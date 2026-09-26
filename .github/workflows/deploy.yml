@@ -3,7 +3,8 @@ on:
   push:
     branches: [main]
     paths:
-      - '2-5-osint-workbench.zip'
+      - '1-osint-admin-final.zip'
+      - 'content/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 permissions:
@@ -21,17 +22,22 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Unpack static directory
+      - name: Build directory and articles
         run: |
           mkdir -p _site
-          unzip -q 2-5-osint-workbench.zip -d _site
+          unzip -q 1-osint-admin-final.zip -d _site
+          python3 _site/build_content.py _site content
           test -f _site/index.html
-          test -f _site/pagefind/pagefind.js
+          test -f _site/admin.html
+          test -f _site/posts/index.html
           test -f _site/catalog/category-01.html
           test -f _site/lab.html
           test -f _site/statistics.html
           test -f _site/verification.html
           test -f _site/smart-search.html
+      - name: Rebuild local search index
+        run: |
+          npx --yes pagefind@1.5.2 --site _site --output-path _site/pagefind
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
