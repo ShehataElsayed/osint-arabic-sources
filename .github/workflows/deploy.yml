@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '3-osint-directory-final.zip'
+      - '4-osint-workbench.zip'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 permissions:
@@ -24,10 +24,14 @@ jobs:
       - name: Unpack static directory
         run: |
           mkdir -p _site
-          unzip -q 3-osint-directory-final.zip -d _site
+          unzip -q 4-osint-workbench.zip -d _site
           test -f _site/index.html
           test -f _site/pagefind/pagefind.js
           test -f _site/catalog/category-01.html
+          test -f _site/lab.html
+          test -f _site/statistics.html
+          test -f _site/verification.html
+          test -f _site/smart-search.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
