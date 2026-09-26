@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '4-osint-workbench.zip'
+      - '1-4-osint-workbench.zip'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
 permissions:
@@ -24,7 +24,7 @@ jobs:
       - name: Unpack static directory
         run: |
           mkdir -p _site
-          unzip -q 4-osint-workbench.zip -d _site
+          unzip -q 1-4-osint-workbench.zip -d _site
           test -f _site/index.html
           test -f _site/pagefind/pagefind.js
           test -f _site/catalog/category-01.html
