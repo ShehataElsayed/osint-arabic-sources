@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '1-osint-no-back-final.zip'
+      - '1-osint-header-final.zip'
       - 'content/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
       - name: Build directory and articles
         run: |
           mkdir -p _site
-          unzip -q 1-osint-no-back-final.zip -d _site
+          unzip -q 1-osint-header-final.zip -d _site
           python3 _site/build_content.py _site content
           test -f _site/index.html
           test -f _site/admin.html
