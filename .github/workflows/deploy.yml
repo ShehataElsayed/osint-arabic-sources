@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '2-osint-verification-newsrag.zip'
+      - '3-osint-verification-cachefix.zip'
       - 'content/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
       - name: Build directory and articles
         run: |
           mkdir -p _site
-          unzip -q 2-osint-verification-newsrag.zip -d _site
+          unzip -q 3-osint-verification-cachefix.zip -d _site
           python3 _site/build_content.py _site content
           test -f _site/index.html
           test -f _site/admin.html
