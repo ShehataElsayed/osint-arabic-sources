@@ -3,7 +3,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '2-1-osint-header-final.zip'
+      - '2-osint-verification-newsrag.zip'
       - 'content/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
@@ -25,7 +25,7 @@ jobs:
       - name: Build directory and articles
         run: |
           mkdir -p _site
-          unzip -q 2-1-osint-header-final.zip -d _site
+          unzip -q 2-osint-verification-newsrag.zip -d _site
           python3 _site/build_content.py _site content
           test -f _site/index.html
           test -f _site/admin.html
@@ -34,6 +34,8 @@ jobs:
           test -f _site/lab.html
           test -f _site/statistics.html
           test -f _site/verification.html
+          test -f _site/newsrag.html
+          test -f _site/newsrag-lab.js
           test -f _site/smart-search.html
           test -f _site/commands.html
           test -f _site/methodology.html
