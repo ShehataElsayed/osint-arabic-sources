@@ -1,0 +1,33 @@
+@font-face{font-family:Cairo;src:url(./Cairo.ttf) format("truetype");font-weight:100 900;font-display:swap}:root{--navy:#102735;--teal:#0a827d;--ink:#142b31;--muted:#52646d;--line:#dbe7e5}*{box-sizing:border-box}body{margin:0;background:#f6f9f7;color:var(--ink);font:700 16px Cairo,Tahoma,Arial,sans-serif;line-height:1.8}button,input,select,textarea{font:inherit}a{color:#08716d}.app{max-width:1530px;margin:auto;padding:22px 34px}.top{background:var(--navy);color:white;padding:15px 22px;border-radius:16px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;box-shadow:0 15px 34px #0c354323}.brand{display:flex;gap:12px;align-items:center}.brand strong{font-size:19px}.brand small{display:block;color:#b9d3d4}.topnav{display:flex;gap:7px;flex-wrap:wrap}.topnav a{color:#e3f7f2;text-decoration:none;padding:7px 10px;border-radius:8px}.topnav a:hover,.topnav a:focus-visible{background:#ffffff2a}.hero{background:radial-gradient(circle at 8% 12%,#1c827878,transparent 35%),linear-gradient(125deg,#16354a,#102c38 53%,#0d594f);color:#fff;border-radius:23px;padding:39px 45px;margin-top:18px}.hero h1{font-size:clamp(29px,4vw,49px);margin:5px 0}.hero p{max-width:800px;color:#d4e9e7;margin:0}.badge{display:inline-block;border-radius:25px;background:#ffffff22;padding:3px 12px;color:#e9f8f6}.box{background:#fff;border:1px solid var(--line);border-radius:17px;padding:27px;margin-top:18px;box-shadow:0 8px 26px #1439390b}.box h2{margin:0 0 12px}.muted{color:var(--muted)}label{display:block;margin:14px 0 5px}input,select,textarea{border:1px solid #b7d3ca;border-radius:9px;padding:10px 12px;background:white;color:var(--ink);max-width:100%}input[type=file]{width:min(100%,620px)}input[type=number]{width:180px}textarea{width:100%;min-height:110px}button,.btn{border:1px solid #a9cec5;background:#e9f7f1;color:#075951;border-radius:9px;padding:9px 17px;cursor:pointer;font-weight:700;display:inline-block;text-decoration:none}button:hover,.btn:hover{background:#d9f4e9}button:disabled{opacity:.5;cursor:not-allowed}.row{display:flex;gap:12px;flex-wrap:wrap;align-items:end}.row>label{margin:8px 0}.note{border-right:4px solid #0a827d;background:#edf9f3;padding:12px 16px;border-radius:8px;margin:14px 0}.warning{border-right-color:#b88932;background:#fff8e7}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}.card{border:1px solid var(--line);border-radius:13px;padding:17px;background:#fbfdfb}.card h3{margin:0 0 7px}.card p{margin:4px 0}.results{margin-top:17px}.status{min-height:30px;color:#075951}.tablewrap{overflow:auto;max-height:350px}table{border-collapse:collapse;width:100%;min-width:550px}th,td{text-align:right;border-bottom:1px solid var(--line);padding:8px 12px;white-space:nowrap}th{background:#e9f7f1;position:sticky;top:0}footer{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:25px 0;color:#526a68}footer strong{color:#143c39}@media(max-width:850px){.app{padding:12px}.top{padding:14px}.brand strong{font-size:16px}.topnav a{padding:4px 7px}.hero{padding:28px 20px}.box{padding:18px}.cards{grid-template-columns:1fr}}.chart{display:grid;gap:7px;max-width:680px}.barrow{display:grid;grid-template-columns:32px 1fr 80px;align-items:center;gap:9px}.bar{height:18px;background:#0a827d;border-radius:5px;min-width:2px}.brand img{width:64px;height:64px;object-fit:contain;border-radius:10px;border:1px solid #ffffff50}@media(max-width:850px){.brand img{width:48px;height:48px}}
+body:has(#kind) .box ol{padding-right:24px}body:has(#kind) .box li{margin:8px 0}body:has(#kind) .box code{background:#edf9f3;border-radius:5px;padding:1px 5px;direction:ltr;unicode-bidi:isolate}[hidden]{display:none!important}
+
+.brand-home{color:inherit;text-decoration:none;font-size:19px;font-weight:900}.brand-home:hover,.brand-home:focus-visible{text-decoration:underline}@media(max-width:850px){.brand-home{font-size:16px}}
+
+
+/* الأقسام الجديدة: منشئ الأوامر + المنهجية */
+.kindfields{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:2px 18px;margin:6px 0 16px}
+.kindfields label{margin:8px 0 0}
+.kindfields input{width:100%}
+.cmdlist{display:grid;gap:9px;margin-top:10px}
+.cmd{display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:11px;padding:9px 13px;background:#fff;flex-wrap:wrap}
+.cmd code{direction:ltr;unicode-bidi:isolate;background:#edf9f3;border-radius:6px;padding:3px 9px;font-size:14px;word-break:break-all;flex:1;min-width:200px;text-align:left}
+.cmdbtns{display:flex;gap:8px;flex:0 0 auto}
+.cmdstage{margin-top:14px}
+.op{direction:ltr;unicode-bidi:isolate;background:#edf9f3;border-radius:5px;padding:1px 6px;font-size:14px}
+.prog{height:14px;background:#e3eeea;border-radius:9px;overflow:hidden;margin:10px 0 4px;max-width:620px}
+.prog>div{height:100%;background:linear-gradient(90deg,#0a827d,#14a085);width:0;transition:width .35s;border-radius:9px}
+.road{display:grid;gap:12px;margin-top:14px}
+details.stage{border:1px solid var(--line);border-radius:13px;background:#fbfdfb;overflow:hidden}
+details.stage>summary{cursor:pointer;list-style:none;padding:15px 17px;display:flex;gap:13px;align-items:center;font-size:17px}
+details.stage>summary::-webkit-details-marker{display:none}
+details.stage>summary:hover{background:#f0f8f4}
+.stagenum{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:var(--teal);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:17px;box-shadow:0 3px 9px #0a827d44}
+.stagebody{padding:14px 18px 16px;border-top:1px dashed var(--line)}
+.stagebody ol{margin:6px 0;padding-right:22px}
+.stagebody li{margin:7px 0}
+.checkline{display:flex;align-items:center;gap:9px;margin-top:14px;font-weight:900;color:#075951}
+.checkline input{width:19px;height:19px;accent-color:#0a827d}
+@media(max-width:850px){.cmd{flex-direction:column;align-items:stretch}.cmdbtns{justify-content:flex-start}.kindfields{grid-template-columns:1fr}}
+
+/* حافظ على مساحة العنوان عند اكتمال قائمة التنقل. */
+@media(max-width:850px){.top .brand,.top .topnav{width:100%}.top .brand>div{min-width:0}}

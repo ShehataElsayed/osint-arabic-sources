@@ -3,7 +3,13 @@ on:
   push:
     branches: [main]
     paths:
-      - '3-osint-verification-cachefix.zip'
+      - 'site/**'
+      - 'data/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'package*.json'
+      - '2-data.json'
+      - '3-review-queue.json'
       - 'content/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
@@ -22,26 +28,20 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build directory and articles
-        run: |
-          mkdir -p _site
-          unzip -q 3-osint-verification-cachefix.zip -d _site
-          python3 _site/build_content.py _site content
-          test -f _site/index.html
-          test -f _site/admin.html
-          test -f _site/posts/index.html
-          test -f _site/catalog/category-01.html
-          test -f _site/lab.html
-          test -f _site/statistics.html
-          test -f _site/verification.html
-          test -f _site/newsrag.html
-          test -f _site/newsrag-lab.js
-          test -f _site/smart-search.html
-          test -f _site/commands.html
-          test -f _site/methodology.html
-      - name: Rebuild local search index
-        run: |
-          npx --yes pagefind@1.5.2 --site _site --output-path _site/pagefind
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm run check:js
+      - run: npx playwright install --with-deps chromium
+      - name: Browser smoke tests
+        run: CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:browser
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

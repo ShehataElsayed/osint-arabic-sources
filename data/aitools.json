@@ -1,0 +1,122 @@
+[
+  [
+    "NotebookLM",
+    "بحث في المستندات",
+    "تلخيص ومقارنة مصادر يرفعها المستخدم، مع ضرورة الرجوع إلى النص الأصلي.",
+    "https://notebooklm.google.com/"
+  ],
+  [
+    "Google Pinpoint",
+    "بحث في المستندات",
+    "البحث في مجموعات مستندات صحفية وتحليلها، مع مراجعة القيود والخصوصية.",
+    "https://journaliststudio.google.com/pinpoint/"
+  ],
+  [
+    "Whisper",
+    "تفريغ صوت",
+    "نموذج تفريغ كلام مفتوح المصدر؛ راجع الأسماء والأرقام يدوياً.",
+    "https://github.com/openai/whisper"
+  ],
+  [
+    "Pyannote.audio",
+    "تفريغ صوت",
+    "تمييز المتحدثين في التسجيلات؛ النتائج تحتاج مراجعة بشرية.",
+    "https://github.com/pyannote/pyannote-audio"
+  ],
+  [
+    "Tesseract OCR",
+    "استخراج نص",
+    "تحويل الصور الممسوحة إلى نص، مع تدقيق الصفحات المستخرجة.",
+    "https://github.com/tesseract-ocr/tesseract"
+  ],
+  [
+    "PaddleOCR",
+    "استخراج نص",
+    "استخراج النص من الصور والملفات الممسوحة مع مراجعة الجودة.",
+    "https://github.com/PaddlePaddle/PaddleOCR"
+  ],
+  [
+    "Docling",
+    "بحث في المستندات",
+    "تحويل المستندات إلى بنية قابلة للبحث والتحليل.",
+    "https://github.com/docling-project/docling"
+  ],
+  [
+    "GDELT",
+    "تحليل الأخبار",
+    "استكشاف بيانات وأحداث الأخبار العالمية؛ ليست أحكامًا على صحة الخبر.",
+    "https://www.gdeltproject.org/"
+  ],
+  [
+    "Hugging Face",
+    "نماذج وأدوات",
+    "مستودع نماذج وتطبيقات؛ افحص ترخيص كل نموذج وخصوصية البيانات.",
+    "https://huggingface.co/"
+  ],
+  [
+    "Ollama",
+    "نماذج محلية",
+    "تشغيل نماذج لغوية محليًا بحسب قدرات الجهاز وترخيص النموذج.",
+    "https://ollama.com/"
+  ],
+  [
+    "OpenAI API",
+    "نماذج وأدوات",
+    "واجهة نماذج لتحليل نصوص وتصنيفها؛ الاستخدام قد يكون مدفوعًا.",
+    "https://platform.openai.com/docs/"
+  ],
+  [
+    "Anthropic Claude",
+    "نماذج وأدوات",
+    "مساعد لتحليل وصياغة النص؛ لا تستخدمه مصدرًا أوليًا.",
+    "https://www.anthropic.com/claude"
+  ],
+  [
+    "Google Gemini",
+    "نماذج وأدوات",
+    "مساعد متعدد الوسائط للبحث الأولي والتلخيص مع تحقق مستقل.",
+    "https://gemini.google.com/"
+  ],
+  [
+    "Perplexity",
+    "بحث مساعد",
+    "بحث يولّد إجابات بمراجع؛ افحص كل مرجع ولا تنقل الادعاءات آليًا.",
+    "https://www.perplexity.ai/"
+  ],
+  [
+    "DeepL",
+    "ترجمة",
+    "ترجمة نصوص مع مراجعة الأسماء والمصطلحات والسياق.",
+    "https://www.deepl.com/translator"
+  ],
+  [
+    "Deepfake-o-meter",
+    "التحقق من الوسائط",
+    "اختبارات لكشف مؤشرات التوليد الاصطناعي؛ المؤشر ليس إثباتًا.",
+    "https://deepfake-o-meter.org/"
+  ],
+  [
+    "InVID-WeVerify",
+    "التحقق من الوسائط",
+    "إضافة أدوات للتحقق من الفيديو والصور وسياق النشر.",
+    "https://weverify.eu/verification-plugin/"
+  ],
+  [
+    "Bellingcat AI Toolkit",
+    "التحقق من الوسائط",
+    "أدوات تجريبية لدعم التحقيقات مفتوحة المصدر؛ تحقق من توفرها.",
+    "https://bellingcat.com/resources/2024/10/03/introducing-bellingcats-ai-toolkit/"
+  ],
+  [
+    "spaCy",
+    "تحليل النص",
+    "استخراج كيانات وأنماط لغوية من مجموعات النصوص.",
+    "https://spacy.io/"
+  ],
+  [
+    "BERTopic",
+    "تحليل النص",
+    "استكشاف الموضوعات في مجموعات نصوص باستخدام تمثيلات لغوية.",
+    "https://maartengr.github.io/BERTopic/"
+  ]
+]

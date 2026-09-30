@@ -1,0 +1,15 @@
+{
+  "name": "osint-arabic-sources",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "python3 scripts/build.py && pagefind --site _site --output-path _site/pagefind",
+    "test": "python3 -m unittest discover -s tests -v",
+    "check:js": "find site -name '*.js' -exec node --check {} \\;",
+    "test:browser": "node tests/browser-smoke.cjs"
+  },
+  "devDependencies": {
+    "pagefind": "1.5.2",
+    "playwright": "1.58.2"
+  }
+}
