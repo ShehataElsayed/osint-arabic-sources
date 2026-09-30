@@ -8,6 +8,8 @@ on:
       - 'scripts/**'
       - 'tests/**'
       - 'package*.json'
+      - '2-data.json'
+      - '3-review-queue.json'
       - 'content/**'
       - '.github/workflows/deploy.yml'
   workflow_dispatch:
