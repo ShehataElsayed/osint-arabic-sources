@@ -10,7 +10,7 @@ class Links(HTMLParser):
             if k in ('href','src') and v:self.links.append(v)
 class Foundation(unittest.TestCase):
     def test_counts_and_descriptions(self):
-        tree=json.loads((ROOT/'data/data.json').read_text());leaves=[]
+        tree=json.loads((ROOT/'2-data.json').read_text());leaves=[]
         def walk(n):
             if n.get('url'):leaves.append(n)
             for c in n.get('children',[]):walk(c)
@@ -19,7 +19,7 @@ class Foundation(unittest.TestCase):
         self.assertEqual(len(leaves),1168)
         self.assertTrue(all(n.get('arDescription') for n in leaves))
     def test_no_invented_review_dates(self):
-        reviews=json.loads((ROOT/'data/review-queue.json').read_text())
+        reviews=json.loads((ROOT/'3-review-queue.json').read_text())
         self.assertEqual(len(reviews),1109)
         self.assertTrue(all(r['last_checked'] is None and r['review_status']=='pending' for r in reviews))
     def test_admin_preserved(self):
