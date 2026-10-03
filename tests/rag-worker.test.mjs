@@ -117,3 +117,22 @@ test('repair: candidates come from the same host sitemap and only count if they 
   const none = await repairSource({ name: 'x', url: 'https://www.example.com/missing' }, 'zzz qqq', [], async () => ({ ok: false, headers: { get: () => '' }, text: async () => '' }));
   assert.equal(none, null);
 });
+
+import { exaSameDomain } from '../worker/rag-worker.js';
+test('repair: domain-restricted search runs only with a key, is cached, and fails quietly', async () => {
+  assert.deepEqual(await exaSameDomain('a.com', 'x', {}, async () => { throw new Error('no'); }), []);
+  let n = 0, body;
+  const f = async (u, o) => { n++; body = JSON.parse(o.body); return { ok: true, json: async () => ({ results: [{ url: 'https://www.a.com/p/1' }, { url: 'https://evil.com/p' }] }) }; };
+  assert.deepEqual(await exaSameDomain('www.a.com', 'q1', { EXA_API_KEY: 'k' }, f), ['https://www.a.com/p/1']);
+  await exaSameDomain('www.a.com', 'q1', { EXA_API_KEY: 'k' }, f);
+  assert.equal(n, 1); assert.deepEqual(body.includeDomains, ['a.com']);
+  assert.deepEqual(await exaSameDomain('b.com', 'q', { EXA_API_KEY: 'k' }, async () => ({ ok: false })), []);
+});
+
+import { exaWeb } from '../worker/rag-worker.js';
+test('open-web search: blocked domains dropped, capped, quiet without key', async () => {
+  assert.deepEqual(await exaWeb('q', {}, async () => { throw new Error('x'); }), []);
+  const f = async () => ({ ok: true, json: async () => ({ results: [{ url: 'https://factuel.afp.com/a', title: 'a' }, { url: 'https://misbar.com/b', title: 'b' }, { url: 'https://www.who.int/c', title: 'c' }, { url: 'http://insecure.com/d', title: 'd' }, { url: 'https://un.org/e', title: 'e' }] }) });
+  const r = await exaWeb('blocked-test', { EXA_API_KEY: 'k' }, f, 3);
+  assert.deepEqual(r.map(x => x.host), ['www.who.int', 'un.org']);
+});
