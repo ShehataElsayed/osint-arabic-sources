@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "scripts": {
     "build": "python3 scripts/build.py && pagefind --site _site --output-path _site/pagefind",
-    "test": "python3 -m unittest discover -s tests -v",
-    "check:js": "find site -name '*.js' -exec node --check {} \\;",
+    "test": "python3 -m unittest discover -s tests -v && node --test tests/rag-core.test.mjs tests/rag-worker.test.mjs",
+    "check:js": "node --check worker/rag-worker.js && find site -name '*.js' -exec node --check {} \\;",
     "test:browser": "node tests/browser-smoke.cjs"
   },
   "devDependencies": {

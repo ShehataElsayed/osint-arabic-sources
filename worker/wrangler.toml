@@ -1,0 +1,4 @@
+name = "osint-rag"
+main = "rag-worker.js"
+compatibility_date = "2026-10-01"
+# Secret (never in this file): wrangler secret put FACTCHECK_API_KEY

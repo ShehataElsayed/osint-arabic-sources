@@ -40,12 +40,7 @@ if overrides or newtools:
  index.write_text(s)
 # Generate news/articles and content overview, entirely escaped. Pagefind indexes the new pages.
 style='<style>@font-face{font-family:Cairo;src:url(../Cairo.ttf) format("truetype");font-weight:100 900;font-display:swap}body{margin:0;background:#f6f9f7;color:#142b31;font:700 17px/1.9 Cairo,Tahoma,Arial,sans-serif}.page{max-width:940px;margin:auto;padding:25px 17px}header{background:#102735;color:#fff;border-radius:16px;padding:24px}header a{color:#d9f4e9}article{background:white;border:1px solid #dbe7e5;border-radius:14px;margin:20px 0;padding:25px}a{color:#08716d}p{white-space:pre-wrap}</style>'
-outdir=site/'posts';outdir.mkdir(exist_ok=True)
-for title,body,slug in articles:
- markup='<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+html.escape(title)+' | دليل المصادر المفتوحة للصحفيين العرب</title>'+style+'<div class="page"><header><a href="../index.html">الدليل</a> · <a href="./index.html">المقالات</a></header><main data-pagefind-body><article><h1>'+html.escape(title)+'</h1><p>'+html.escape(body)+'</p></article></main></div></html>'
- (outdir/(slug+'.html')).write_text(markup)
-items=''.join('<article><h2><a href="./'+urllib.parse.quote(slug)+'.html">'+html.escape(title)+'</a></h2><p>'+html.escape(body[:250])+'</p></article>' for title,body,slug in articles)
-(outdir/'index.html').write_text('<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>المقالات | دليل المصادر المفتوحة للصحفيين العرب</title>'+style+'<div class="page"><header><a href="../index.html">العودة إلى الدليل</a><h1>مقالات وتحديثات</h1></header><main data-pagefind-body>'+items+'</main></div></html>')
+# The articles section was removed at the owner's request (still in git history).
 # Catalog static pages are regenerated to make edited descriptions searchable.
 for p in (site/'catalog').glob('category-*.html'):p.unlink()
 css='''<style>@font-face{font-family:Cairo;src:url(../Cairo.ttf) format("truetype");font-weight:100 900;font-display:swap}body{font:700 16px/1.8 Cairo,Tahoma,sans-serif;background:#f6f9f7;color:#142b31;margin:0}.page{max-width:940px;margin:auto;padding:28px 18px}header{background:#102735;color:white;padding:20px;border-radius:15px;margin-bottom:22px}a{color:#08716d}.card{background:white;border:1px solid #dbe7e5;border-radius:12px;padding:17px;margin:12px 0}.card h2{margin:0 0 5px;font-size:21px}.card small{color:#52646d}.card p{margin:5px 0}.back{color:white}</style>'''

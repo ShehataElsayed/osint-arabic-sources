@@ -25,7 +25,7 @@ class Foundation(unittest.TestCase):
     def test_admin_preserved(self):
         self.assertEqual((ROOT/'site/admin.html').read_bytes(),(ROOT/'_site/admin.html').read_bytes())
     def test_required_pages(self):
-        for f in ['index.html','admin.html','commands.html','methodology.html','verification.html','newsrag.html','lab.html','statistics.html','smart-search.html','posts/index.html','catalog/category-01.html']:
+        for f in ['index.html','admin.html','commands.html','methodology.html','verification.html','newsrag.html','rag.html','smart-search.html','catalog/category-01.html']:
             self.assertTrue((ROOT/'_site'/f).is_file(),f)
     def test_local_links(self):
         missing=[]
