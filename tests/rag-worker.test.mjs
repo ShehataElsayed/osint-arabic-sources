@@ -105,3 +105,15 @@ test('identity: registrable domain, RDAP parsing without guessing, rating floors
   assert.equal(reliabilityOf('official', null, null), 'very_high'); assert.equal(reliabilityOf('news', null, null), 'high');
   assert.equal(reliabilityOf('unknown', { age_years: 9 }, pg), 'medium'); assert.equal(reliabilityOf('unknown', { age_years: 1 }, pg), 'unknown'); assert.equal(reliabilityOf('unknown', null, null), 'unknown');
 });
+
+import { pickFromSitemap, repairSource } from '../worker/rag-worker.js';
+test('repair: candidates come from the same host sitemap and only count if they fetch', async () => {
+  const locs = ['https://www.example.com/news/2022/11/cop27-loss-and-damage-fund-agreed', 'https://www.example.com/sports/football', 'https://other.com/cop27-loss-and-damage-fund'];
+  assert.deepEqual(pickFromSitemap(locs, 'cop27 loss damage fund agreed', 'www.example.com'), ['https://www.example.com/news/2022/11/cop27-loss-and-damage-fund-agreed']);
+  const page = '<p>Delegates agreed to create the loss and damage fund at the cop27 summit in Egypt</p>';
+  const f = async u => u.endsWith('sitemap.xml') ? { ok: true, text: async () => `<urlset>${locs.map(l => `<url><loc>${l}</loc></url>`).join('')}</urlset>` } : u.includes('cop27') ? { ok: true, headers: { get: () => 'text/html' }, text: async () => page } : { ok: false, headers: { get: () => '' }, text: async () => '' };
+  const r = await repairSource({ name: 'cop27 fund', url: 'https://www.example.com/missing' }, 'cop27 loss damage fund agreed', [], f);
+  assert.ok(r && r.repaired && r.exists && r.original === 'https://www.example.com/missing' && r.url.includes('cop27'));
+  const none = await repairSource({ name: 'x', url: 'https://www.example.com/missing' }, 'zzz qqq', [], async () => ({ ok: false, headers: { get: () => '' }, text: async () => '' }));
+  assert.equal(none, null);
+});

@@ -155,6 +155,30 @@ export async function checkSource(src, claimText, nums, f = fetch) {
   } catch { /* unreachable */ }
   return out;
 }
+// Link repair: when a model-cited page does not open, look for a real page on the SAME host through its own sitemap.
+// A candidate is shown as "repaired" only if it actually fetched; the original URL is kept for display.
+export function pickFromSitemap(locs, hint, host, n = 2) {
+  const want = new Set(stok(hint)); if (want.size < 2) return [];
+  return locs.map(u => { let d = u; try { d = decodeURIComponent(u); } catch { /* keep raw */ } const t = new Set(stok(d.replace(/[-_/.]+/g, ' '))); let k = 0; want.forEach(x => { if (t.has(x)) k++; }); return { u, k }; })
+    .filter(x => x.k >= 2 && safeSourceUrl(x.u) && new URL(x.u).hostname.replace(/^www\./, '') === host.replace(/^www\./, '')).sort((a, b) => b.k - a.k).slice(0, n).map(x => x.u);
+}
+async function sitemapLocs(host, f) {
+  const get = async u => { try { const r = await f(u, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; osint-guide-check)' }, redirect: 'follow', signal: AbortSignal.timeout(4000) }); return r.ok ? (await r.text()).slice(0, 300000) : ''; } catch { return ''; } };
+  const locs = x => [...x.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/g)].map(m => m[1].replace(/&amp;/g, '&')).slice(0, 3000);
+  let first = await get(`https://${host}/sitemap.xml`);
+  if (!first) { const rb = await get(`https://${host}/robots.txt`); const m = rb.match(/^sitemap:\s*(\S+)/im); if (m) first = await get(m[1]); }
+  let all = locs(first);
+  const kids = all.filter(u => /\.xml(\.gz)?$/i.test(u)).slice(0, 2);
+  if (kids.length) { all = all.filter(u => !/\.xml(\.gz)?$/i.test(u)); for (const k of kids) all = all.concat(locs(await get(k))); }
+  return all;
+}
+export async function repairSource(src, claimText, nums, f = fetch) {
+  const u = safeSourceUrl(src?.url); let host; try { host = new URL(u || src?.url).hostname; } catch { return null; }
+  if (!u) return null;
+  const cands = pickFromSitemap(await sitemapLocs(host, f), `${src?.name || ''} ${claimText}`, host);
+  for (const c of cands) { const r = await checkSource({ ...src, url: c }, claimText, nums, f); if (r.exists) return { ...r, repaired: true, original: u }; }
+  return null;
+}
 export async function verifyModel(question, env, f = fetch) {
   const q = String(question || '').trim().slice(0, 300);
   if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL || !q) return { error: 'off' };
@@ -167,7 +191,7 @@ export async function verifyModel(question, env, f = fetch) {
   const [verdict, top] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
   const share = top / GATE.samples, lead = ok.find(x => x.verdict === verdict && x.answer) || ok[0];
   const type = claimType(q), strict = type !== 'general';
-  const checked = await Promise.all((lead.sources || []).map(s => checkSource(s, `${q} ${lead.answer}`, lead.numbers, f)));
+  const checked = await Promise.all((lead.sources || []).map(async s => { const r = await checkSource(s, `${q} ${lead.answer}`, lead.numbers, f); if (r.exists) return r; const fix = await repairSource(s, `${q} ${lead.answer}`, lead.numbers, f); return fix ? { ...fix, name: r.name } : r; }));
   // Extraction step: one call per opened source (max 3). The model only chooses among sentences already cut from the fetched page; the choice is accepted by index, so the shown text is always a verbatim sentence of that page.
   await Promise.all(checked.filter(s => s.exists).map(async s => { s.identity = await rdapInfo(s.host, f); s.rel = reliabilityOf(s.tier, s.identity, s.page); }));
   await Promise.all(checked.filter(s => s.exists && s.cands.length).map(async s => {
@@ -190,7 +214,7 @@ export async function verifyModel(question, env, f = fetch) {
     { id: 'evidence', label: 'سند مستقل', status: 'na', detail: 'معرفة النموذج ليست دليلاً' },
   ];
   const failed = criteria.filter(c => c.status === 'fail').map(c => c.id);
-  const out = { type, verdict, criteria, sources: checked.map(s => ({ name: s.name, url: s.exists ? s.url : '', claimed: s.exists ? '' : s.claimed, host: s.host, exists: s.exists, title: s.title, quote: s.exists ? s.quote : '', picked: s.exists && s.picked, rel: s.exists ? s.rel : 'unknown', identity: s.exists ? s.identity : null, page: s.exists ? s.page : null, similarity: s.similarity, verified: s.verified, tier: s.tier })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed, warnings: criteria.filter(c => c.status === 'warn').map(c => c.id) };
+  const out = { type, verdict, criteria, sources: checked.map(s => ({ name: s.name, url: s.exists ? s.url : '', claimed: s.exists ? '' : s.claimed, host: s.host, exists: s.exists, title: s.title, quote: s.exists ? s.quote : '', picked: s.exists && s.picked, repaired: Boolean(s.repaired), original: s.repaired ? s.original : '', rel: s.exists ? s.rel : 'unknown', identity: s.exists ? s.identity : null, page: s.exists ? s.page : null, similarity: s.similarity, verified: s.verified, tier: s.tier })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed, warnings: criteria.filter(c => c.status === 'warn').map(c => c.id) };
   out.answer = lead.answer;
   return out;
 }
