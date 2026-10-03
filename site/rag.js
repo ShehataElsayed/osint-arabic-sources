@@ -6,7 +6,7 @@ const $ = id => document.getElementById(id);
 const el = (tag, txt, cls) => { const n = document.createElement(tag); if (txt != null) n.textContent = txt; if (cls) n.className = cls; return n; };
 const safeUrl = u => { try { return ['https:', 'http:'].includes(new URL(u).protocol) ? u : ''; } catch { return ''; } };
 const TYPES = { numeric: 'رقمي', attribution: 'نسبة قول', health: 'صحي', general: 'عام' };
-const REASONS = { no_sources: 'لا توجد مصادر', low_similarity: 'تشابه منخفض مع المصادر', contradiction: 'تناقض بين السؤال والمصدر', split_vote: 'المصادر منقسمة في الحكم', consistency: 'عينات النموذج غير متسقة', type_rule: 'نوع الادعاء يتطلب إجماعًا كاملًا', contradiction_model: 'النقد الذاتي وجد احتمال تناقض', recency: 'قد يحتاج مصدرًا حديثًا', conflict: 'يتعارض مع حكم منشور', source_support: 'المصدر المذكور لا يدعم الادعاء', source_exists: 'لم تُفتح المصادر المذكورة', no_rating_in_sources: 'لا حكم صريح في المصادر' };
+const REASONS = { no_sources: 'لا توجد مصادر', low_similarity: 'تشابه منخفض مع المصادر', contradiction: 'تناقض بين السؤال والمصدر', split_vote: 'المصادر منقسمة في الحكم', consistency: 'عينات النموذج غير متسقة', type_rule: 'نوع الادعاء يتطلب إجماعًا كاملًا', contradiction_model: 'النقد الذاتي وجد احتمال تناقض', recency: 'قد يحتاج مصدرًا حديثًا', type_rule_warn: 'ادعاء رقمي أو صحي أو منسوب بلا مصدر تحقق منه الفحص', conflict: 'يتعارض مع حكم منشور', source_support: 'المصدر المذكور لا يدعم الادعاء', source_exists: 'لم تُفتح المصادر المذكورة', no_rating_in_sources: 'لا حكم صريح في المصادر' };
 let local = [];
 if ($('mode')) $('mode').textContent = BACKEND_URL ? 'الوضع: فهرس أحكام التدقيق، ويُضاف مفتاح التدقيق لاحقًا.' : 'الوضع المحلي: الخلفية غير مفعّلة بعد، تعمل على مصادر تلصقها أنت داخل الصفحة فقط';
 function renderLocal() { const b = $('sources'); b.replaceChildren(); local.forEach((s, i) => { const c = el('article', null, 'evidence-card'), r = el('div', null, 'row'), d = el('button', 'حذف', 'secondary'); d.type = 'button'; d.onclick = () => { local.splice(i, 1); renderLocal(); }; r.append(el('strong', `${i + 1}. ${s.title}`), d); c.append(r, el('small', `${s.publisher || 'ناشر غير محدد'} · ${s.rating || 'بلا حكم'}`)); b.append(c); }); if (!local.length) b.append(el('p', 'لا توجد مصادر بعد.', 'empty-state')); }
@@ -39,12 +39,15 @@ function crossCheck(model, evidence) {
   const f = pol.filter(p => p === 'false').length, t = pol.length - f, against = model.verdict === 'supported' ? f > t : model.verdict === 'refuted' ? t > f : false;
   return { id: 'conflict', label: 'مطابقة أحكام منشورة', status: against ? 'fail' : 'pass', detail: `${t} صحيح · ${f} خاطئ أو مضلل` };
 }
-const HARD = ['consistency', 'type_rule', 'conflict'];
+const WARN = { type_rule: 'ادعاء رقمي أو صحي أو منسوب لم يتحقق مصدر منه', recency: 'قد يحتاج مصدرًا حديثًا', source_support: 'لم يدعم مصدرٌ فُحص الادعاء', source_exists: 'لم تُفتح المصادر المذكورة' };
+const TIERS = { official: 'جهة رسمية أو دولية', news: 'مؤسسة إخبارية معروفة', unknown: 'غير مصنّف' };
 // Heuristic confidence from the criteria results. It is a rule of thumb, not a measured probability.
-function confidence(crit, failed) {
-  const f = crit.filter(c => c.status === 'fail').map(c => c.id), supported = crit.some(c => c.id === 'source_support' && c.status === 'pass');
-  const level = f.some(id => HARD.includes(id)) || f.length >= 2 ? 'low' : f.length === 1 ? 'medium' : supported ? 'high' : 'medium';
-  return { level, why: [...new Set(failed)].map(r => REASONS[r] || r) };
+// Any failed criterion -> low. No failure -> medium, or high only when a cited source of the official or news class was fetched and passed the similarity and numbers checks.
+function confidence(crit, failed, sources) {
+  const f = crit.filter(c => c.status === 'fail').length, warn = crit.filter(c => c.status === 'warn').map(c => c.id);
+  const strong = (sources || []).some(s => s.verified && (s.tier === 'official' || s.tier === 'news'));
+  const level = f ? 'low' : strong ? 'high' : 'medium';
+  return { level, why: [...new Set(failed)].map(r => REASONS[r] || r), warn: warn.map(r => WARN[r] || REASONS[r] || r) };
 }
 const CONF = { high: 'عالية', medium: 'متوسطة', low: 'منخفضة' };
 function criteriaBox(list) {
@@ -65,20 +68,20 @@ async function show(q, res, model, body) {
     if (x.status === 'fail') failed.push('conflict');
     modelAnswer = model.answer || '';
     reasons = failed;
-    conf = confidence(crit, failed);
+    conf = confidence(crit, failed, model.sources);
   }
   const lead = modelAnswer ? 'إجابة من معرفة النموذج، وهي ليست دليلاً:' : res.decision === 'answer' && top ? 'يوجد تدقيق سابق، والحكم السائد: ' : res.decision === 'answer' ? 'وُجدت مصادر ذات صلة بسؤالك.' : 'لم يُنتج النموذج إجابة صالحة.';
   await typeInto(title, lead);
   if (!modelAnswer && res.decision === 'answer' && top) { title.append(el('span', top[0], 'badge ' + badgeCls(top[0])), document.createTextNode(` (${top[1]} من ${rated.length} نتائج)`)); }
   if (modelAnswer) { const p = el('p', null, 'model-answer'); body.append(p); await typeInto(p, modelAnswer); }
   body.append(el('p', `نوع السؤال: ${TYPES[classifyClaim(q)]}`, 'meta-line fade'));
-  if (conf) { const c = el('div', null, 'conf ' + conf.level); c.append(el('strong', 'درجة الثقة: ' + CONF[conf.level]), el('small', conf.level === 'low' ? 'ثقة منخفضة: لا تعتمد على هذه الإجابة قبل الرجوع إلى مصدر.' : 'تقدير إرشادي من نتائج المعايير أدناه، وليس قياسًا ولا حكمًا نهائيًا.')); if (conf.why.length) c.append(el('small', 'أسباب خفض الثقة: ' + conf.why.join('، '))); body.append(c); }
+  if (conf) { const c = el('div', null, 'conf ' + conf.level); c.append(el('strong', 'درجة الثقة: ' + CONF[conf.level]), el('small', conf.level === 'low' ? 'ثقة منخفضة: لا تعتمد على هذه الإجابة قبل الرجوع إلى مصدر.' : conf.level === 'medium' ? 'ثقة متوسطة: لم يتحقق مصدر معروف من الادعاء، فراجع مصدرًا قبل النشر.' : 'تقدير إرشادي من نتائج المعايير أدناه، وليس قياسًا ولا حكمًا نهائيًا.')); if (conf.why.length) c.append(el('small', 'أسباب خفض الثقة: ' + conf.why.join('، '))); if (conf.warn.length) c.append(el('small', 'تحفظات: ' + conf.warn.join('، '))); body.append(c); }
   if (!modelAnswer && res.decision !== 'answer' && reasons.length) body.append(el('p', 'السبب: ' + [...new Set(reasons)].map(r => REASONS[r] || r).join('، '), 'why fade'));
   if (model && model.error) body.append(el('p', model.error === 'busy' ? 'خدمة النموذج مشغولة الآن، فعُرضت المصادر فقط.' : 'خدمة النموذج غير متاحة الآن، فعُرضت المصادر فقط.', 'meta-line fade'));
   if (crit) body.append(criteriaBox(crit));
   if (model && !model.error && (model.sources || []).length) { const box = el('div', null, 'criteria fade'); box.append(el('strong', 'المصادر التي ذكرها النموذج وفُحصت آليًا'));
-    model.sources.forEach(x => { const u = safeUrl(x.url), r = el('div', null, 'crit ' + (x.verified ? 'pass' : 'warn')); const a = el('a', x.host); if (u) { a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; } r.append(el('span', x.verified ? '✓' : '!', 'mk'), a, el('small', x.verified ? `تشابه ${x.similarity.toFixed(2)}` : 'لم يتحقق من دعمه للادعاء')); box.append(r); });
-    box.append(el('small', 'يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام، وليس حكمًا بموثوقيته.', 'crit-note')); body.append(box); }
+    model.sources.forEach(x => { const u = safeUrl(x.url), r = el('div', null, 'crit ' + (x.verified ? 'pass' : 'warn')); const a = el('a', x.host); if (u) { a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; } r.append(el('span', x.verified ? '✓' : '!', 'mk'), a, el('small', `${TIERS[x.tier] || TIERS.unknown} · ` + (x.verified ? `تشابه ${x.similarity.toFixed(2)}` : 'لم يتحقق من دعمه للادعاء'))); box.append(r); });
+    box.append(el('small', 'الفئة تصنيف للنطاق وحده، ولا تعني صحة الادعاء. يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام.', 'crit-note')); body.append(box); }
   res.evidence.forEach((it, i) => body.append(srcCard(it, i)));
   if (wantsChart(q)) { const svg = barChartSVG(chartSpec(res.evidence, 'rating'), 'توزيع الأحكام في المصادر المسترجعة'); if (svg) { const box = el('div', null, 'chart fade'); box.dir = 'ltr'; box.innerHTML = svg; body.append(box); } else body.append(el('p', 'لا توجد بيانات حقيقية لرسم مخطط.', 'meta-line fade')); }
 }

@@ -40,13 +40,17 @@ test('verify: answers when every gate passes, never validated', async () => {
   const r = await verifyModel('هل القاهرة عاصمة مصر', env, mk([D('supported')], { contradiction: 0.1 }));
   assert.equal(r.decision, 'answer'); assert.equal(r.validated_for_release, false); assert.equal(r.criteria.find(c => c.id === 'evidence').status, 'na');
 });
-test('verify: abstains on disagreement, high critic score, recency, strict type', async () => {
+test('verify: failures only for disagreement or critic; recency and unverified strict type are warnings', async () => {
   assert.equal((await verifyModel('سؤال', env, mk([D('supported'), D('refuted'), D('uncertain')], { contradiction: 0.1 }))).decision, 'abstain');
   assert.deepEqual((await verifyModel('سؤال', env, mk([D('supported')], { contradiction: 0.7 }))).reasons, ['contradiction']);
-  assert.deepEqual((await verifyModel('سؤال', env, mk([D('supported', { time_sensitive: true })], { contradiction: 0 }))).reasons, ['recency']);
+  const rc = await verifyModel('سؤال', env, mk([D('supported', { time_sensitive: true })], { contradiction: 0 }));
+  assert.deepEqual(rc.reasons, []); assert.ok(rc.warnings.includes('recency'));
   const s = await verifyModel('ارتفع السعر 20%', env, mk([D('supported'), D('supported'), D('refuted')], { contradiction: 0 }));
   assert.equal(s.decision, 'abstain'); assert.ok(s.reasons.includes('type_rule'));
+  const u = await verifyModel('ارتفع السعر 20%', env, mk([D('supported')], { contradiction: 0 }));
+  assert.deepEqual(u.reasons, []); assert.ok(u.warnings.includes('type_rule'));
 });
+
 test('verify: no key, bad critic, links stripped, quota', async () => {
   assert.deepEqual(await verifyModel('x', {}), { error: 'off' });
   assert.equal((await verifyModel('سؤال', env, mk([D('supported')], { contradiction: 'x' }))).decision, 'abstain');
@@ -70,3 +74,6 @@ test('source check: url safety, existence, support, numbers', async () => {
 });
 
 test('verify: answer is returned even when gates fail (confidence is decided by the page)', async () => { const r = await verifyModel('سؤال', env, mk([D('supported'), D('refuted'), D('uncertain')], { contradiction: 0.1 })); assert.equal(r.decision, 'abstain'); assert.equal(r.answer, 'جملة'); assert.equal(r.validated_for_release, false); });
+
+import { tierOf } from '../worker/rag-worker.js';
+test('tierOf classifies the domain only', () => { assert.equal(tierOf('www.who.int'), 'official'); assert.equal(tierOf('data.worldbank.org'), 'official'); assert.equal(tierOf('moh.gov.eg'), 'official'); assert.equal(tierOf('www.reuters.com'), 'news'); assert.equal(tierOf('blog.example.com'), 'unknown'); assert.equal(tierOf('fakewho.int.example.com'), 'unknown'); });
