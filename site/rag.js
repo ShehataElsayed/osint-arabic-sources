@@ -80,8 +80,17 @@ async function show(q, res, model, body) {
   if (model && model.error) body.append(el('p', model.error === 'busy' ? 'خدمة النموذج مشغولة الآن، فعُرضت المصادر فقط.' : 'خدمة النموذج غير متاحة الآن، فعُرضت المصادر فقط.', 'meta-line fade'));
   if (crit) body.append(criteriaBox(crit));
   if (model && !model.error && (model.sources || []).length) { const box = el('div', null, 'criteria fade'); box.append(el('strong', 'المصادر التي ذكرها النموذج وفُحصت آليًا'));
-    model.sources.forEach(x => { const u = safeUrl(x.url), r = el('div', null, 'crit ' + (x.verified ? 'pass' : 'warn')); const a = el('a', x.host); if (u) { a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; } r.append(el('span', x.verified ? '✓' : '!', 'mk'), a, el('small', `${TIERS[x.tier] || TIERS.unknown} · ` + (x.verified ? `تشابه ${x.similarity.toFixed(2)}` : 'لم يتحقق من دعمه للادعاء'))); box.append(r); });
-    box.append(el('small', 'الفئة تصنيف للنطاق وحده، ولا تعني صحة الادعاء. يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام.', 'crit-note')); body.append(box); }
+    model.sources.forEach(x => { const u = safeUrl(x.url), r = el('div', null, 'srcrow ' + (x.verified ? 'pass' : x.exists ? 'warn' : 'fail'));
+      const head = el('div', null, 'srchead'); head.append(el('span', x.verified ? '✓' : x.exists ? '!' : '✗', 'mk'));
+      if (u) { const a = el('a', x.name || x.title || x.host); a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; head.append(a); } else head.append(el('strong', x.name || 'مصدر بلا عنوان'));
+      r.append(head);
+      if (u) r.append(el('small', u, 'url'));
+      else r.append(el('small', 'لم يتم فتح الرابط' + (x.claimed ? ' (الرابط الذي ذكره النموذج: ' + x.claimed + ')' : ''), 'url'));
+      if (x.exists) { r.append(el('small', `${TIERS[x.tier] || TIERS.unknown} · ` + (x.verified ? `تشابه ${x.similarity.toFixed(2)}` : 'لم يتحقق من دعمه للادعاء')));
+        if (x.title) r.append(el('small', 'عنوان الصفحة: ' + x.title));
+        if (x.quote) { const q = el('blockquote', '«' + x.quote + '»', 'quote'); r.append(el('small', x.verified ? 'اقتباس من الصفحة المفتوحة:' : 'أقرب مقطع وجدناه في الصفحة (لا يعني أنه يدعم الادعاء):'), q); } }
+      box.append(r); });
+    box.append(el('small', 'الاقتباس يُستخرج من نص الصفحة نفسها بعد فتحها، لا من كتابة النموذج. الفئة تصنيف للنطاق وحده، ولا تعني صحة الادعاء. يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام.', 'crit-note')); body.append(box); }
   res.evidence.forEach((it, i) => body.append(srcCard(it, i)));
   if (wantsChart(q)) { const svg = barChartSVG(chartSpec(res.evidence, 'rating'), 'توزيع الأحكام في المصادر المسترجعة'); if (svg) { const box = el('div', null, 'chart fade'); box.dir = 'ltr'; box.innerHTML = svg; body.append(box); } else body.append(el('p', 'لا توجد بيانات حقيقية لرسم مخطط.', 'meta-line fade')); }
 }

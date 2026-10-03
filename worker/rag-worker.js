@@ -103,16 +103,19 @@ export function tierOf(host) {
   return 'unknown';
 }
 export async function checkSource(src, claimText, nums, f = fetch) {
-  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 80), url: '', host: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false };
+  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false };
   if (!url) return out;
   out.host = new URL(url).hostname; out.tier = tierOf(out.host);
   try {
     const r = await f(url, { headers: { accept: 'text/html,text/plain', 'user-agent': 'Mozilla/5.0 (compatible; osint-guide-check)' }, redirect: 'follow', signal: AbortSignal.timeout(6000) });
     const ct = r.headers?.get?.('content-type') || 'text/html';
     if (!r.ok || !/text\/(html|plain)/i.test(ct)) return out;
-    const text = (await r.text()).slice(0, 400000).replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ');
+    const raw = (await r.text()).slice(0, 400000); const text = raw.replace(/<(script|style|head|title|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|td|section|article|header|footer|blockquote)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
     out.exists = true; out.url = url;
-    out.similarity = Math.max(0, ...text.split(/[.!؟?\n]+/).filter(x => x.trim().length > 15).map(x => cos(claimText, x)));
+    const tm = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i); out.title = cleanText((tm ? tm[1] : '').replace(/&nbsp;|&amp;/g, ' '), 160);
+    const sents = text.split(/[.!؟?\n]+/).map(x => x.replace(/\s+/g, ' ').trim()).filter(x => x.length > 15);
+    const scored = sents.map(x => ({ x, s: cos(claimText, x) })).sort((a, b) => b.s - a.s);
+    out.similarity = scored.length ? scored[0].s : 0; out.quote = scored.length && scored[0].s > 0 ? cleanText(scored[0].x, 300) : '';
     out.similarity = Math.round(out.similarity * 100) / 100;
     const body = digits(text), want = (nums || []).map(digits).filter(Boolean);
     out.numbers_ok = want.length ? want.every(n => body.includes(n)) : null;
@@ -123,10 +126,10 @@ export async function checkSource(src, claimText, nums, f = fetch) {
 export async function verifyModel(question, env, f = fetch) {
   const q = String(question || '').trim().slice(0, 300);
   if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL || !q) return { error: 'off' };
-  const draft = `أجب عن الادعاء أو السؤال التالي من معرفتك فقط، بالعربية، بدون روابط. إن لم تكن متأكدًا أو كان الأمر حديثًا فاجعل الحكم uncertain. أعد JSON فقط: {"verdict":"supported|refuted|uncertain","answer":"جملة أو جملتان","time_sensitive":true|false,"numbers":["أرقام أو تواريخ ذُكرت في الادعاء"],"sources":[{"name":"اسم الجهة","url":"https://..."}]}. اذكر حتى مصدرين فقط بروابط https تعرف أنها موجودة فعلًا، وإلا اترك المصادر فارغة ولا تخترع روابط. معنى supported أن الادعاء صحيح، وrefuted أنه خاطئ.\nالادعاء: ${q}`;
+  const draft = `أجب عن الادعاء أو السؤال التالي من معرفتك فقط، بالعربية، بدون روابط. إن لم تكن متأكدًا أو كان الأمر حديثًا فاجعل الحكم uncertain. أعد JSON فقط: {"verdict":"supported|refuted|uncertain","answer":"جملة أو جملتان","time_sensitive":true|false,"numbers":["أرقام أو تواريخ ذُكرت في الادعاء"],"sources":[{"name":"العنوان الكامل للمقال أو الصفحة واسم الجهة","url":"https://الرابط الكامل للصفحة نفسها لا للصفحة الرئيسية"}]}. اذكر من مصدر إلى ثلاثة مصادر بعنوان كامل ورابط https كامل لصفحة محددة تعرف أنها موجودة فعلًا، ولا تخترع روابط ولا تكتب اقتباسات. معنى supported أن الادعاء صحيح، وrefuted أنه خاطئ.\nالادعاء: ${q}`;
   const runs = await Promise.all(Array.from({ length: GATE.samples }, () => modelJson(draft, env, f, 0.7)));
   if (runs.some(x => x.error === 'http_429')) return { error: 'busy' };
-  const ok = runs.filter(x => x.json && VERDICTS.includes(x.json.verdict)).map(x => ({ verdict: x.json.verdict, answer: cleanText(x.json.answer, 400), time: x.json.time_sensitive === true, numbers: Array.isArray(x.json.numbers) ? x.json.numbers.slice(0, 5).map(n => cleanText(n, 30)) : [], sources: Array.isArray(x.json.sources) ? x.json.sources.slice(0, 2) : [] }));
+  const ok = runs.filter(x => x.json && VERDICTS.includes(x.json.verdict)).map(x => ({ verdict: x.json.verdict, answer: cleanText(x.json.answer, 400), time: x.json.time_sensitive === true, numbers: Array.isArray(x.json.numbers) ? x.json.numbers.slice(0, 5).map(n => cleanText(n, 30)) : [], sources: Array.isArray(x.json.sources) ? x.json.sources.slice(0, 3) : [] }));
   if (!ok.length) return { error: 'upstream' };
   const counts = {}; ok.forEach(x => { counts[x.verdict] = (counts[x.verdict] || 0) + 1; });
   const [verdict, top] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
@@ -146,7 +149,7 @@ export async function verifyModel(question, env, f = fetch) {
     { id: 'evidence', label: 'سند مستقل', status: 'na', detail: 'معرفة النموذج ليست دليلاً' },
   ];
   const failed = criteria.filter(c => c.status === 'fail').map(c => c.id);
-  const out = { type, verdict, criteria, sources: checked.filter(s => s.exists).map(s => ({ name: s.name, url: s.url, host: s.host, similarity: s.similarity, verified: s.verified, tier: s.tier })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed, warnings: criteria.filter(c => c.status === 'warn').map(c => c.id) };
+  const out = { type, verdict, criteria, sources: checked.map(s => ({ name: s.name, url: s.exists ? s.url : '', claimed: s.exists ? '' : s.claimed, host: s.host, exists: s.exists, title: s.title, quote: s.exists ? s.quote : '', similarity: s.similarity, verified: s.verified, tier: s.tier })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed, warnings: criteria.filter(c => c.status === 'warn').map(c => c.id) };
   out.answer = lead.answer;
   return out;
 }

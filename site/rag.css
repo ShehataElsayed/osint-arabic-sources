@@ -58,3 +58,9 @@
 .conf strong{font-weight:800}.conf small{color:#4a5a66}
 .conf.high{border-color:#8cc9a8;background:#eef9f2}.conf.medium{border-color:#e3c677;background:#fff8e6}.conf.low{border-color:#e39a9a;background:#fdeeee}
 .crit.warn .mk{color:#b36b00}
+
+.srcrow{display:flex;flex-direction:column;gap:3px;padding:10px 0;border-top:1px solid #e4ecea;font-family:Cairo,sans-serif}
+.srchead{display:flex;gap:8px;align-items:baseline;font-weight:700}
+.srcrow small{color:#4a5a66}.srcrow .url{direction:ltr;text-align:right;word-break:break-all}
+.srcrow.pass .mk{color:#1b7a4a}.srcrow.warn .mk{color:#b36b00}.srcrow.fail .mk{color:#b3261e}
+.quote{margin:2px 0;padding:6px 12px;border-right:3px solid #0a827d;background:#f2f8f7;font-weight:700;color:#1b3a45;line-height:1.8}
