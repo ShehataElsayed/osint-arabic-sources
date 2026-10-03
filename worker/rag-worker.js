@@ -93,10 +93,19 @@ const digits = s => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.in
 export function safeSourceUrl(u) {
   try { const x = new URL(String(u)); const h = x.hostname.toLowerCase(); if (x.protocol !== 'https:' || x.username || x.port || !h.includes('.') || /^[\d.]+$/.test(h) || h.includes(':') || /(^|\.)(localhost|local|internal)$/.test(h) || SRC_DENY.some(d => h.includes(d))) return ''; return x.href; } catch { return ''; }
 }
+const OFFICIAL = /(^|\.)(who\.int|un\.org|unesco\.org|unicef\.org|worldbank\.org|albankaldawli\.org|imf\.org|oecd\.org|unfccc\.int|europa\.eu|nasa\.gov|cdc\.gov|nih\.gov|icrc\.org|redcross\.org|capmas\.gov\.eg|cbe\.org\.eg)$/i;
+const NEWS = /(^|\.)(reuters\.com|apnews\.com|bbc\.com|bbc\.co\.uk|aljazeera\.net|aljazeera\.com|alarabiya\.net|skynewsarabia\.com|france24\.com|dw\.com|nytimes\.com|theguardian\.com|washingtonpost\.com|ahram\.org\.eg|almasryalyoum\.com|shorouknews\.com|asharqalawsat\.com|independentarabia\.com|rt\.com)$/i;
+// Domain class only. It says who runs the site, never that a claim is true.
+export function tierOf(host) {
+  const h = String(host || '').toLowerCase();
+  if (OFFICIAL.test(h) || /\.gov(\.[a-z]{2})?$/.test(h) || /\.edu(\.[a-z]{2})?$/.test(h) || /\.int$/.test(h)) return 'official';
+  if (NEWS.test(h)) return 'news';
+  return 'unknown';
+}
 export async function checkSource(src, claimText, nums, f = fetch) {
-  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 80), url: '', host: '', exists: false, similarity: 0, numbers_ok: null, verified: false };
+  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 80), url: '', host: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false };
   if (!url) return out;
-  out.host = new URL(url).hostname;
+  out.host = new URL(url).hostname; out.tier = tierOf(out.host);
   try {
     const r = await f(url, { headers: { accept: 'text/html,text/plain', 'user-agent': 'Mozilla/5.0 (compatible; osint-guide-check)' }, redirect: 'follow', signal: AbortSignal.timeout(6000) });
     const ct = r.headers?.get?.('content-type') || 'text/html';
@@ -129,15 +138,15 @@ export async function verifyModel(question, env, f = fetch) {
   const cs = Number(critic.json?.contradiction), criticOk = Number.isFinite(cs) && cs >= 0 && cs <= 1;
   const criteria = [
     { id: 'consistency', label: 'اتساق العينات', status: verdict !== 'uncertain' && share >= GATE.minAgreeShare ? 'pass' : 'fail', detail: `${top} من ${GATE.samples} عينات: حكم ${{ supported: 'صحيح', refuted: 'خاطئ', uncertain: 'غير متأكد' }[verdict]}` },
-    { id: 'type_rule', label: strict ? 'قاعدة النوع (إجماع ومصدر متحقَّق)' : 'قاعدة النوع', status: !strict || (share === 1 && anyVerified) ? 'pass' : 'fail', detail: type },
+    { id: 'type_rule', label: strict ? 'قاعدة النوع (إجماع العينات)' : 'قاعدة النوع', status: !strict ? 'pass' : share === 1 ? (anyVerified ? 'pass' : 'warn') : 'fail', detail: type },
     { id: 'contradiction', label: 'نقد ذاتي للتناقض', status: criticOk && cs < GATE.contradiction ? 'pass' : 'fail', detail: criticOk ? cs.toFixed(2) : 'غير متاح' },
-    { id: 'recency', label: 'حداثة الموضوع', status: ok.some(x => x.time) ? 'fail' : 'pass', detail: ok.some(x => x.time) ? 'قد يحتاج مصدرًا حديثًا' : 'لا مؤشر على حداثة' },
-    { id: 'source_exists', label: 'وجود المصادر المذكورة', status: !checked.length ? 'na' : anyExists ? 'pass' : strict ? 'fail' : 'warn', detail: !checked.length ? 'لم يذكر النموذج مصدرًا' : `${checked.filter(s => s.exists).length} من ${checked.length} روابط فُتحت` },
-    { id: 'source_support', label: 'دعم المصدر للادعاء', status: !anyExists ? 'na' : anyVerified ? 'pass' : strict ? 'fail' : 'warn', detail: !anyExists ? 'لا مصدر مفتوح' : `تشابه ${Math.max(...checked.map(s => s.similarity)).toFixed(2)} والأرقام ${checked.some(s => s.numbers_ok === true) ? 'موجودة' : checked.some(s => s.numbers_ok === false) ? 'غير موجودة' : 'غير مطلوبة'}` },
+    { id: 'recency', label: 'حداثة الموضوع', status: ok.some(x => x.time) ? 'warn' : 'pass', detail: ok.some(x => x.time) ? 'قد يحتاج مصدرًا حديثًا' : 'لا مؤشر على حداثة' },
+    { id: 'source_exists', label: 'وجود المصادر المذكورة', status: !checked.length ? 'na' : anyExists ? 'pass' : 'warn', detail: !checked.length ? 'لم يذكر النموذج مصدرًا' : `${checked.filter(s => s.exists).length} من ${checked.length} روابط فُتحت` },
+    { id: 'source_support', label: 'دعم المصدر للادعاء', status: !anyExists ? 'na' : anyVerified ? 'pass' : 'warn', detail: !anyExists ? 'لا مصدر مفتوح' : `تشابه ${Math.max(...checked.map(s => s.similarity)).toFixed(2)} والأرقام ${checked.some(s => s.numbers_ok === true) ? 'موجودة' : checked.some(s => s.numbers_ok === false) ? 'غير موجودة' : 'غير مطلوبة'}` },
     { id: 'evidence', label: 'سند مستقل', status: 'na', detail: 'معرفة النموذج ليست دليلاً' },
   ];
   const failed = criteria.filter(c => c.status === 'fail').map(c => c.id);
-  const out = { type, verdict, criteria, sources: checked.filter(s => s.exists).map(s => ({ name: s.name, url: s.url, host: s.host, similarity: s.similarity, verified: s.verified })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed };
+  const out = { type, verdict, criteria, sources: checked.filter(s => s.exists).map(s => ({ name: s.name, url: s.url, host: s.host, similarity: s.similarity, verified: s.verified, tier: s.tier })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed, warnings: criteria.filter(c => c.status === 'warn').map(c => c.id) };
   out.answer = lead.answer;
   return out;
 }
