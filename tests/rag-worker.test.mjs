@@ -85,3 +85,5 @@ test('source check: quote is a verbatim passage of the fetched page; dead links 
   const dead = await checkSource({ name: 'م', url: 'https://example.com/zzz' }, 'سعر الخبز', [], async () => ({ ok: false, headers: { get: () => 'text/html' }, text: async () => '' }));
   assert.equal(dead.exists, false); assert.equal(dead.quote, ''); assert.equal(dead.claimed, 'https://example.com/zzz');
 });
+
+test('tierOf: broader lists, anchored to the registrable domain', () => { assert.equal(tierOf('www.cbe.org.eg'), 'official'); assert.equal(tierOf('www.capmas.gov.eg'), 'official'); assert.equal(tierOf('www.sama.gov.sa'), 'official'); assert.equal(tierOf('news.un.org'), 'official'); assert.equal(tierOf('www.aljazeera.net'), 'news'); assert.equal(tierOf('www.youm7.com'), 'news'); assert.equal(tierOf('www.thelancet.com'), 'academic'); assert.equal(tierOf('cu.edu.eg'), 'official'); assert.equal(tierOf('www.ox.ac.uk'), 'academic'); assert.equal(tierOf('who.int.evil.com'), 'unknown'); assert.equal(tierOf('notreuters.com'), 'unknown'); assert.equal(tierOf('reuters.com.fake.io'), 'unknown'); });

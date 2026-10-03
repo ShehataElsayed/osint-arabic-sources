@@ -40,12 +40,13 @@ function crossCheck(model, evidence) {
   return { id: 'conflict', label: 'مطابقة أحكام منشورة', status: against ? 'fail' : 'pass', detail: `${t} صحيح · ${f} خاطئ أو مضلل` };
 }
 const WARN = { type_rule: 'ادعاء رقمي أو صحي أو منسوب لم يتحقق مصدر منه', recency: 'قد يحتاج مصدرًا حديثًا', source_support: 'لم يدعم مصدرٌ فُحص الادعاء', source_exists: 'لم تُفتح المصادر المذكورة' };
-const TIERS = { official: 'جهة رسمية أو دولية', news: 'مؤسسة إخبارية معروفة', unknown: 'غير مصنّف' };
+const RELIABILITY = { official: 'عالية جدًا', news: 'عالية', academic: 'عالية', unknown: 'غير معروفة' };
+const TIERS = { official: 'جهة رسمية أو دولية', news: 'مؤسسة إخبارية معروفة', academic: 'مجلة علمية أو جهة أكاديمية وصحية معروفة', unknown: 'غير مصنّف' };
 // Heuristic confidence from the criteria results. It is a rule of thumb, not a measured probability.
 // Any failed criterion -> low. No failure -> medium, or high only when a cited source of the official or news class was fetched and passed the similarity and numbers checks.
 function confidence(crit, failed, sources) {
   const f = crit.filter(c => c.status === 'fail').length, warn = crit.filter(c => c.status === 'warn').map(c => c.id);
-  const strong = (sources || []).some(s => s.verified && (s.tier === 'official' || s.tier === 'news'));
+  const strong = (sources || []).some(s => s.verified && (s.tier === 'official' || s.tier === 'news' || s.tier === 'academic'));
   const level = f ? 'low' : strong ? 'high' : 'medium';
   return { level, why: [...new Set(failed)].map(r => REASONS[r] || r), warn: warn.map(r => WARN[r] || REASONS[r] || r) };
 }
@@ -86,11 +87,11 @@ async function show(q, res, model, body) {
       r.append(head);
       if (u) r.append(el('small', u, 'url'));
       else r.append(el('small', 'لم يتم فتح الرابط' + (x.claimed ? ' (الرابط الذي ذكره النموذج: ' + x.claimed + ')' : ''), 'url'));
-      if (x.exists) { r.append(el('small', `${TIERS[x.tier] || TIERS.unknown} · ` + (x.verified ? `تشابه ${x.similarity.toFixed(2)}` : 'لم يتحقق من دعمه للادعاء')));
+      if (x.exists) { const rel = el('div', null, 'rel rel-' + (x.tier || 'unknown')); rel.append(el('strong', 'موثوقية المصدر: ' + (RELIABILITY[x.tier] || RELIABILITY.unknown)), el('small', 'الفئة: ' + (TIERS[x.tier] || TIERS.unknown) + '. تقدير عام للجهة وليس للادعاء.')); r.append(rel); r.append(el('small', 'دعم الادعاء: ' + (x.verified ? `اجتاز الفحص (تشابه ${x.similarity.toFixed(2)})` : 'لم يتحقق من دعمه للادعاء')));
         if (x.title) r.append(el('small', 'عنوان الصفحة: ' + x.title));
         if (x.quote) { const q = el('blockquote', '«' + x.quote + '»', 'quote'); r.append(el('small', x.verified ? 'اقتباس من الصفحة المفتوحة:' : 'أقرب مقطع وجدناه في الصفحة (لا يعني أنه يدعم الادعاء):'), q); } }
       box.append(r); });
-    box.append(el('small', 'الاقتباس يُستخرج من نص الصفحة نفسها بعد فتحها، لا من كتابة النموذج. الفئة تصنيف للنطاق وحده، ولا تعني صحة الادعاء. يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام.', 'crit-note')); body.append(box); }
+    box.append(el('small', 'الاقتباس يُستخرج من نص الصفحة نفسها بعد فتحها، لا من كتابة النموذج. موثوقية المصدر تقدير للجهة حسب نطاقها ولا ترفع درجة ثقة الادعاء بمفردها، ولا تعني صحة هذا الادعاء. يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام.', 'crit-note')); body.append(box); }
   res.evidence.forEach((it, i) => body.append(srcCard(it, i)));
   if (wantsChart(q)) { const svg = barChartSVG(chartSpec(res.evidence, 'rating'), 'توزيع الأحكام في المصادر المسترجعة'); if (svg) { const box = el('div', null, 'chart fade'); box.dir = 'ltr'; box.innerHTML = svg; body.append(box); } else body.append(el('p', 'لا توجد بيانات حقيقية لرسم مخطط.', 'meta-line fade')); }
 }
