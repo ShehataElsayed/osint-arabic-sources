@@ -10,7 +10,7 @@ const fs=require('fs');
   browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',args:['--no-sandbox']});
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
   await page.goto('http://127.0.0.1:8765/');
-  await page.getByRole('link',{name:'معمل NewsRAG',exact:true}).waitFor();
+  await page.getByRole('link',{name:'تجربة عملية على مكتبة NewsRAG',exact:true}).waitFor();
   await page.getByRole('searchbox',{name:'ابحث في هذا الموقع',exact:true}).fill('صورة');
   await page.waitForFunction(()=>document.querySelector('[aria-label="نتائج البحث"]')?.innerText.includes('Google Images'));
   assert.ok(await page.evaluate(()=>[...document.querySelectorAll('[aria-label="نتائج البحث"] a')].some(a=>a.href.includes('category-06.html'))));
