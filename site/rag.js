@@ -66,6 +66,9 @@ async function show(q, res, model, body) {
   if (!modelAnswer && res.decision !== 'answer' && reasons.length) body.append(el('p', 'السبب: ' + [...new Set(reasons)].map(r => REASONS[r] || r).join('، '), 'why fade'));
   if (model && model.error) body.append(el('p', model.error === 'busy' ? 'خدمة النموذج مشغولة الآن، فعُرضت المصادر فقط.' : 'خدمة النموذج غير متاحة الآن، فعُرضت المصادر فقط.', 'meta-line fade'));
   if (crit) body.append(criteriaBox(crit));
+  if (model && !model.error && (model.sources || []).length) { const box = el('div', null, 'criteria fade'); box.append(el('strong', 'المصادر التي ذكرها النموذج وفُحصت آليًا'));
+    model.sources.forEach(x => { const u = safeUrl(x.url), r = el('div', null, 'crit ' + (x.verified ? 'pass' : 'fail')); const a = el('a', x.host); if (u) { a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; } r.append(el('span', x.verified ? '✓' : '✗', 'mk'), a, el('small', x.verified ? `تشابه ${x.similarity.toFixed(2)}` : 'لم يتحقق من دعمه للادعاء')); box.append(r); });
+    box.append(el('small', 'يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام، وليس حكمًا بموثوقيته.', 'crit-note')); body.append(box); }
   res.evidence.forEach((it, i) => body.append(srcCard(it, i)));
   if (wantsChart(q)) { const svg = barChartSVG(chartSpec(res.evidence, 'rating'), 'توزيع الأحكام في المصادر المسترجعة'); if (svg) { const box = el('div', null, 'chart fade'); box.dir = 'ltr'; box.innerHTML = svg; body.append(box); } else body.append(el('p', 'لا توجد بيانات حقيقية لرسم مخطط.', 'meta-line fade')); }
 }
