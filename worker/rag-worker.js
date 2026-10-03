@@ -112,15 +112,15 @@ const vfn = e => { const v = (e?.vcardArray?.[1] || []).find(x => x[0] === 'fn' 
 export async function rdapInfo(host, f = fetch) {
   const out = { domain: registrable(host), age_years: null, registrar: null, registrant: null, rdap: 'unavailable' };
   try {
-    const r = await f(`https://rdap.org/domain/${encodeURIComponent(out.domain)}`, { headers: { accept: 'application/rdap+json' }, redirect: 'follow', signal: AbortSignal.timeout(5000) });
-    if (!r.ok) return out;
+    const r = await f(`https://rdap.org/domain/${encodeURIComponent(out.domain)}`, { headers: { accept: 'application/rdap+json', 'user-agent': 'Mozilla/5.0 (compatible; osint-guide-identity)' }, redirect: 'follow', signal: AbortSignal.timeout(5000) });
+    if (!r.ok) { out.rdap = 'http_' + r.status; return out; }
     const j = await r.json(); out.rdap = 'ok';
     const reg = (j.events || []).find(e => e.eventAction === 'registration')?.eventDate, t = Date.parse(reg);
     if (Number.isFinite(t)) out.age_years = Math.max(0, Math.floor((Date.now() - t) / 31557600000));
     const ents = j.entities || [];
     out.registrar = vfn(ents.find(e => (e.roles || []).includes('registrar')));
     out.registrant = vfn(ents.find(e => (e.roles || []).includes('registrant')));
-  } catch { /* RDAP unreachable */ }
+  } catch (e) { out.rdap = 'error:' + String(e?.message || e).slice(0, 60); }
   return out;
 }
 export function pageIdentity(raw) {
@@ -145,13 +145,13 @@ export async function checkSource(src, claimText, nums, f = fetch) {
     const raw = (await r.text()).slice(0, 400000); const text = raw.replace(/<(script|style|head|title|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|td|section|article|header|footer|blockquote)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
     out.exists = true; out.url = url;
     const tm = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i); out.title = cleanText((tm ? tm[1] : '').replace(/&nbsp;|&amp;/g, ' '), 160);
-    const sents = text.split(/[.!؟?\n]+/).map(x => x.replace(/\s+/g, ' ').trim()).filter(x => x.length > 15);
+    const sents = text.split(/[.!؟?\n]+/).map(x => x.replace(/\s+/g, ' ').trim()).filter(x => x.length > 15 && x.split(' ').length >= 6);
     const scored = sents.map(x => ({ x, s: cos(claimText, x) })).sort((a, b) => b.s - a.s);
-    out.page = pageIdentity(raw); out.cands = scored.slice(0, 10).map(c => c.x.slice(0, 300)); out.similarity = scored.length ? scored[0].s : 0; out.quote = scored.length && scored[0].s > 0 ? cleanText(scored[0].x, 300) : '';
+    out.page = pageIdentity(raw); out.cands = scored.slice(0, 10).map(c => c.x.slice(0, 300)); out.similarity = scored.length ? scored[0].s : 0; out.quote = scored.length && scored[0].s >= 0.15 ? cleanText(scored[0].x, 300) : '';
     out.similarity = Math.round(out.similarity * 100) / 100;
     const body = digits(text), want = (nums || []).map(digits).filter(Boolean);
     out.numbers_ok = want.length ? want.every(n => body.includes(n)) : null;
-    out.verified = out.similarity >= 0.35 && out.numbers_ok !== false;
+    out.verified = out.similarity >= 0.4 && out.numbers_ok !== false;
   } catch { /* unreachable */ }
   return out;
 }

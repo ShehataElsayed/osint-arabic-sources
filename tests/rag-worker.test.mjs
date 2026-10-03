@@ -100,7 +100,7 @@ test('identity: registrable domain, RDAP parsing without guessing, rating floors
   const j = { events: [{ eventAction: 'registration', eventDate: '2006-01-23T00:00:00Z' }], entities: [{ roles: ['registrar'], vcardArray: ['vcard', [['fn', {}, 'text', 'GoDaddy.com, LLC']]] }, { roles: ['registrant'], vcardArray: ['vcard', [['fn', {}, 'text', 'REDACTED FOR PRIVACY']]] }] };
   const id = await rdapInfo('www.x.com', async () => ({ ok: true, json: async () => j }));
   assert.ok(id.age_years >= 19); assert.equal(id.registrar, 'GoDaddy.com, LLC'); assert.equal(id.registrant, null); assert.equal(id.rdap, 'ok');
-  assert.equal((await rdapInfo('x.com', async () => ({ ok: false }))).rdap, 'unavailable');
+  assert.notEqual((await rdapInfo('x.com', async () => ({ ok: false }))).rdap, 'ok');
   const pg = pageIdentity('<meta property="og:site_name" content="موقع تجريبي"><a href="/about">من نحن</a>'); assert.equal(pg.site_name, 'موقع تجريبي'); assert.equal(pg.has_about, true); assert.equal(pg.has_contact, false);
   assert.equal(reliabilityOf('official', null, null), 'very_high'); assert.equal(reliabilityOf('news', null, null), 'high');
   assert.equal(reliabilityOf('unknown', { age_years: 9 }, pg), 'medium'); assert.equal(reliabilityOf('unknown', { age_years: 1 }, pg), 'unknown'); assert.equal(reliabilityOf('unknown', null, null), 'unknown');
