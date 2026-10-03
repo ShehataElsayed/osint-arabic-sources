@@ -17,8 +17,8 @@ export async function factCheck(q, key, f = fetch) {
     out.push({ title: rv.title || c.text, claim: c.text, publisher: rv.publisher?.name || rv.publisher?.site || '', url: rv.url, rating: rv.textualRating || '', date: rv.reviewDate || c.claimDate || '', text: '', fetch: 'link_only', source: 'factcheck' });
   return out;
 }
-// Optional Gemini step: writes one short Arabic sentence from the question + verdict labels only. No publisher text is sent.
-// Secret: GEMINI_API_KEY (env). Model name: env GEMINI_MODEL. Unpaid Gemini terms apply: content may be used by Google.
+// Optional external-AI step: writes one short Arabic sentence from the question + verdict labels only. No publisher text is sent.
+// Secret: GEMINI_API_KEY (env). Model name: env GEMINI_MODEL. The provider is external and may use the text; the site shows a notice.
 export const cleanLabels = l => (Array.isArray(l) ? l : []).slice(0, 8).map(x => ({ rating: String(x?.rating || '').slice(0, 40), count: Math.min(99, Number(x?.count) || 0) }));
 export async function compose(question, labels, decision, env, f = fetch) {
   if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL) return null;
@@ -65,6 +65,50 @@ export async function plan(text, env, f = fetch) {
   let j; try { j = JSON.parse(((await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   return cleanPlan(j) || { error: 'filtered' };
 }
+// Model-answer gate: a JS port of the NewsRAG decision rules applied to the model's own answer.
+// It is not the Python library and has no trained NLI; the critic score is a model self-critique. validated_for_release stays false.
+export const GATE = Object.freeze({ minAgreeShare: 0.6, contradiction: 0.5, samples: 3 });
+const nrm = s => String(s ?? '').toLowerCase().normalize('NFKC').replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+export function claimType(text) {
+  const t = nrm(text);
+  if (/\d|[٠-٩]/.test(String(text)) || /(نسبه|مليون|مليار|الف|عدد|ارتفع|انخفض|%)/.test(t)) return 'numeric';
+  if (/(قال|صرح|اعلن|اكد|نسب|يزعم|قاله|تصريح)/.test(t)) return 'attribution';
+  if (/(لقاح|مرض|علاج|سرطان|فيروس|دواء|صحه|وباء)/.test(t)) return 'health';
+  return 'general';
+}
+const VERDICTS = ['supported', 'refuted', 'uncertain'];
+const cleanText = (s, n) => { const t = String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n); return /https?:|www\./i.test(t) ? '' : t; };
+async function modelJson(prompt, env, f, temperature) {
+  const r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature, responseMimeType: 'application/json' } }) });
+  if (!r.ok) return { error: 'http_' + r.status };
+  try { return { json: JSON.parse(((await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/^\s*```(?:json)?|```\s*$/g, '').trim()) }; } catch { return { error: 'parse' }; }
+}
+export async function verifyModel(question, env, f = fetch) {
+  const q = String(question || '').trim().slice(0, 300);
+  if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL || !q) return { error: 'off' };
+  const draft = `أجب عن الادعاء أو السؤال التالي من معرفتك فقط، بالعربية، بدون روابط. إن لم تكن متأكدًا أو كان الأمر حديثًا فاجعل الحكم uncertain. أعد JSON فقط: {"verdict":"supported|refuted|uncertain","answer":"جملة أو جملتان","time_sensitive":true|false}. معنى supported أن الادعاء صحيح، وrefuted أنه خاطئ.\nالادعاء: ${q}`;
+  const runs = await Promise.all(Array.from({ length: GATE.samples }, () => modelJson(draft, env, f, 0.7)));
+  if (runs.some(x => x.error === 'http_429')) return { error: 'busy' };
+  const ok = runs.filter(x => x.json && VERDICTS.includes(x.json.verdict)).map(x => ({ verdict: x.json.verdict, answer: cleanText(x.json.answer, 400), time: x.json.time_sensitive === true }));
+  if (!ok.length) return { error: 'upstream' };
+  const counts = {}; ok.forEach(x => { counts[x.verdict] = (counts[x.verdict] || 0) + 1; });
+  const [verdict, top] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+  const share = top / GATE.samples, lead = ok.find(x => x.verdict === verdict && x.answer) || ok[0];
+  const type = claimType(q), strict = type !== 'general';
+  const critic = await modelJson(`أنت مدقق ناقد. الادعاء: ${q}\nإجابة مقترحة: ${lead.answer} (الحكم: ${verdict}).\nقيّم من 0 إلى 1 مدى احتمال أن الإجابة تناقض وقائع معروفة أو أنها غير مدعومة. أعد JSON فقط: {"contradiction":0.0}`, env, f, 0);
+  const cs = Number(critic.json?.contradiction), criticOk = Number.isFinite(cs) && cs >= 0 && cs <= 1;
+  const criteria = [
+    { id: 'consistency', label: 'اتساق العينات', status: verdict !== 'uncertain' && share >= GATE.minAgreeShare ? 'pass' : 'fail', detail: `${top} من ${GATE.samples} عينات على الحكم نفسه` },
+    { id: 'type_rule', label: strict ? 'قاعدة النوع (إجماع كامل)' : 'قاعدة النوع', status: !strict || share === 1 ? 'pass' : 'fail', detail: type },
+    { id: 'contradiction', label: 'نقد ذاتي للتناقض', status: criticOk && cs < GATE.contradiction ? 'pass' : 'fail', detail: criticOk ? cs.toFixed(2) : 'غير متاح' },
+    { id: 'recency', label: 'حداثة الموضوع', status: ok.some(x => x.time) ? 'fail' : 'pass', detail: ok.some(x => x.time) ? 'قد يحتاج مصدرًا حديثًا' : 'لا مؤشر على حداثة' },
+    { id: 'evidence', label: 'سند من مصدر', status: 'na', detail: 'معرفة النموذج ليست دليلاً' },
+  ];
+  const failed = criteria.filter(c => c.status === 'fail').map(c => c.id);
+  const out = { type, verdict, criteria, validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed };
+  if (!failed.length) out.answer = lead.answer;
+  return out;
+}
 export async function answer(question, env, f = fetch) {
   const fc = await factCheck(question, env.FACTCHECK_API_KEY, f);
   const results = [...fc].map(x => (x.fetch === 'full' && denied(x.url) ? { ...x, fetch: 'link_only', text: '' } : x));
@@ -79,6 +123,7 @@ export default {
     let b; try { b = await req.json(); } catch { return json({ error: 'json' }, 400, o); }
     if (b?.mode === 'compose') { try { return json({ text: await compose(String(b.question || ''), b.labels, b.decision, env) }, 200, o); } catch { return json({ text: null }, 200, o); } }
     if (b?.mode === 'recommend') { try { const rec = await recommend(String(b.query || ''), b.candidates, env); return json(Array.isArray(rec) ? { picks: rec } : { picks: null, reason: rec?.error || 'off' }, 200, o); } catch { return json({ picks: null }, 200, o); } }
+    if (b?.mode === 'verify') { try { return json(await verifyModel(String(b.question || ''), env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     const q = String(b?.question || '').trim().slice(0, 300); if (!q) return json({ error: 'empty' }, 400, o);
     try { return json(await answer(q, env), 200, o); } catch { return json({ error: 'upstream' }, 502, o); }

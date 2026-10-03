@@ -3,7 +3,7 @@
 <section class="greet" id="greet">
 <div class="spark" aria-hidden="true"></div>
 <span class="tag-exp">تجريبي</span><h1>تجربة عملية على مكتبة NewsRAG</h1>
-<p>اسأل وتحقق: اكتب ادعاءً أو سؤالًا. تُسترجع المصادر ويُفحص التشابه والتناقض، ثم تظهر إجابة بإحالاتها أو امتناع صريح.</p>
+<p>اسأل وتحقق: اكتب ادعاءً أو سؤالًا. يجيب النموذج من معرفته أو من المصادر، وتُطبَّق على إجابته معايير المكتبة (اتساق، تناقض، نوع الادعاء، حداثة، مطابقة الأحكام المنشورة) قبل أن تظهر، أو يمتنع صراحة.</p>
 <div class="chips" id="chips" role="group" aria-label="أسئلة مقترحة">
 <button type="button" class="chip">هل يرتدي الرباع السوري معن أسعد حذاء مهترئا في أولمبياد طوكيو؟</button>
 <button type="button" class="chip">فيديو يظهر توغل قوات إسرائيلية في درعا مع رسم بياني</button>
@@ -18,6 +18,7 @@
 <button id="ask" type="submit" aria-label="تحقق"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 </form>
 <p id="status" class="status" role="status"></p>
+<p id="notice" class="note"></p>
 <p id="measured" class="note"></p>
 </div>
 <details class="local">
