@@ -138,7 +138,7 @@ export async function verifyModel(question, env, f = fetch) {
   ];
   const failed = criteria.filter(c => c.status === 'fail').map(c => c.id);
   const out = { type, verdict, criteria, sources: checked.filter(s => s.exists).map(s => ({ name: s.name, url: s.url, host: s.host, similarity: s.similarity, verified: s.verified })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed };
-  if (!failed.length) out.answer = lead.answer;
+  out.answer = lead.answer;
   return out;
 }
 export async function answer(question, env, f = fetch) {

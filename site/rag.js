@@ -39,6 +39,14 @@ function crossCheck(model, evidence) {
   const f = pol.filter(p => p === 'false').length, t = pol.length - f, against = model.verdict === 'supported' ? f > t : model.verdict === 'refuted' ? t > f : false;
   return { id: 'conflict', label: 'مطابقة أحكام منشورة', status: against ? 'fail' : 'pass', detail: `${t} صحيح · ${f} خاطئ أو مضلل` };
 }
+const HARD = ['consistency', 'type_rule', 'conflict'];
+// Heuristic confidence from the criteria results. It is a rule of thumb, not a measured probability.
+function confidence(crit, failed) {
+  const f = crit.filter(c => c.status === 'fail').map(c => c.id), supported = crit.some(c => c.id === 'source_support' && c.status === 'pass');
+  const level = f.some(id => HARD.includes(id)) || f.length >= 2 ? 'low' : f.length === 1 ? 'medium' : supported ? 'high' : 'medium';
+  return { level, why: [...new Set(failed)].map(r => REASONS[r] || r) };
+}
+const CONF = { high: 'عالية', medium: 'متوسطة', low: 'منخفضة' };
 function criteriaBox(list) {
   const box = el('div', null, 'criteria fade'); box.append(el('strong', 'نتائج المعايير'));
   list.forEach(c => { const r = el('div', null, 'crit ' + c.status); r.append(el('span', MARK[c.status], 'mk'), el('span', c.label), el('small', c.id === 'type_rule' ? (TYPES[c.detail] || c.detail) : c.detail)); box.append(r); });
@@ -50,19 +58,21 @@ async function show(q, res, model, body) {
   const rated = res.evidence.filter(i => i.rating), tally = {}; rated.forEach(i => { tally[i.rating] = (tally[i.rating] || 0) + 1; });
   const top = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
   const title = el('h3', null, 'answer-title'); body.append(title);
-  let crit = null, reasons = [...res.reasons], modelAnswer = '';
+  let crit = null, reasons = [...res.reasons], modelAnswer = '', conf = null;
   if (model && !model.error) {
     const x = crossCheck(model, res.evidence); crit = [...model.criteria.slice(0, 4), x, ...model.criteria.slice(4)];
     const failed = model.reasons.map(r => r === 'contradiction' ? 'contradiction_model' : r);
     if (x.status === 'fail') failed.push('conflict');
-    if (!failed.length) modelAnswer = model.answer || '';
-    reasons = failed.length ? failed : reasons;
+    modelAnswer = model.answer || '';
+    reasons = failed;
+    conf = confidence(crit, failed);
   }
-  const lead = modelAnswer ? 'إجابة من معرفة النموذج، وهي ليست دليلاً:' : res.decision === 'answer' && top ? 'يوجد تدقيق سابق، والحكم السائد: ' : res.decision === 'answer' ? 'وُجدت مصادر ذات صلة بسؤالك.' : 'امتنعتُ عن الإجابة.';
+  const lead = modelAnswer ? 'إجابة من معرفة النموذج، وهي ليست دليلاً:' : res.decision === 'answer' && top ? 'يوجد تدقيق سابق، والحكم السائد: ' : res.decision === 'answer' ? 'وُجدت مصادر ذات صلة بسؤالك.' : 'لم يُنتج النموذج إجابة صالحة.';
   await typeInto(title, lead);
   if (!modelAnswer && res.decision === 'answer' && top) { title.append(el('span', top[0], 'badge ' + badgeCls(top[0])), document.createTextNode(` (${top[1]} من ${rated.length} نتائج)`)); }
   if (modelAnswer) { const p = el('p', null, 'model-answer'); body.append(p); await typeInto(p, modelAnswer); }
   body.append(el('p', `نوع السؤال: ${TYPES[classifyClaim(q)]}`, 'meta-line fade'));
+  if (conf) { const c = el('div', null, 'conf ' + conf.level); c.append(el('strong', 'درجة الثقة: ' + CONF[conf.level]), el('small', conf.level === 'low' ? 'ثقة منخفضة: لا تعتمد على هذه الإجابة قبل الرجوع إلى مصدر.' : 'تقدير إرشادي من نتائج المعايير أدناه، وليس قياسًا ولا حكمًا نهائيًا.')); if (conf.why.length) c.append(el('small', 'أسباب خفض الثقة: ' + conf.why.join('، '))); body.append(c); }
   if (!modelAnswer && res.decision !== 'answer' && reasons.length) body.append(el('p', 'السبب: ' + [...new Set(reasons)].map(r => REASONS[r] || r).join('، '), 'why fade'));
   if (model && model.error) body.append(el('p', model.error === 'busy' ? 'خدمة النموذج مشغولة الآن، فعُرضت المصادر فقط.' : 'خدمة النموذج غير متاحة الآن، فعُرضت المصادر فقط.', 'meta-line fade'));
   if (crit) body.append(criteriaBox(crit));
