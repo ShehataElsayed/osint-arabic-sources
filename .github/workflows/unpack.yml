@@ -1,0 +1,22 @@
+name: unpack
+on:
+  push:
+    branches: [rag-publish8]
+permissions:
+  contents: write
+jobs:
+  u:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          f=$(ls *.tgz 2>/dev/null | head -1)
+          [ -n "$f" ] || exit 0
+          tar xzf "$f"
+          xargs -r git rm -q -f < DELETE.txt
+          rm -f "$f" DELETE.txt
+          git config user.name "Shehata El-sayed"
+          git config user.email "noreply@users.noreply.github.com"
+          git add -A
+          git commit -m "Source reliability rating and wider tiers"
+          git push
