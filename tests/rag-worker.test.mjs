@@ -87,3 +87,9 @@ test('source check: quote is a verbatim passage of the fetched page; dead links 
 });
 
 test('tierOf: broader lists, anchored to the registrable domain', () => { assert.equal(tierOf('www.cbe.org.eg'), 'official'); assert.equal(tierOf('www.capmas.gov.eg'), 'official'); assert.equal(tierOf('www.sama.gov.sa'), 'official'); assert.equal(tierOf('news.un.org'), 'official'); assert.equal(tierOf('www.aljazeera.net'), 'news'); assert.equal(tierOf('www.youm7.com'), 'news'); assert.equal(tierOf('www.thelancet.com'), 'academic'); assert.equal(tierOf('cu.edu.eg'), 'official'); assert.equal(tierOf('www.ox.ac.uk'), 'academic'); assert.equal(tierOf('who.int.evil.com'), 'unknown'); assert.equal(tierOf('notreuters.com'), 'unknown'); assert.equal(tierOf('reuters.com.fake.io'), 'unknown'); });
+
+test('extraction: the picked passage is a verbatim candidate sentence; bad indexes fall back', async () => {
+  const html = '<p>أعلنت الوزارة أن سعر الخبز ارتفع بنسبة 30 في المئة الشهر الماضي في القاهرة</p><p>سعر الخبز في المدينة بقي مستقرا طوال السنة الماضية كلها</p>';
+  const s = await checkSource({ name: 'م', url: 'https://example.com/a' }, 'سعر الخبز ارتفع 30 في المئة', ['30'], async () => ({ ok: true, headers: { get: () => 'text/html' }, text: async () => html }));
+  assert.ok(s.cands.length >= 2 && s.cands.every(c => html.includes(c)));
+});

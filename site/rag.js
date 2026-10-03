@@ -86,10 +86,11 @@ async function show(q, res, model, body) {
       if (u) { const a = el('a', x.name || x.title || x.host); a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; head.append(a); } else head.append(el('strong', x.name || 'مصدر بلا عنوان'));
       r.append(head);
       if (u) r.append(el('small', u, 'url'));
+      if (u) { const b = el('a', 'فتح المصدر', 'open-src'); b.href = u; b.target = '_blank'; b.rel = 'noopener noreferrer'; r.append(b); }
       else r.append(el('small', 'لم يتم فتح الرابط' + (x.claimed ? ' (الرابط الذي ذكره النموذج: ' + x.claimed + ')' : ''), 'url'));
       if (x.exists) { const rel = el('div', null, 'rel rel-' + (x.tier || 'unknown')); rel.append(el('strong', 'موثوقية المصدر: ' + (RELIABILITY[x.tier] || RELIABILITY.unknown)), el('small', 'الفئة: ' + (TIERS[x.tier] || TIERS.unknown) + '. تقدير عام للجهة وليس للادعاء.')); r.append(rel); r.append(el('small', 'دعم الادعاء: ' + (x.verified ? `اجتاز الفحص (تشابه ${x.similarity.toFixed(2)})` : 'لم يتحقق من دعمه للادعاء')));
         if (x.title) r.append(el('small', 'عنوان الصفحة: ' + x.title));
-        if (x.quote) { const q = el('blockquote', '«' + x.quote + '»', 'quote'); r.append(el('small', x.verified ? 'اقتباس من الصفحة المفتوحة:' : 'أقرب مقطع وجدناه في الصفحة (لا يعني أنه يدعم الادعاء):'), q); } }
+        if (x.quote) { const q = el('blockquote', '«' + x.quote + '»', 'quote'); r.append(el('small', x.picked ? 'مقطع اختير من نص الصفحة المفتوحة، ووُجد حرفيًا فيها (وليس دليلًا على الدعم):' : 'أقرب مقطع وجدناه في الصفحة (لا يعني أنه يدعم الادعاء):'), q); } }
       box.append(r); });
     box.append(el('small', 'الاقتباس يُستخرج من نص الصفحة نفسها بعد فتحها، لا من كتابة النموذج. موثوقية المصدر تقدير للجهة حسب نطاقها ولا ترفع درجة ثقة الادعاء بمفردها، ولا تعني صحة هذا الادعاء. يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام.', 'crit-note')); body.append(box); }
   res.evidence.forEach((it, i) => body.append(srcCard(it, i)));
