@@ -40,7 +40,7 @@ function crossCheck(model, evidence) {
   return { id: 'conflict', label: 'مطابقة أحكام منشورة', status: against ? 'fail' : 'pass', detail: `${t} صحيح · ${f} خاطئ أو مضلل` };
 }
 const WARN = { type_rule: 'ادعاء رقمي أو صحي أو منسوب لم يتحقق مصدر منه', recency: 'قد يحتاج مصدرًا حديثًا', source_support: 'لم يدعم مصدرٌ فُحص الادعاء', source_exists: 'لم تُفتح المصادر المذكورة' };
-const RELIABILITY = { official: 'عالية جدًا', news: 'عالية', academic: 'عالية', unknown: 'غير معروفة' };
+const RELIABILITY = { very_high: 'عالية جدًا', high: 'عالية', medium: 'متوسطة', unknown: 'غير معروفة' };
 const TIERS = { official: 'جهة رسمية أو دولية', news: 'مؤسسة إخبارية معروفة', academic: 'مجلة علمية أو جهة أكاديمية وصحية معروفة', unknown: 'غير مصنّف' };
 // Heuristic confidence from the criteria results. It is a rule of thumb, not a measured probability.
 // Any failed criterion -> low. No failure -> medium, or high only when a cited source of the official or news class was fetched and passed the similarity and numbers checks.
@@ -86,12 +86,17 @@ async function show(q, res, model, body) {
       if (u) { const a = el('a', x.name || x.title || x.host); a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; head.append(a); } else head.append(el('strong', x.name || 'مصدر بلا عنوان'));
       r.append(head);
       if (u) r.append(el('small', u, 'url'));
+      if (u) { const b = el('a', 'فتح المصدر', 'open-src'); b.href = u; b.target = '_blank'; b.rel = 'noopener noreferrer'; r.append(b); }
       else r.append(el('small', 'لم يتم فتح الرابط' + (x.claimed ? ' (الرابط الذي ذكره النموذج: ' + x.claimed + ')' : ''), 'url'));
-      if (x.exists) { const rel = el('div', null, 'rel rel-' + (x.tier || 'unknown')); rel.append(el('strong', 'موثوقية المصدر: ' + (RELIABILITY[x.tier] || RELIABILITY.unknown)), el('small', 'الفئة: ' + (TIERS[x.tier] || TIERS.unknown) + '. تقدير عام للجهة وليس للادعاء.')); r.append(rel); r.append(el('small', 'دعم الادعاء: ' + (x.verified ? `اجتاز الفحص (تشابه ${x.similarity.toFixed(2)})` : 'لم يتحقق من دعمه للادعاء')));
+      if (x.exists) { const rel = el('div', null, 'rel rel-' + (x.rel || 'unknown')); rel.append(el('strong', 'موثوقية المصدر: ' + (RELIABILITY[x.rel] || RELIABILITY.unknown)), el('small', 'الفئة: ' + (TIERS[x.tier] || TIERS.unknown) + '. تقدير عام للجهة وليس للادعاء.')); r.append(rel);
+        const id = x.identity || {}, pg = x.page || {}, NA = 'غير متاح';
+        const idl = el('div', null, 'idbox'); idl.append(el('strong', 'هوية المصدر وملكيته (من سجلات عامة وصفحته نفسها):'));
+        [['النطاق', id.domain || x.host], ['عمر النطاق', id.age_years != null ? id.age_years + ' سنة' : NA], ['المسجِّل', id.registrar || NA], ['المالك المسجَّل', id.registrant || NA + ' (قد يكون محجوبًا في السجل العام)'], ['اسم الموقع في الصفحة', pg.site_name || NA], ['صفحة «من نحن»', pg.has_about ? 'يوجد رابط إليها' : 'لم نجد رابطًا في هذه الصفحة'], ['صفحة التواصل', pg.has_contact ? 'يوجد رابط إليها' : 'لم نجد رابطًا في هذه الصفحة'], ['HTTPS', 'نعم']].forEach(([k, v]) => idl.append(el('small', k + ': ' + v)));
+        idl.append(el('small', 'غياب حقل لا يعني شيئًا عن المصدر، فكثير من السجلات تحجب بيانات المالك.')); r.append(idl); r.append(el('small', 'دعم الادعاء: ' + (x.verified ? `اجتاز الفحص (تشابه ${x.similarity.toFixed(2)})` : 'لم يتحقق من دعمه للادعاء')));
         if (x.title) r.append(el('small', 'عنوان الصفحة: ' + x.title));
-        if (x.quote) { const q = el('blockquote', '«' + x.quote + '»', 'quote'); r.append(el('small', x.verified ? 'اقتباس من الصفحة المفتوحة:' : 'أقرب مقطع وجدناه في الصفحة (لا يعني أنه يدعم الادعاء):'), q); } }
+        if (x.quote) { const q = el('blockquote', '«' + x.quote + '»', 'quote'); r.append(el('small', x.picked ? 'مقطع اختير من نص الصفحة المفتوحة، ووُجد حرفيًا فيها (وليس دليلًا على الدعم):' : 'أقرب مقطع وجدناه في الصفحة (لا يعني أنه يدعم الادعاء):'), q); } }
       box.append(r); });
-    box.append(el('small', 'الاقتباس يُستخرج من نص الصفحة نفسها بعد فتحها، لا من كتابة النموذج. موثوقية المصدر تقدير للجهة حسب نطاقها ولا ترفع درجة ثقة الادعاء بمفردها، ولا تعني صحة هذا الادعاء. يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام.', 'crit-note')); body.append(box); }
+    box.append(el('small', 'الاقتباس يُستخرج من نص الصفحة نفسها بعد فتحها، لا من كتابة النموذج. موثوقية المصدر تقدير للجهة حسب فئة نطاقها وهويتها المعلنة ولا ترفع درجة ثقة الادعاء بمفردها، ولا تعني صحة هذا الادعاء. يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام.', 'crit-note')); body.append(box); }
   res.evidence.forEach((it, i) => body.append(srcCard(it, i)));
   if (wantsChart(q)) { const svg = barChartSVG(chartSpec(res.evidence, 'rating'), 'توزيع الأحكام في المصادر المسترجعة'); if (svg) { const box = el('div', null, 'chart fade'); box.dir = 'ltr'; box.innerHTML = svg; body.append(box); } else body.append(el('p', 'لا توجد بيانات حقيقية لرسم مخطط.', 'meta-line fade')); }
 }
