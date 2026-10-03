@@ -31,3 +31,27 @@ test('plan: whitelisted kind and fields, no links, dates validated', async () =>
   assert.equal(cleanPlan({ kind: 'topic', fields: { topic: 'قمح' }, note: 'see https://a.b' }), null);
   assert.deepEqual(await plan('نص', {}), { error: 'off' });
 });
+
+import { verifyModel, claimType } from '../worker/rag-worker.js';
+const mk = (drafts, critic) => { let i = 0; return async (u, o) => { const body = JSON.parse(o.body).contents[0].parts[0].text; const j = body.startsWith('أنت مدقق') ? critic : drafts[i++ % drafts.length]; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(j) }] } }] }) }; }; };
+const env = { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' };
+const D = (verdict, extra = {}) => ({ verdict, answer: 'جملة', time_sensitive: false, ...extra });
+test('verify: answers when every gate passes, never validated', async () => {
+  const r = await verifyModel('هل القاهرة عاصمة مصر', env, mk([D('supported')], { contradiction: 0.1 }));
+  assert.equal(r.decision, 'answer'); assert.equal(r.validated_for_release, false); assert.equal(r.criteria.find(c => c.id === 'evidence').status, 'na');
+});
+test('verify: abstains on disagreement, high critic score, recency, strict type', async () => {
+  assert.equal((await verifyModel('سؤال', env, mk([D('supported'), D('refuted'), D('uncertain')], { contradiction: 0.1 }))).decision, 'abstain');
+  assert.deepEqual((await verifyModel('سؤال', env, mk([D('supported')], { contradiction: 0.7 }))).reasons, ['contradiction']);
+  assert.deepEqual((await verifyModel('سؤال', env, mk([D('supported', { time_sensitive: true })], { contradiction: 0 }))).reasons, ['recency']);
+  const s = await verifyModel('ارتفع السعر 20%', env, mk([D('supported'), D('supported'), D('refuted')], { contradiction: 0 }));
+  assert.equal(s.decision, 'abstain'); assert.ok(s.reasons.includes('type_rule'));
+});
+test('verify: no key, bad critic, links stripped, quota', async () => {
+  assert.deepEqual(await verifyModel('x', {}), { error: 'off' });
+  assert.equal((await verifyModel('سؤال', env, mk([D('supported')], { contradiction: 'x' }))).decision, 'abstain');
+  const r = await verifyModel('سؤال', env, mk([D('supported', { answer: 'see https://x.io' })], { contradiction: 0 }));
+  assert.equal(r.answer, '');
+  assert.deepEqual(await verifyModel('سؤال', env, async () => ({ ok: false, status: 429 })), { error: 'busy' });
+  assert.equal(claimType('قال الوزير'), 'attribution');
+});

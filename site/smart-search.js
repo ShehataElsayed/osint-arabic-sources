@@ -1,22 +1,51 @@
-import { BACKEND_URL } from './rag-config.js';
-const $=id=>document.getElementById(id);let tools,pipeline;
-const norm=s=>s.toLowerCase().normalize('NFKD').replace(/[\u064b-\u065f\u0670]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
-function keyword(q,items){const docs=items.map(t=>norm(t.name+' '+t.description.split(/[.؛]/)[0])),terms=[...new Set(norm(q).split(' ').filter(x=>x.length>3))].map(w=>{const stem=w.length>4?w.replace(/^(ال|و|ب|ل)/,''):w,df=docs.filter(d=>d.includes(stem)).length;return{stem,wt:df?Math.min(2,.6+Math.log(items.length/df)/3):0}}),scored=items.map((t,i)=>({t,score:terms.reduce((sum,x)=>sum+(docs[i].includes(x.stem)?x.wt:0),0)}));return scored.sort((a,b)=>b.score-a.score).slice(0,24)}
-function show(items){$('results').replaceChildren();for(const item of items.slice(0,8)){const t=item.t,c=document.createElement('article'),h=document.createElement('h3'),p=document.createElement('p'),a=document.createElement('a');c.className='card';h.textContent=t.name;p.textContent=t.description;a.textContent='افتح المصدر ↗';a.href=t.url;a.target='_blank';a.rel='noopener noreferrer';a.dataset.osintTool=t.name;c.append(h,p,a);$('results').append(c)}}
-async function load(){if(!tools)tools=await(await fetch('./search-tools.json')).json();return tools}
-$('basic').onclick=async()=>{const q=$('query').value.trim();if(!q)return $('status').textContent='اكتب سؤالك أولًا.';try{const candidates=keyword(q,await load());const hits=candidates.filter(x=>x.score>0);show(hits);$('status').textContent=hits.length?'نتائج تطابق الكلمات في وصف الأدوات.':'لا توجد نتائج مطابقة؛ جرّب كلمات أخرى أو بحث الدليل الرئيسي.'}catch(e){$('status').textContent='تعذر قراءة فهرس الأدوات: '+e.message}}
-$('ai').onclick=async()=>{const q=$('query').value.trim();if(!q)return $('status').textContent='اكتب سؤالك أولًا.';try{$('status').textContent='جارٍ تنزيل نموذج متعدد اللغات وتشغيله على جهازك...';const candidates=keyword(q,await load());if(!pipeline){const mod=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm');pipeline=await mod.pipeline('feature-extraction','Xenova/paraphrase-multilingual-MiniLM-L12-v2',{dtype:'q8',progress_callback:x=>{if(x.status==='progress'&&x.total)$('status').textContent='جارٍ تنزيل النموذج: '+Math.round(x.progress)+'%' }})}const strings=[q,...candidates.map(x=>`${x.t.name}: ${x.t.description}`)];const vectors=[];for(const text of strings){const tensor=await pipeline(text,{pooling:'mean',normalize:true});vectors.push(tensor.data)}const qv=vectors[0];const scored=candidates.map((c,i)=>({...c,semantic:qv.reduce((sum,v,k)=>sum+v*vectors[i+1][k],0)})).sort((a,b)=>b.semantic-a.semantic);show(scored);$('status').textContent='ترتيب دلالي تجريبي من نموذج محلي؛ افحص كل نتيجة ومصدرها.'}catch(e){$('status').textContent='تعذر تشغيل النموذج على هذا الجهاز. البحث بالكلمات متاح: '+e.message}}
-
-$('gem').onclick=async()=>{const q=$('query').value.trim();if(!q)return $('status').textContent='اكتب سؤالك أولًا.';
- if(!BACKEND_URL)return $('status').textContent='الخدمة غير مفعّلة.';
- try{$('status').textContent='جارٍ البحث داخل المنصة...';const all=await load();const cand=keyword(q,all).filter(x=>x.score>0).slice(0,15);
- if(!cand.length){$('results').replaceChildren();return $('status').textContent='لا توجد أدوات مطابقة داخل المنصة؛ جرّب كلمات أخرى.'}
- const payload=cand.map(x=>({id:all.indexOf(x.t),name:x.t.name,description:x.t.description}));
- const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'recommend',query:q,candidates:payload})});
- const picks=r.ok?(await r.json()).picks:null;
- if(!Array.isArray(picks)||!picks.length){show(cand);return $('status').textContent='تعذّر الترشيح الذكي الآن، فعُرضت أقرب الأدوات بالكلمات.'}
- const box=$('results');box.replaceChildren();
- for(const k of picks){const t=all[k.id];if(!t)continue;const c=document.createElement('article'),h=document.createElement('h3'),a=document.createElement('a');c.className='card';h.textContent=t.name;c.append(h);
-  for(const [label,txt] of [['لماذا هذه الأداة؟',k.why],['كيف تستخدمها؟',k.how],['وصف الدليل',t.description]]){const p=document.createElement('p'),b=document.createElement('strong');b.textContent=label+' ';p.append(b,document.createTextNode(txt));c.append(p)}
-  a.textContent='افتح الأداة ↗';a.href=t.url;a.target='_blank';a.rel='noopener noreferrer';c.append(a);box.append(c)}
- $('status').textContent='ترشيح داخل أدوات المنصة فقط؛ الروابط من قاعدة الدليل نفسها. النص المرسل: سؤالك وأوصاف أدوات الدليل.'}catch{$('status').textContent='تعذّر الاتصال بالخدمة الآن.'}};
+import { BACKEND_URL, EXTERNAL_AI } from './rag-config.js';
+import { $, el, startTurn, typeInto, wireComposer, NOTICE } from './chat-ui.js';
+let tools, pipeline;
+const norm = s => s.toLowerCase().normalize('NFKD').replace(/[\u064b-\u065f\u0670]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const load = async () => tools || (tools = await (await fetch('./search-tools.json')).json());
+// Candidates: IDF-weighted keyword match over the tool name and first sentence of its description.
+function keyword(q, items) {
+  const docs = items.map(t => norm(t.name + ' ' + t.description.split(/[.؛]/)[0]));
+  const terms = [...new Set(norm(q).split(' ').filter(x => x.length > 3))].map(w => { const stem = w.length > 4 ? w.replace(/^(ال|و|ب|ل)/, '') : w, df = docs.filter(d => d.includes(stem)).length; return { stem, wt: df ? Math.min(2, .6 + Math.log(items.length / df) / 3) : 0 }; });
+  return items.map((t, i) => ({ t, id: i, score: terms.reduce((s, x) => s + (docs[i].includes(x.stem) ? x.wt : 0), 0) })).sort((a, b) => b.score - a.score).slice(0, 24);
+}
+function card(t, i, extra) {
+  const c = el('article', null, 'src-card fade'); c.style.animationDelay = (i * 0.12) + 's';
+  c.append(el('strong', t.name));
+  for (const [label, txt] of extra || []) { const p = el('p', null, 'tool-line'); p.append(el('b', label + ' '), document.createTextNode(txt)); c.append(p); }
+  c.append(el('small', t.description));
+  const a = el('a', 'افتح الأداة ↗'); a.href = t.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.dataset.osintTool = t.name; c.append(a);
+  return c;
+}
+async function semantic(q, cands) {
+  if (!pipeline) { const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm'); pipeline = await mod.pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', { dtype: 'q8' }); }
+  const vs = []; for (const s of [q, ...cands.map(x => `${x.t.name}: ${x.t.description}`)]) vs.push((await pipeline(s, { pooling: 'mean', normalize: true })).data);
+  return cands.map((c, i) => ({ ...c, sem: vs[0].reduce((s, v, k) => s + v * vs[i + 1][k], 0) })).sort((a, b) => b.sem - a.sem);
+}
+let last = null;
+async function ask(q) {
+  $('greet').hidden = true; const body = startTurn($('thread'), q);
+  const all = await load(), cands = keyword(q, all).filter(x => x.score > 0).slice(0, 15); last = { q, cands };
+  body.replaceChildren(); const title = el('h3', null, 'answer-title'); body.append(title);
+  if (!cands.length) { await typeInto(title, 'لا توجد أدوات مطابقة داخل الدليل، جرّب كلمات أخرى.'); return; }
+  let picks = null;
+  if (EXTERNAL_AI && BACKEND_URL) {
+    try { const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'recommend', query: q, candidates: cands.map(x => ({ id: x.id, name: x.t.name, description: x.t.description })) }) }); picks = r.ok ? (await r.json()).picks : null; } catch { /* keyword fallback */ }
+  }
+  if (Array.isArray(picks) && picks.length) {
+    await typeInto(title, 'هذه أنسب الأدوات في الدليل لسؤالك:');
+    picks.forEach((k, i) => { const t = all[k.id]; if (t) body.append(card(t, i, [['لماذا هذه الأداة؟', k.why], ['كيف تستخدمها؟', k.how]])); });
+    body.append(el('p', 'الترشيح من أدوات الدليل فقط، والروابط من قاعدة الدليل نفسها. افحص كل أداة ومصدرها قبل الاعتماد عليها.', 'meta-line fade'));
+  } else {
+    await typeInto(title, EXTERNAL_AI ? 'تعذّر الترشيح الآن، وهذه أقرب الأدوات بالكلمات:' : 'أقرب الأدوات بالكلمات:');
+    cands.slice(0, 8).forEach((x, i) => body.append(card(x.t, i)));
+  }
+}
+wireComposer({ form: $('composer'), input: $('q'), send: $('send'), chips: [...document.querySelectorAll('.chip')], onAsk: async q => { try { await ask(q); } catch (e) { startTurn($('thread'), q).replaceChildren(el('p', 'تعذّر إكمال الطلب: ' + e.message, 'why')); } } });
+$('local').onclick = async () => {
+  if (!last) { $('status').textContent = 'اسأل أولًا ثم رتّب النتائج.'; return; }
+  $('status').textContent = 'جارٍ تنزيل نموذج صغير يعمل على جهازك (مرة واحدة)...';
+  try { const r = await semantic(last.q, last.cands), body = startTurn($('thread'), 'ترتيب دلالي على جهازي'); body.replaceChildren(el('h3', 'ترتيب دلالي تجريبي من نموذج يعمل على جهازك:', 'answer-title')); r.slice(0, 6).forEach((x, i) => body.append(card(x.t, i))); $('status').textContent = ''; }
+  catch (e) { $('status').textContent = 'تعذر تشغيل النموذج على هذا الجهاز: ' + e.message; }
+};
+if (EXTERNAL_AI) $('notice').textContent = NOTICE;
