@@ -6,7 +6,7 @@ const $ = id => document.getElementById(id);
 const el = (tag, txt, cls) => { const n = document.createElement(tag); if (txt != null) n.textContent = txt; if (cls) n.className = cls; return n; };
 const safeUrl = u => { try { return ['https:', 'http:'].includes(new URL(u).protocol) ? u : ''; } catch { return ''; } };
 const TYPES = { numeric: 'رقمي', attribution: 'نسبة قول', health: 'صحي', general: 'عام' };
-const REASONS = { no_sources: 'لا توجد مصادر', low_similarity: 'تشابه منخفض مع المصادر', contradiction: 'تناقض بين السؤال والمصدر', split_vote: 'المصادر منقسمة في الحكم', consistency: 'عينات النموذج غير متسقة', type_rule: 'نوع الادعاء يتطلب إجماعًا كاملًا', contradiction_model: 'النقد الذاتي وجد احتمال تناقض', recency: 'قد يحتاج مصدرًا حديثًا', conflict: 'يتعارض مع حكم منشور', no_rating_in_sources: 'لا حكم صريح في المصادر' };
+const REASONS = { no_sources: 'لا توجد مصادر', low_similarity: 'تشابه منخفض مع المصادر', contradiction: 'تناقض بين السؤال والمصدر', split_vote: 'المصادر منقسمة في الحكم', consistency: 'عينات النموذج غير متسقة', type_rule: 'نوع الادعاء يتطلب إجماعًا كاملًا', contradiction_model: 'النقد الذاتي وجد احتمال تناقض', recency: 'قد يحتاج مصدرًا حديثًا', conflict: 'يتعارض مع حكم منشور', source_support: 'المصدر المذكور لا يدعم الادعاء', source_exists: 'لم تُفتح المصادر المذكورة', no_rating_in_sources: 'لا حكم صريح في المصادر' };
 let local = [];
 if ($('mode')) $('mode').textContent = BACKEND_URL ? 'الوضع: فهرس أحكام التدقيق، ويُضاف مفتاح التدقيق لاحقًا.' : 'الوضع المحلي: الخلفية غير مفعّلة بعد، تعمل على مصادر تلصقها أنت داخل الصفحة فقط';
 function renderLocal() { const b = $('sources'); b.replaceChildren(); local.forEach((s, i) => { const c = el('article', null, 'evidence-card'), r = el('div', null, 'row'), d = el('button', 'حذف', 'secondary'); d.type = 'button'; d.onclick = () => { local.splice(i, 1); renderLocal(); }; r.append(el('strong', `${i + 1}. ${s.title}`), d); c.append(r, el('small', `${s.publisher || 'ناشر غير محدد'} · ${s.rating || 'بلا حكم'}`)); b.append(c); }); if (!local.length) b.append(el('p', 'لا توجد مصادر بعد.', 'empty-state')); }
@@ -31,7 +31,7 @@ function srcCard(it, i) {
   return c;
 }
 const polarity = r => { const c = badgeCls(String(r || '')); return c === 'true' ? 'true' : c === 'false' || c === 'mislead' ? 'false' : ''; };
-const MARK = { pass: '✓', fail: '✗', na: '—' };
+const MARK = { pass: '✓', fail: '✗', warn: '!', na: '—' };
 // Cross-check of the model's verdict against published ratings kept on this device (never sent to the model).
 function crossCheck(model, evidence) {
   const pol = evidence.map(i => polarity(i.rating)).filter(Boolean);
@@ -67,7 +67,7 @@ async function show(q, res, model, body) {
   if (model && model.error) body.append(el('p', model.error === 'busy' ? 'خدمة النموذج مشغولة الآن، فعُرضت المصادر فقط.' : 'خدمة النموذج غير متاحة الآن، فعُرضت المصادر فقط.', 'meta-line fade'));
   if (crit) body.append(criteriaBox(crit));
   if (model && !model.error && (model.sources || []).length) { const box = el('div', null, 'criteria fade'); box.append(el('strong', 'المصادر التي ذكرها النموذج وفُحصت آليًا'));
-    model.sources.forEach(x => { const u = safeUrl(x.url), r = el('div', null, 'crit ' + (x.verified ? 'pass' : 'fail')); const a = el('a', x.host); if (u) { a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; } r.append(el('span', x.verified ? '✓' : '✗', 'mk'), a, el('small', x.verified ? `تشابه ${x.similarity.toFixed(2)}` : 'لم يتحقق من دعمه للادعاء')); box.append(r); });
+    model.sources.forEach(x => { const u = safeUrl(x.url), r = el('div', null, 'crit ' + (x.verified ? 'pass' : 'warn')); const a = el('a', x.host); if (u) { a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; } r.append(el('span', x.verified ? '✓' : '!', 'mk'), a, el('small', x.verified ? `تشابه ${x.similarity.toFixed(2)}` : 'لم يتحقق من دعمه للادعاء')); box.append(r); });
     box.append(el('small', 'يُعرض وزن المصدر (درجة التشابه) فقط بعد نجاح فحص الوجود والتشابه والأرقام، وليس حكمًا بموثوقيته.', 'crit-note')); body.append(box); }
   res.evidence.forEach((it, i) => body.append(srcCard(it, i)));
   if (wantsChart(q)) { const svg = barChartSVG(chartSpec(res.evidence, 'rating'), 'توزيع الأحكام في المصادر المسترجعة'); if (svg) { const box = el('div', null, 'chart fade'); box.dir = 'ltr'; box.innerHTML = svg; body.append(box); } else body.append(el('p', 'لا توجد بيانات حقيقية لرسم مخطط.', 'meta-line fade')); }

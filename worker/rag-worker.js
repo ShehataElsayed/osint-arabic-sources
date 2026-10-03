@@ -132,8 +132,8 @@ export async function verifyModel(question, env, f = fetch) {
     { id: 'type_rule', label: strict ? 'قاعدة النوع (إجماع ومصدر متحقَّق)' : 'قاعدة النوع', status: !strict || (share === 1 && anyVerified) ? 'pass' : 'fail', detail: type },
     { id: 'contradiction', label: 'نقد ذاتي للتناقض', status: criticOk && cs < GATE.contradiction ? 'pass' : 'fail', detail: criticOk ? cs.toFixed(2) : 'غير متاح' },
     { id: 'recency', label: 'حداثة الموضوع', status: ok.some(x => x.time) ? 'fail' : 'pass', detail: ok.some(x => x.time) ? 'قد يحتاج مصدرًا حديثًا' : 'لا مؤشر على حداثة' },
-    { id: 'source_exists', label: 'وجود المصادر المذكورة', status: !checked.length ? 'na' : anyExists ? 'pass' : 'fail', detail: !checked.length ? 'لم يذكر النموذج مصدرًا' : `${checked.filter(s => s.exists).length} من ${checked.length} روابط فُتحت` },
-    { id: 'source_support', label: 'دعم المصدر للادعاء', status: !anyExists ? 'na' : anyVerified ? 'pass' : 'fail', detail: !anyExists ? 'لا مصدر مفتوح' : `تشابه ${Math.max(...checked.map(s => s.similarity)).toFixed(2)} والأرقام ${checked.some(s => s.numbers_ok === true) ? 'موجودة' : checked.some(s => s.numbers_ok === false) ? 'غير موجودة' : 'غير مطلوبة'}` },
+    { id: 'source_exists', label: 'وجود المصادر المذكورة', status: !checked.length ? 'na' : anyExists ? 'pass' : strict ? 'fail' : 'warn', detail: !checked.length ? 'لم يذكر النموذج مصدرًا' : `${checked.filter(s => s.exists).length} من ${checked.length} روابط فُتحت` },
+    { id: 'source_support', label: 'دعم المصدر للادعاء', status: !anyExists ? 'na' : anyVerified ? 'pass' : strict ? 'fail' : 'warn', detail: !anyExists ? 'لا مصدر مفتوح' : `تشابه ${Math.max(...checked.map(s => s.similarity)).toFixed(2)} والأرقام ${checked.some(s => s.numbers_ok === true) ? 'موجودة' : checked.some(s => s.numbers_ok === false) ? 'غير موجودة' : 'غير مطلوبة'}` },
     { id: 'evidence', label: 'سند مستقل', status: 'na', detail: 'معرفة النموذج ليست دليلاً' },
   ];
   const failed = criteria.filter(c => c.status === 'fail').map(c => c.id);
