@@ -28,9 +28,9 @@ async function ask(q) {
   const all = await load(), cands = keyword(q, all).filter(x => x.score > 0).slice(0, 15); last = { q, cands };
   body.replaceChildren(); const title = el('h3', null, 'answer-title'); body.append(title);
   if (!cands.length) { await typeInto(title, 'لا توجد أدوات مطابقة داخل الدليل، جرّب كلمات أخرى.'); return; }
-  let picks = null;
+  let picks = null, web = [];
   if (EXTERNAL_AI && BACKEND_URL) {
-    try { const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'recommend', query: q, candidates: cands.map(x => ({ id: x.id, name: x.t.name, description: x.t.description })) }) }); picks = r.ok ? (await r.json()).picks : null; } catch { /* keyword fallback */ }
+    try { const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'recommend', query: q, candidates: cands.map(x => ({ id: x.id, name: x.t.name, description: x.t.description })) }) }); if (r.ok) { const j = await r.json(); picks = j.picks; web = Array.isArray(j.web) ? j.web : []; } } catch { /* keyword fallback */ }
   }
   if (Array.isArray(picks) && picks.length) {
     await typeInto(title, 'هذه أنسب الأدوات في الدليل لسؤالك:');
@@ -39,6 +39,12 @@ async function ask(q) {
   } else {
     await typeInto(title, EXTERNAL_AI ? 'تعذّر الترشيح الآن، وهذه أقرب الأدوات بالكلمات:' : 'أقرب الأدوات بالكلمات:');
     cands.slice(0, 8).forEach((x, i) => body.append(card(x.t, i)));
+  }
+  const okWeb = web.filter(x => /^https:\/\//.test(x.url || '')).slice(0, 3);
+  if (okWeb.length) {
+    const box = el('div', null, 'web-results'); box.append(el('h4', 'نتائج بحث ويب خارجية (غير مفحوصة)', 'why'));
+    okWeb.forEach(x => { const a = el('a', x.title || x.host); a.href = x.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; const d = el('div', null, 'web-item'); d.append(a, el('small', ' ' + x.host, 'url')); box.append(d); });
+    box.append(el('p', 'هذه روابط من بحث عام على الويب وليست من قاعدة الدليل، ولم تُفحص. افتحها وتحقق منها بنفسك.', 'meta-line fade')); body.append(box);
   }
 }
 wireComposer({ form: $('composer'), input: $('q'), send: $('send'), chips: [...document.querySelectorAll('.chip')], onAsk: async q => { try { await ask(q); } catch (e) { startTurn($('thread'), q).replaceChildren(el('p', 'تعذّر إكمال الطلب: ' + e.message, 'why')); } } });

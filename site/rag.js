@@ -86,6 +86,7 @@ async function show(q, res, model, body) {
       if (u) { const a = el('a', x.name || x.title || x.host); a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; head.append(a); } else head.append(el('strong', x.name || 'مصدر بلا عنوان'));
       r.append(head);
       if (u) r.append(el('small', u, 'url'));
+      if (u && x.by_search) r.append(el('small', 'عُثر على هذا المصدر ببحث الويب عن الادعاء، ولم يذكره النموذج.', 'url'));
       if (u && x.repaired) r.append(el('small', 'رابط بديل من نفس النطاق، وقد فُتح فعلًا. الرابط الأصلي الذي ذكره النموذج لم يُفتح: ' + x.original, 'url'));
       if (u) { const b = el('a', 'فتح المصدر', 'open-src'); b.href = u; b.target = '_blank'; b.rel = 'noopener noreferrer'; r.append(b); }
       else r.append(el('small', 'لم يتم فتح الرابط' + (x.claimed ? ' (الرابط الذي ذكره النموذج: ' + x.claimed + ')' : ''), 'url'));
