@@ -142,7 +142,7 @@ export async function verifyModel(question, env, f = fetch) {
   const critic = await modelJson(`أنت مدقق ناقد. الادعاء: ${q}\nإجابة مقترحة: ${lead.answer} (الحكم: ${verdict}).\nقيّم من 0 إلى 1 مدى احتمال أن الإجابة تناقض وقائع معروفة أو أنها غير مدعومة. أعد JSON فقط: {"contradiction":0.0}`, env, f, 0);
   const cs = Number(critic.json?.contradiction), criticOk = Number.isFinite(cs) && cs >= 0 && cs <= 1;
   const criteria = [
-    { id: 'consistency', label: 'اتساق العينات', status: verdict !== 'uncertain' && share >= GATE.minAgreeShare ? 'pass' : 'fail', detail: `${top} من ${GATE.samples} عينات: حكم ${{ supported: 'صحيح', refuted: 'خاطئ', uncertain: 'غير متأكد' }[verdict]}` },
+    { id: 'consistency', label: 'اتساق العينات', status: verdict !== 'uncertain' && share >= GATE.minAgreeShare ? 'pass' : 'fail', detail: `عدد المصادر: ${checked.length}، فُتح منها ${checked.filter(s => s.exists).length}` },
     { id: 'type_rule', label: strict ? 'قاعدة النوع (إجماع العينات)' : 'قاعدة النوع', status: !strict ? 'pass' : share === 1 ? (anyVerified ? 'pass' : 'warn') : 'fail', detail: type },
     { id: 'contradiction', label: 'نقد ذاتي للتناقض', status: criticOk && cs < GATE.contradiction ? 'pass' : 'fail', detail: criticOk ? cs.toFixed(2) : 'غير متاح' },
     { id: 'recency', label: 'حداثة الموضوع', status: ok.some(x => x.time) ? 'warn' : 'pass', detail: ok.some(x => x.time) ? 'قد يحتاج مصدرًا حديثًا' : 'لا مؤشر على حداثة' },
