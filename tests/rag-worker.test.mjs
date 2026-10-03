@@ -77,3 +77,11 @@ test('verify: answer is returned even when gates fail (confidence is decided by 
 
 import { tierOf } from '../worker/rag-worker.js';
 test('tierOf classifies the domain only', () => { assert.equal(tierOf('www.who.int'), 'official'); assert.equal(tierOf('data.worldbank.org'), 'official'); assert.equal(tierOf('moh.gov.eg'), 'official'); assert.equal(tierOf('www.reuters.com'), 'news'); assert.equal(tierOf('blog.example.com'), 'unknown'); assert.equal(tierOf('fakewho.int.example.com'), 'unknown'); });
+
+test('source check: quote is a verbatim passage of the fetched page; dead links give no quote', async () => {
+  const html = '<html><title>عنوان الصفحة</title><p>أعلنت الوزارة أن سعر الخبز ارتفع بنسبة 30 في المئة الشهر الماضي في القاهرة</p><p>جملة أخرى لا علاقة لها بالموضوع إطلاقا هنا</p></html>';
+  const ok = await checkSource({ name: 'م', url: 'https://example.com/a' }, 'سعر الخبز ارتفع 30 في المئة', ['30'], async () => ({ ok: true, headers: { get: () => 'text/html' }, text: async () => html }));
+  assert.ok(ok.exists && ok.quote && html.includes(ok.quote)); assert.equal(ok.title, 'عنوان الصفحة');
+  const dead = await checkSource({ name: 'م', url: 'https://example.com/zzz' }, 'سعر الخبز', [], async () => ({ ok: false, headers: { get: () => 'text/html' }, text: async () => '' }));
+  assert.equal(dead.exists, false); assert.equal(dead.quote, ''); assert.equal(dead.claimed, 'https://example.com/zzz');
+});
