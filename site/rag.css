@@ -64,3 +64,7 @@
 .srcrow small{color:#4a5a66}.srcrow .url{direction:ltr;text-align:right;word-break:break-all}
 .srcrow.pass .mk{color:#1b7a4a}.srcrow.warn .mk{color:#b36b00}.srcrow.fail .mk{color:#b3261e}
 .quote{margin:2px 0;padding:6px 12px;border-right:3px solid #0a827d;background:#f2f8f7;font-weight:700;color:#1b3a45;line-height:1.8}
+
+.rel{display:flex;flex-direction:column;gap:2px;padding:6px 10px;border-radius:10px;border:1px solid #cfe0dc;background:#f6faf9;margin:2px 0}
+.rel strong{font-weight:700}.rel-official{border-color:#8cc9a8;background:#eef9f2}.rel-news{border-color:#a9cfe3;background:#eff7fb}.rel-unknown{border-color:#d7d7d7;background:#f6f6f6}
+.rel-academic{border-color:#c9b6e3;background:#f6f1fb}
