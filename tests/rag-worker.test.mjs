@@ -68,3 +68,5 @@ test('source check: url safety, existence, support, numbers', async () => {
   const dead = await checkSource({ url: 'https://example.com/a' }, 'x', [], async () => ({ ok: false, headers: { get: () => 'text/html' } }));
   assert.equal(dead.exists, false);
 });
+
+test('verify: answer is returned even when gates fail (confidence is decided by the page)', async () => { const r = await verifyModel('سؤال', env, mk([D('supported'), D('refuted'), D('uncertain')], { contradiction: 0.1 })); assert.equal(r.decision, 'abstain'); assert.equal(r.answer, 'جملة'); assert.equal(r.validated_for_release, false); });
