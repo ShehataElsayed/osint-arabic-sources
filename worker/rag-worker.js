@@ -83,29 +83,61 @@ async function modelJson(prompt, env, f, temperature) {
   if (!r.ok) return { error: 'http_' + r.status };
   try { return { json: JSON.parse(((await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/^\s*```(?:json)?|```\s*$/g, '').trim()) }; } catch { return { error: 'parse' }; }
 }
+
+// Source verification: do the sources cited in the model answer exist, and does the page text support the claim.
+// Page text is compared locally (term overlap and numbers); it is never sent to the model and never shown.
+const SRC_DENY = ['afp.com', 'misbar.com', 'arafacts'];
+const stok = s => nrm(s).split(' ').filter(t => t.length > 2);
+const cos = (a, b) => { const va = new Map(), vb = new Map(); stok(a).forEach(t => va.set(t, (va.get(t) || 0) + 1)); stok(b).forEach(t => vb.set(t, (vb.get(t) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [t, c] of va) { na += c * c; if (vb.has(t)) d += c * vb.get(t); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
+const digits = s => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,٬\s]/g, '');
+export function safeSourceUrl(u) {
+  try { const x = new URL(String(u)); const h = x.hostname.toLowerCase(); if (x.protocol !== 'https:' || x.username || x.port || !h.includes('.') || /^[\d.]+$/.test(h) || h.includes(':') || /(^|\.)(localhost|local|internal)$/.test(h) || SRC_DENY.some(d => h.includes(d))) return ''; return x.href; } catch { return ''; }
+}
+export async function checkSource(src, claimText, nums, f = fetch) {
+  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 80), url: '', host: '', exists: false, similarity: 0, numbers_ok: null, verified: false };
+  if (!url) return out;
+  out.host = new URL(url).hostname;
+  try {
+    const r = await f(url, { headers: { accept: 'text/html,text/plain', 'user-agent': 'Mozilla/5.0 (compatible; osint-guide-check)' }, redirect: 'follow', signal: AbortSignal.timeout(6000) });
+    const ct = r.headers?.get?.('content-type') || 'text/html';
+    if (!r.ok || !/text\/(html|plain)/i.test(ct)) return out;
+    const text = (await r.text()).slice(0, 400000).replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ');
+    out.exists = true; out.url = url;
+    out.similarity = Math.max(0, ...text.split(/[.!؟?\n]+/).filter(x => x.trim().length > 15).map(x => cos(claimText, x)));
+    out.similarity = Math.round(out.similarity * 100) / 100;
+    const body = digits(text), want = (nums || []).map(digits).filter(Boolean);
+    out.numbers_ok = want.length ? want.every(n => body.includes(n)) : null;
+    out.verified = out.similarity >= 0.35 && out.numbers_ok !== false;
+  } catch { /* unreachable */ }
+  return out;
+}
 export async function verifyModel(question, env, f = fetch) {
   const q = String(question || '').trim().slice(0, 300);
   if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL || !q) return { error: 'off' };
-  const draft = `أجب عن الادعاء أو السؤال التالي من معرفتك فقط، بالعربية، بدون روابط. إن لم تكن متأكدًا أو كان الأمر حديثًا فاجعل الحكم uncertain. أعد JSON فقط: {"verdict":"supported|refuted|uncertain","answer":"جملة أو جملتان","time_sensitive":true|false}. معنى supported أن الادعاء صحيح، وrefuted أنه خاطئ.\nالادعاء: ${q}`;
+  const draft = `أجب عن الادعاء أو السؤال التالي من معرفتك فقط، بالعربية، بدون روابط. إن لم تكن متأكدًا أو كان الأمر حديثًا فاجعل الحكم uncertain. أعد JSON فقط: {"verdict":"supported|refuted|uncertain","answer":"جملة أو جملتان","time_sensitive":true|false,"numbers":["أرقام أو تواريخ ذُكرت في الادعاء"],"sources":[{"name":"اسم الجهة","url":"https://..."}]}. اذكر حتى مصدرين فقط بروابط https تعرف أنها موجودة فعلًا، وإلا اترك المصادر فارغة ولا تخترع روابط. معنى supported أن الادعاء صحيح، وrefuted أنه خاطئ.\nالادعاء: ${q}`;
   const runs = await Promise.all(Array.from({ length: GATE.samples }, () => modelJson(draft, env, f, 0.7)));
   if (runs.some(x => x.error === 'http_429')) return { error: 'busy' };
-  const ok = runs.filter(x => x.json && VERDICTS.includes(x.json.verdict)).map(x => ({ verdict: x.json.verdict, answer: cleanText(x.json.answer, 400), time: x.json.time_sensitive === true }));
+  const ok = runs.filter(x => x.json && VERDICTS.includes(x.json.verdict)).map(x => ({ verdict: x.json.verdict, answer: cleanText(x.json.answer, 400), time: x.json.time_sensitive === true, numbers: Array.isArray(x.json.numbers) ? x.json.numbers.slice(0, 5).map(n => cleanText(n, 30)) : [], sources: Array.isArray(x.json.sources) ? x.json.sources.slice(0, 2) : [] }));
   if (!ok.length) return { error: 'upstream' };
   const counts = {}; ok.forEach(x => { counts[x.verdict] = (counts[x.verdict] || 0) + 1; });
   const [verdict, top] = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
   const share = top / GATE.samples, lead = ok.find(x => x.verdict === verdict && x.answer) || ok[0];
   const type = claimType(q), strict = type !== 'general';
+  const checked = await Promise.all((lead.sources || []).map(s => checkSource(s, `${q} ${lead.answer}`, lead.numbers, f)));
+  const anyVerified = checked.some(s => s.verified), anyExists = checked.some(s => s.exists);
   const critic = await modelJson(`أنت مدقق ناقد. الادعاء: ${q}\nإجابة مقترحة: ${lead.answer} (الحكم: ${verdict}).\nقيّم من 0 إلى 1 مدى احتمال أن الإجابة تناقض وقائع معروفة أو أنها غير مدعومة. أعد JSON فقط: {"contradiction":0.0}`, env, f, 0);
   const cs = Number(critic.json?.contradiction), criticOk = Number.isFinite(cs) && cs >= 0 && cs <= 1;
   const criteria = [
-    { id: 'consistency', label: 'اتساق العينات', status: verdict !== 'uncertain' && share >= GATE.minAgreeShare ? 'pass' : 'fail', detail: `${top} من ${GATE.samples} عينات على الحكم نفسه` },
-    { id: 'type_rule', label: strict ? 'قاعدة النوع (إجماع كامل)' : 'قاعدة النوع', status: !strict || share === 1 ? 'pass' : 'fail', detail: type },
+    { id: 'consistency', label: 'اتساق العينات', status: verdict !== 'uncertain' && share >= GATE.minAgreeShare ? 'pass' : 'fail', detail: `${top} من ${GATE.samples} عينات: حكم ${{ supported: 'صحيح', refuted: 'خاطئ', uncertain: 'غير متأكد' }[verdict]}` },
+    { id: 'type_rule', label: strict ? 'قاعدة النوع (إجماع ومصدر متحقَّق)' : 'قاعدة النوع', status: !strict || (share === 1 && anyVerified) ? 'pass' : 'fail', detail: type },
     { id: 'contradiction', label: 'نقد ذاتي للتناقض', status: criticOk && cs < GATE.contradiction ? 'pass' : 'fail', detail: criticOk ? cs.toFixed(2) : 'غير متاح' },
     { id: 'recency', label: 'حداثة الموضوع', status: ok.some(x => x.time) ? 'fail' : 'pass', detail: ok.some(x => x.time) ? 'قد يحتاج مصدرًا حديثًا' : 'لا مؤشر على حداثة' },
-    { id: 'evidence', label: 'سند من مصدر', status: 'na', detail: 'معرفة النموذج ليست دليلاً' },
+    { id: 'source_exists', label: 'وجود المصادر المذكورة', status: !checked.length ? 'na' : anyExists ? 'pass' : 'fail', detail: !checked.length ? 'لم يذكر النموذج مصدرًا' : `${checked.filter(s => s.exists).length} من ${checked.length} روابط فُتحت` },
+    { id: 'source_support', label: 'دعم المصدر للادعاء', status: !anyExists ? 'na' : anyVerified ? 'pass' : 'fail', detail: !anyExists ? 'لا مصدر مفتوح' : `تشابه ${Math.max(...checked.map(s => s.similarity)).toFixed(2)} والأرقام ${checked.some(s => s.numbers_ok === true) ? 'موجودة' : checked.some(s => s.numbers_ok === false) ? 'غير موجودة' : 'غير مطلوبة'}` },
+    { id: 'evidence', label: 'سند مستقل', status: 'na', detail: 'معرفة النموذج ليست دليلاً' },
   ];
   const failed = criteria.filter(c => c.status === 'fail').map(c => c.id);
-  const out = { type, verdict, criteria, validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed };
+  const out = { type, verdict, criteria, sources: checked.filter(s => s.exists).map(s => ({ name: s.name, url: s.url, host: s.host, similarity: s.similarity, verified: s.verified })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed };
   if (!failed.length) out.answer = lead.answer;
   return out;
 }

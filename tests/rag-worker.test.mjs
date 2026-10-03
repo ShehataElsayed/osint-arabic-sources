@@ -55,3 +55,16 @@ test('verify: no key, bad critic, links stripped, quota', async () => {
   assert.deepEqual(await verifyModel('سؤال', env, async () => ({ ok: false, status: 429 })), { error: 'busy' });
   assert.equal(claimType('قال الوزير'), 'attribution');
 });
+
+import { checkSource, safeSourceUrl } from '../worker/rag-worker.js';
+test('source check: url safety, existence, support, numbers', async () => {
+  assert.equal(safeSourceUrl('http://a.com/x'), ''); assert.equal(safeSourceUrl('https://127.0.0.1/x'), ''); assert.equal(safeSourceUrl('https://x.afp.com/a'), ''); assert.equal(safeSourceUrl('https://localhost/x'), '');
+  assert.ok(safeSourceUrl('https://example.com/a'));
+  const page = body => async () => ({ ok: true, headers: { get: () => 'text/html' }, text: async () => body });
+  const good = await checkSource({ name: 'x', url: 'https://example.com/a' }, 'ارتفع سعر الخبز بنسبة 30 في المئة الشهر الماضي', ['30'], page('<p>أعلنت الوزارة أن سعر الخبز ارتفع بنسبة 30 في المئة الشهر الماضي في القاهرة.</p>'));
+  assert.equal(good.verified, true); assert.equal(good.numbers_ok, true);
+  const badNum = await checkSource({ url: 'https://example.com/a' }, 'ارتفع سعر الخبز بنسبة 30 في المئة الشهر الماضي', ['45'], page('<p>أعلنت الوزارة أن سعر الخبز ارتفع بنسبة 30 في المئة الشهر الماضي في القاهرة.</p>'));
+  assert.equal(badNum.verified, false);
+  const dead = await checkSource({ url: 'https://example.com/a' }, 'x', [], async () => ({ ok: false, headers: { get: () => 'text/html' } }));
+  assert.equal(dead.exists, false);
+});
