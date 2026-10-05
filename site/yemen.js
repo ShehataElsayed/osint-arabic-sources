@@ -113,8 +113,10 @@ async function loadNews(){
   catch(e){$('newsMeta').textContent='الفهرس الآلي للأخبار لم يُنشر بعد في هذا الإصدار.'}
 }
 async function loadStreams(){
-  try{const c=await getJson('./data/yemen-streams.json');
-    $('streams').innerHTML='<p class="muted small">روابط قنوات إخبارية رسمية على يوتيوب، وليست كاميرات مراقبة. الأداة لا ترصد البث المباشر آليًا؛ الرابط يفتح صفحة القناة على يوتيوب.</p>'+c.channels.map(x=>`<div class="ym-item"><b>${esc(x.name)}</b><small>${esc(x.kind)}</small><a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">فتح على يوتيوب</a></div>`).join('')
+  try{const [c,l]=await Promise.all([getJson('./data/yemen-streams.json'),fetch(LIVE+'yemen-streams-live.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()}).catch(()=>({live:[]}))]);
+    const live={};(l.live||[]).forEach(x=>live[x.channel_id]=x.video_id);
+    $('streams').innerHTML='<p class="muted small">بث قنوات إخبارية رسمية، وليست كاميرات مراقبة. تتحقق الأداة آليًا من أن القناة تبث الآن وتسمح بالتضمين. التشغيل يتم من يوتيوب بعد ضغطك.</p>'+c.channels.map(x=>{const v=live[x.channel_id];return `<div class="ym-item"><b>${esc(x.name)}</b><small>${esc(x.kind)} · ${v?'بث مباشر الآن':'لم يُرصد بث مباشر قابل للتضمين'}</small>${v&&/^[\w-]{11}$/.test(v)?`<button type="button" class="ym-play" data-v="${v}">تشغيل داخل الأداة</button>`:''}<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">فتح على يوتيوب</a></div>`}).join('');
+    $('streams').addEventListener('click',ev=>{const b=ev.target.closest('.ym-play');if(!b)return;b.outerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${b.dataset.v}?autoplay=1" width="100%" height="200" style="border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="بث مباشر"></iframe>`})
   }catch(e){$('streams').innerHTML='<p class="muted">تعذر تحميل قائمة القنوات.</p>'}
 }
 async function loadCams(){
