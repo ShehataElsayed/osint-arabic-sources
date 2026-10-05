@@ -1,7 +1,29 @@
-{"note":"قنوات رسمية فقط على يوتيوب. تُضاف قناة بعد التأكد من اسمها الرسمي ومعرّفها. البث نفسه يُحدَّد آليًا كل ساعة تقريبًا ولا يظهر إلا إذا كان مباشرًا وتسمح القناة بتضمينه.","channels":[
-{"name":"قناة الجزيرة","kind":"قناة إخبارية","channel_id":"UCfiwzLy-8yKzIbsmZTzxDgw","url":"https://www.youtube.com/channel/UCfiwzLy-8yKzIbsmZTzxDgw/live"},
-{"name":"سكاي نيوز عربية","kind":"قناة إخبارية","channel_id":"UCIJXOvggjKtCagMfxvcCzAA","url":"https://www.youtube.com/channel/UCIJXOvggjKtCagMfxvcCzAA/live"},
-{"name":"BBC News عربي","kind":"قناة إخبارية","channel_id":"UCelk6aHijZq-GJBBB9YpReA","url":"https://www.youtube.com/channel/UCelk6aHijZq-GJBBB9YpReA/live"},
-{"name":"قناة اليمن الفضائية","kind":"قناة يمنية","channel_id":"UCmdgAcBW7sMCOFUoRDpclmQ","url":"https://www.youtube.com/channel/UCmdgAcBW7sMCOFUoRDpclmQ/live"},
-{"name":"بلقيس","kind":"قناة يمنية","channel_id":"UCQd1_s2J6NvI-7YYN6MkIxA","url":"https://www.youtube.com/channel/UCQd1_s2J6NvI-7YYN6MkIxA/live"}
-]}
+{
+"note": "قنوات رسمية فقط على يوتيوب. تُضاف قناة بعد التأكد من اسمها الرسمي ومعرّفها. البث نفسه يُحدَّد آليًا كل ساعة تقريبًا ولا يظهر إلا إذا كان مباشرًا وتسمح القناة بتضمينه.",
+"channels": [
+{
+"name": "قناة الجزيرة",
+"kind": "قناة إخبارية",
+"channel_id": "UCfiwzLy-8yKzIbsmZTzxDgw",
+"url": "https://www.youtube.com/channel/UCfiwzLy-8yKzIbsmZTzxDgw/live"
+},
+{
+"name": "سكاي نيوز عربية",
+"kind": "قناة إخبارية",
+"channel_id": "UCIJXOvggjKtCagMfxvcCzAA",
+"url": "https://www.youtube.com/channel/UCIJXOvggjKtCagMfxvcCzAA/live"
+},
+{
+"name": "BBC News عربي",
+"kind": "قناة إخبارية",
+"channel_id": "UCelk6aHijZq-GJBBB9YpReA",
+"url": "https://www.youtube.com/channel/UCelk6aHijZq-GJBBB9YpReA/live"
+},
+{
+"name": "قناة اليمن الفضائية",
+"kind": "قناة يمنية",
+"channel_id": "UCmdgAcBW7sMCOFUoRDpclmQ",
+"url": "https://www.youtube.com/channel/UCmdgAcBW7sMCOFUoRDpclmQ/live"
+}
+]
+}
