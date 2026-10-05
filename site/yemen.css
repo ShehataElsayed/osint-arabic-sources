@@ -42,3 +42,4 @@ button.ghost,.ym-export button,.ym-tabs button{border:1px solid #c9dcd8;backgrou
 .ym-sigwarn{background:#eef4ff;border:1px solid #c7d9fb;border-radius:12px;padding:8px 12px;font-size:13.5px;margin:0 0 8px}.ym-item.sig{border-style:dashed;border-color:#8fb4f0}
 .ym-detail details{margin:6px 0}.leaflet-popup-content{font-family:Cairo,Tahoma,sans-serif}
 .ym-play{display:block;margin:.4rem 0;padding:.35rem .7rem;font:inherit;cursor:pointer}
+.ym-layers{margin:.6rem 0;padding:.5rem .8rem;border:1px solid var(--line,#d5dfe3);border-radius:12px;background:#fff}.ym-layers summary{cursor:pointer;font-weight:700}.ym-layers-body{display:grid;gap:.4rem;margin-top:.5rem}.ym-layers-body label{display:flex;gap:.5rem;align-items:center}

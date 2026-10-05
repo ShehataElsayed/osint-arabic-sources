@@ -133,6 +133,21 @@ async function loadEvents(){
   const govs=[...new Set(EV.map(e=>gAr(e.gov)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ar'));
   if($('fGov').options.length<2)$('fGov').insertAdjacentHTML('beforeend',govs.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join(''));
 }
+
+/* ---- Optional context layers: NASA GIBS imagery, NASA FIRMS thermal, OpenStreetMap places. Not documented events. ---- */
+const LY={};
+function layerGroup(k){return LY[k]||(LY[k]=L.layerGroup())}
+function toggle(k,on,build){const g=layerGroup(k);if(on){g.addTo(map);if(!g._built){g._built=true;build(g)}}else map.removeLayer(g)}
+async function lyJson(n){try{return await fetch(LIVE+n+'?t='+Math.floor(Date.now()/600000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){return getJson('./data/'+n)}}
+const KIND={h:{c:'#1b7f5a',t:'مستشفى'},a:{c:'#1f5fa8',t:'مطار'},o:{c:'#1f5fa8',t:'ميناء'},p:{c:'#7a6a00',t:'محطة كهرباء'}};
+async function drawInfra(g,kinds){const d=await lyJson('yemen-infra.json');d.items.filter(i=>kinds.includes(i[0])).forEach(i=>{const k=KIND[i[0]];const nm=i[3]||'بدون اسم عربي في OpenStreetMap';L.circleMarker([i[1],i[2]],{radius:i[0]==='h'?4:5,color:'#fff',weight:1,fillColor:k.c,fillOpacity:.9}).bindPopup(`<div dir="rtl" style="font-family:Cairo,sans-serif"><b>${esc(nm)}</b><br>${k.t}${i[4]&&!i[3]?'<br><span dir="ltr">'+esc(i[4])+'</span>':''}<br><small>مصدر: OpenStreetMap (ODbL). قد تكون المعلومة ناقصة أو قديمة.</small></div>`).addTo(g)})}
+function initLayers(){
+  $('lyGibs').addEventListener('change',e=>toggle('gibs',e.target.checked,g=>{const d=new Date(Date.now()-36*3600e3).toISOString().slice(0,10);L.tileLayer(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${d}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,{maxNativeZoom:9,maxZoom:14,opacity:.85,attribution:'صور NASA GIBS / EOSDIS، VIIRS ليوم '+d}).addTo(g)}));
+  $('lyThermal').addEventListener('change',e=>toggle('thermal',e.target.checked,async g=>{const d=await lyJson('yemen-thermal.json');d.points.forEach(p=>L.circleMarker([p[0],p[1]],{radius:4,color:'#000',weight:1,fillColor:'#ff6a00',fillOpacity:.8}).bindPopup(`<div dir="rtl" style="font-family:Cairo,sans-serif"><b>حرارة مرصودة بالقمر الصناعي</b><br>${esc(p[2])} ${esc(p[3].slice(0,2)+':'+p[3].slice(2))} UTC · ${esc(p[4])}<br>ثقة الرصد: ${esc(p[5])}<br><small>ليست ضربة مؤكدة. قد تكون حريقًا أو مشعل غاز. مصدر: NASA FIRMS.</small></div>`).addTo(g))}));
+  $('lyHosp').addEventListener('change',e=>toggle('hosp',e.target.checked,g=>drawInfra(g,['h'])));
+  $('lyAir').addEventListener('change',e=>toggle('air',e.target.checked,g=>drawInfra(g,['a','o'])));
+  $('lyPower').addEventListener('change',e=>toggle('pow',e.target.checked,g=>drawInfra(g,['p'])));
+}
 async function boot(){
   map=L.map('map',{center:[15.5,47.5],zoom:6,minZoom:5,maxZoom:14,worldCopyJump:false});
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© مساهمو <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · بيانات الأحداث: UCDP GED وUCDP Candidate (CC BY 4.0)',maxZoom:18}).addTo(map);
@@ -140,7 +155,7 @@ async function boot(){
   heat=L.heatLayer([],{radius:18,blur:20,maxZoom:9,minOpacity:.35,gradient:{.2:'#ffe08a',.45:'#f5a623',.7:'#d9480f',1:'#8b0000'}}).addTo(map);
   ptsLayer=L.layerGroup().addTo(map);sigLayer=L.layerGroup().addTo(map);
   map.on('moveend',()=>{if($('inView').checked)drawList()});
-  await loadEvents();init2();loadParams();render();loadNews();loadCams();loadStreams();loadSignals();
+  await loadEvents();init2();loadParams();render();loadNews();loadCams();loadStreams();loadSignals();initLayers();
   setInterval(()=>{loadNews();loadCams()},600000);setInterval(loadSignals,300000);$('sigShow').addEventListener('change',drawSignals);$('sigWin').addEventListener('change',drawSignals);
   $('sigList').addEventListener('click',e=>{const b=e.target.closest('.sig');if(!b)return;const g=sigRowsCache[+b.dataset.i];if(g){map.setView([g.lat,g.lon],Math.max(map.getZoom(),9));L.popup().setLatLng([g.lat,g.lon]).setContent(sigPopup(g)).openOn(map)}});
   setInterval(async()=>{try{await loadEvents();render()}catch(e){}},3600000);
