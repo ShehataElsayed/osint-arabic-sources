@@ -1,0 +1,55 @@
+name: مراجعة إشارة على خريطة اليمن
+description: طلب اعتماد إشارة إعلامية كـ "موثقة بعد مراجعة بشرية" وفق المعيار المكتوب في docs/yemen-review-standard.md
+title: "مراجعة إشارة: "
+labels: ["yemen-review-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        لا تتحول الإشارة إلى "موثقة" إلا بعد أن يضيف مشرف المستودع الوسم `yemen-reviewed`. تعبئة هذا النموذج وحدها لا تكفي. اقرأ المعيار أولًا: docs/yemen-review-standard.md (مسودة بانتظار اعتماد صاحب الدليل).
+  - type: input
+    id: signal_key
+    attributes:
+      label: مفتاح الإشارة
+      description: يُملأ تلقائيًا من زر "اقترح مراجعة" في نافذة الإشارة. الشكل lat|lon|cameo
+    validations:
+      required: true
+  - type: input
+    id: place
+    attributes:
+      label: المكان والتاريخ
+    validations:
+      required: true
+  - type: textarea
+    id: sources
+    attributes:
+      label: المصادر (رابط في كل سطر، مصدران مستقلان على الأقل)
+      description: أدرج اسم الجهة قبل الرابط. مثال "وكالة كذا: https://..."
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: ما الذي جرى التحقق منه وكيف
+      description: الموقع (تحديد جغرافي)، التاريخ، وما بقي غير مؤكد
+    validations:
+      required: true
+  - type: input
+    id: reviewer
+    attributes:
+      label: اسم المراجع
+    validations:
+      required: true
+  - type: textarea
+    id: conflicts
+    attributes:
+      label: تضارب مصالح أو ملاحظات
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: تأكيدات
+      options:
+        - label: لم أنسخ مادة من Yemen Data Project أو من مصدر ترخيصه يمنع إعادة النشر
+          required: true
+        - label: أفهم أن الوسم يعني "موثقة بعد مراجعة" وليس "مؤكدة 100%"
+          required: true

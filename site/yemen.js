@@ -26,7 +26,7 @@ function render(){
   filtered=apply(false);saveParams();
   const best=filtered.reduce((s,e)=>s+e.best,0),low=filtered.reduce((s,e)=>s+e.low,0),high=filtered.reduce((s,e)=>s+e.high,0),civ=filtered.reduce((s,e)=>s+e.civ,0);
   $('stats').innerHTML=`<div><b>${num(filtered.length)}</b><small>حدث</small></div><div><b>${num(best)}</b><small>قتلى (أفضل تقدير) · بين ${num(low)} و${num(high)}</small></div><div><b>${num(civ)}</b><small>منهم مدنيون</small></div>${filtered.some(e=>e.cand)?`<div><b>${num(filtered.filter(e=>e.cand).length)}</b><small>منها مبدئية (UCDP شهري، تُراجع لاحقًا)</small></div>`:''}`;
-  drawMap();drawList();drawChart();drawAnalysis();
+  drawMap();drawList();drawChart();drawAnalysis();drawMini();
 }
 function drawMap(){
   const l=F.layer.value;
@@ -43,7 +43,7 @@ function drawList(){
   if(rows.length>150)$('list').insertAdjacentHTML('beforeend',`<p class="muted small">يعرض أحدث 150 من ${num(rows.length)}. استخدم التصدير للقائمة الكاملة.</p>`);
 }
 function select(e){
-  selected=e;const d=$('detail');d.hidden=false;const h=tHead(e),ds=tDesc(e);
+  selected=e;const d=$('detail');d.hidden=false;if($('detailHint'))$('detailHint').hidden=true;const h=tHead(e),ds=tDesc(e);
   const mt=x=>x.mt?'<span class="mt">ترجمة آلية</span>':'';const tx=x=>x.mt?esc(x.t):'<span class="mt off">لم تُترجم بعد، الأصل في «النص الأصلي» أدناه</span>';
   d.innerHTML=`<h3>${esc(where(e))}</h3>${e.cand?`<p class="mt">بيانات UCDP مبدئية (شهرية). قد تُعدَّل لاحقًا${e.cs&&e.cs!=='Clear'?'. علامة مراجعة من UCDP نفسها: '+esc(e.cs):''}</p>`:''}<dl><dt>التاريخ</dt><dd>${esc(e.d)}${e.d2!==e.d?' إلى '+esc(e.d2):''}</dd><dt>النوع</dt><dd>${esc(TYPES[e.type])}</dd><dt>الطرفان</dt><dd>${esc(pAr(e.a))} ← ${esc(pAr(e.b))}</dd><dt>المحافظة</dt><dd>${esc(gAr(e.gov))}</dd><dt>القتلى</dt><dd>أفضل تقدير ${num(e.best)} (بين ${num(e.low)} و${num(e.high)})، مدنيون: ${num(e.civ)}</dd><dt>وصف الموقع</dt><dd>${tx(ds)} ${mt(ds)}</dd><dt>المصدر</dt><dd>${esc(e.src)}${e.sd?' · '+esc(e.sd):''}<br>${tx(h)} ${mt(h)}</dd><dt>السجل</dt><dd><a href="https://ucdp.uu.se/event/${e.id}" rel="noopener" target="_blank" style="direction:ltr;unicode-bidi:isolate">UCDP GED #${e.id}</a></dd></dl>
   <details><summary>النص الأصلي (بالإنجليزية)</summary><p dir="ltr" style="text-align:left">${esc(e.place)}<br>${esc(e.head)}<br>${esc(e.a)} → ${esc(e.b)}</p></details>
@@ -85,26 +85,31 @@ for(const k of Object.keys(F)){F[k].addEventListener('change',render);if(k==='q'
 $('fReset').addEventListener('click',()=>{for(const k of Object.keys(F)){F[k].value=F[k].defaultValue;if(F[k].tagName==='SELECT')F[k].selectedIndex=0}init2();render()});
 $('inView').addEventListener('change',drawList);
 $('list').addEventListener('click',e=>{const b=e.target.closest('.ym-item');if(!b)return;const x=EV.find(v=>v.id==b.dataset.id);if(x)select(x)});
-document.querySelectorAll('.ym-tabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.ym-tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));for(const t of['list','sig','an','news','cams'])$('tab-'+t).hidden=t!==b.dataset.tab}));
+document.querySelectorAll('.ym-tabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.ym-tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));for(const t of['list','sig','an','ctx','news','cams'])$('tab-'+t).hidden=t!==b.dataset.tab}));
 function init2(){const last=EV.length?EV[EV.length-1].d:'';const y=last?new Date(+last.slice(0,4)-1,+last.slice(5,7)-1,+last.slice(8,10)+1):null;F.from.value=y?y.toISOString().slice(0,10):'';F.to.value=''}
 async function getJson(u){const r=await fetch(u+'?t='+Math.floor(Date.now()/600000));if(!r.ok)throw new Error(u);return r.json()}
 
 /* ---- Near-live media-derived signals (GDELT). Separate from UCDP documented events. ---- */
 let sigLayer,REV={};const sigKey=g=>[g.lat,g.lon,g.cameo].join('|');const nDom=g=>new Set(g.sources.map(x=>x.d)).size;const cand=g=>nDom(g)>=2;
+function corr(g){const n=nDom(g);let sc=n>=5?3:n>=3?2:n>=2?1:0,why=[`${num(n)} مواقع إخبارية مختلفة`];
+  const t0=new Date(g.first).getTime()-7*864e5,t1=new Date(g.last).getTime()+7*864e5;
+  const hit=EV.find(e=>{const t=new Date(e.d).getTime();return t>=t0&&t<=t1&&Math.hypot((e.lat-g.lat)*111,(e.lon-g.lon)*111*Math.cos(g.lat*Math.PI/180))<=25&&e.prec<=2});
+  if(hit){sc+=2;why.push('يوجد حدث UCDP ضمن 25 كم وأسبوع: '+hit.d)}else why.push('لا يوجد حدث UCDP مطابق حتى الآن (UCDP متأخر عن الإشارات)');
+  return{sc,lab:sc>=4?'تعدد مصادر قوي':sc>=2?'تعدد مصادر متوسط':'مصدر واحد أو قليل',why:why.join(' · ')}}
 const sigWhere=g=>(g.place_ar||'')?(g.place_ar+(g.gov_ar&&g.gov_ar!==g.place_ar?'، '+g.gov_ar:'')):(g.gov_ar||'اليمن');
 function sigRows(){const h=+$('sigWin').value;const cut=new Date(Date.now()-h*3600e3).toISOString();return SIG.filter(g=>g.last>=cut)}
 function ago(t){const m=Math.max(0,Math.round((Date.now()-new Date(t))/60000));return m<60?`قبل ${num(m)} دقيقة`:m<2880?`قبل ${num(Math.round(m/60))} ساعة`:`قبل ${num(Math.round(m/1440))} يوم`}
 function drawSignals(){
   sigLayer.clearLayers();const rows=sigRows();
   if($('sigShow').checked)for(const g of rows){const m=L.circleMarker([g.lat,g.lon],{radius:6+Math.min(8,Math.log(1+g.mentions)),color:REV[sigKey(g)]?'#0a6b3a':cand(g)?'#b35c00':'#1f5fbf',weight:2,dashArray:REV[sigKey(g)]?null:'3 3',fillColor:REV[sigKey(g)]?'#7fe0a8':cand(g)?'#ffc27a':'#7fb2ff',fillOpacity:.4});m.bindPopup(sigPopup(g));sigLayer.addLayer(m)}
-  $('sigList').innerHTML=rows.length?rows.map((g,i)=>`<div class="ym-item sig" data-i="${i}"><b>${esc(sigWhere(g))}</b><small>${REV[sigKey(g)]?'موثق بعد مراجعة · ':cand(g)?'مرشح (مصدران أو أكثر) · ':''}${esc(g.cameo_ar)} · ${esc(ago(g.last))} · ${num(nDom(g))} موقعًا إخباريًا${g.mentions?' · ذُكر '+num(g.mentions)+' مرة':''}</small></div>`).join(''):'<p class="muted">لا إشارات ضمن هذه المدة، أو لم يُنشر ملف الإشارات بعد.</p>';
-  sigRowsCache=rows;
+  $('sigList').innerHTML=rows.length?rows.map((g,i)=>`<div class="ym-item sig" data-i="${i}"><b>${esc(sigWhere(g))}</b><small>${REV[sigKey(g)]?'موثق بعد مراجعة · ':cand(g)?'مرشح (مصدران أو أكثر) · ':''}تقييم آلي: ${esc(corr(g).lab)} · ${esc(g.cameo_ar)} · ${esc(ago(g.last))} · ${num(nDom(g))} موقعًا إخباريًا${g.mentions?' · ذُكر '+num(g.mentions)+' مرة':''}</small></div>`).join(''):'<p class="muted">لا إشارات ضمن هذه المدة، أو لم يُنشر ملف الإشارات بعد.</p>';
+  sigRowsCache=rows;drawTicker();
 }
 let sigRowsCache=[];
-function sigPopup(g){return `<div dir="rtl" style="font-family:Cairo,sans-serif;min-width:200px"><b>${REV[sigKey(g)]?'موثق بعد مراجعة بشرية':cand(g)?'مرشح للتوثيق: مصادر مستقلة متعددة، لم يُراجع بعد':'إشارة إعلامية آلية، غير محققة'}</b><br>${esc(sigWhere(g))}<br>${esc(g.cameo_ar)} · آخر ظهور ${esc(ago(g.last))}<br>${g.place_ar?'':'<small>الاسم الأصلي: <span dir="ltr">'+esc(g.place_en)+'</span></small><br>'}<small>تُستخرج آليًا من أخبار، وقد يكون الموقع أو النوع خاطئًا. افتح المصدر وتحقق.</small><br>${g.sources.slice(0,4).map(s=>`<a href="${esc(s.u)}" target="_blank" rel="noopener noreferrer" style="direction:ltr;unicode-bidi:isolate;display:block">${esc(s.d||'مصدر')}</a>`).join('')}</div>`}
+function sigPopup(g){return `<div dir="rtl" style="font-family:Cairo,sans-serif;min-width:200px"><b>${REV[sigKey(g)]?'موثق بعد مراجعة بشرية':cand(g)?'مرشح للتوثيق: مصادر مستقلة متعددة، لم يُراجع بعد':'إشارة إعلامية آلية، غير محققة'}</b><br>${esc(sigWhere(g))}<br>${esc(g.cameo_ar)} · آخر ظهور ${esc(ago(g.last))}<br>${g.place_ar?'':'<small>الاسم الأصلي: <span dir="ltr">'+esc(g.place_en)+'</span></small><br>'}<small>تقييم آلي لتعدد المصادر: ${esc(corr(g).lab)} (${esc(corr(g).why)}). هذا ليس تحققًا، وقد تنقل المواقع الخبر عن مصدر واحد.</small><br><small>تُستخرج آليًا من أخبار، وقد يكون الموقع أو النوع خاطئًا. افتح المصدر وتحقق.</small><br>${REV[sigKey(g)]?`<small>المراجع: ${esc(REV[sigKey(g)].reviewer)} · ${esc(REV[sigKey(g)].date)} · <a href="${esc(REV[sigKey(g)].issue||'#')}" target="_blank" rel="noopener noreferrer">سجل المراجعة</a></small><br>`:`<a href="https://github.com/ShehataElsayed/osint-arabic-sources/issues/new?template=yemen-review.yml&signal_key=${encodeURIComponent(sigKey(g))}&place=${encodeURIComponent(sigWhere(g))}" target="_blank" rel="noopener noreferrer">اقترح مراجعة هذه الإشارة</a><br>`}${g.sources.slice(0,4).map(s=>`<a href="${esc(s.u)}" target="_blank" rel="noopener noreferrer" style="direction:ltr;unicode-bidi:isolate;display:block">${esc(s.d||'مصدر')}</a>`).join('')}</div>`}
 async function loadSignals(){
   let d=null;try{d=await fetch(LIVE+'yemen-signals.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){try{d=await getJson('./data/yemen-signals.json')}catch(e2){}}
-  if(!d)return;try{const r=await getJson('./data/yemen-reviewed.json');REV={};(r.reviewed||[]).forEach(x=>{if(x.status==='documented')REV[x.key]=x})}catch(e){}SIG=d.signals||[];$('sigMeta').textContent=`آخر تحديث للملف: ${d.updated.replace('T',' ').replace('Z',' UTC')} (${ago(d.updated)}). ${d.label}.`;drawSignals();
+  if(!d)return;try{let r;try{r=await fetch(LIVE+'yemen-reviewed.json?t='+Math.floor(Date.now()/300000)).then(x=>{if(!x.ok)throw 0;return x.json()})}catch(e){r=await getJson('./data/yemen-reviewed.json')}REV={};(r.reviewed||[]).forEach(x=>{if(x.status==='documented')REV[x.key]=x})}catch(e){}SIG=d.signals||[];$('sigMeta').textContent=`آخر تحديث للملف: ${d.updated.replace('T',' ').replace('Z',' UTC')} (${ago(d.updated)}). ${d.label}.`;drawSignals();
 }
 async function loadNews(){
   try{let n;try{n=await fetch(LIVE+'yemen-news.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){n=await getJson('./data/yemen-news.json')}const items=(n.items||[]).filter(i=>i.l==='arabic');
@@ -113,8 +118,8 @@ async function loadNews(){
   catch(e){$('newsMeta').textContent='الفهرس الآلي للأخبار لم يُنشر بعد في هذا الإصدار.'}
 }
 async function loadStreams(){
-  try{const [c,l]=await Promise.all([getJson('./data/yemen-streams.json'),fetch(LIVE+'yemen-streams-live.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()}).catch(()=>({live:[]}))]);
-    const live={};(l.live||[]).forEach(x=>live[x.channel_id]=x.video_id);
+  try{const [c,l]=await Promise.all([getJson('./data/yemen-streams.json'),fetch(LIVE+'yemen-streams-live.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()}).catch(()=>getJson('./data/yemen-streams-live.json')).catch(()=>({live:[]}))]);
+    const live={};(l.live||[]).forEach(x=>live[x.channel_id]=x.video_id);{const f=c.channels.find(x=>live[x.channel_id]);if(f)miniPlayer(f.name,live[f.channel_id])}
     $('streams').innerHTML='<p class="muted small">بث قنوات إخبارية رسمية، وليست كاميرات مراقبة. تتحقق الأداة آليًا من أن القناة تبث الآن وتسمح بالتضمين. التشغيل يتم من يوتيوب بعد ضغطك.</p>'+c.channels.map(x=>{const v=live[x.channel_id];return `<div class="ym-item"><b>${esc(x.name)}</b><small>${esc(x.kind)} · ${v?'بث مباشر الآن':'لم يُرصد بث مباشر قابل للتضمين'}</small>${v&&/^[\w-]{11}$/.test(v)?`<button type="button" class="ym-play" data-v="${v}">تشغيل داخل الأداة</button>`:''}<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">فتح على يوتيوب</a></div>`}).join('');
     $('streams').addEventListener('click',ev=>{const b=ev.target.closest('.ym-play');if(!b)return;b.outerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${b.dataset.v}?autoplay=1" width="100%" height="200" style="border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="بث مباشر"></iframe>`})
   }catch(e){$('streams').innerHTML='<p class="muted">تعذر تحميل قائمة القنوات.</p>'}
@@ -142,6 +147,7 @@ async function lyJson(n){try{return await fetch(LIVE+n+'?t='+Math.floor(Date.now
 const KIND={h:{c:'#1b7f5a',t:'مستشفى'},a:{c:'#1f5fa8',t:'مطار'},o:{c:'#1f5fa8',t:'ميناء'},p:{c:'#7a6a00',t:'محطة كهرباء'}};
 async function drawInfra(g,kinds){const d=await lyJson('yemen-infra.json');d.items.filter(i=>kinds.includes(i[0])).forEach(i=>{const k=KIND[i[0]];const nm=i[3]||'بدون اسم عربي في OpenStreetMap';L.circleMarker([i[1],i[2]],{radius:i[0]==='h'?4:5,color:'#fff',weight:1,fillColor:k.c,fillOpacity:.9}).bindPopup(`<div dir="rtl" style="font-family:Cairo,sans-serif"><b>${esc(nm)}</b><br>${k.t}${i[4]&&!i[3]?'<br><span dir="ltr">'+esc(i[4])+'</span>':''}<br><small>مصدر: OpenStreetMap (ODbL). قد تكون المعلومة ناقصة أو قديمة.</small></div>`).addTo(g)})}
 function initLayers(){
+  $('lyAdm').addEventListener('change',e=>toggle('adm',e.target.checked,async g=>{const d=await getJson('./data/yemen-admin1.json');L.geoJSON(d,{style:{color:'#555',weight:1.2,fill:false,dashArray:'4 3'},onEachFeature:(f,l)=>l.bindTooltip(GEN[f.properties.en]||f.properties.ar)}).addTo(g)}));
   $('lyGibs').addEventListener('change',e=>toggle('gibs',e.target.checked,g=>{const d=new Date(Date.now()-36*3600e3).toISOString().slice(0,10);L.tileLayer(`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${d}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`,{maxNativeZoom:9,maxZoom:14,opacity:.85,attribution:'صور NASA GIBS / EOSDIS، VIIRS ليوم '+d}).addTo(g)}));
   $('lyThermal').addEventListener('change',e=>toggle('thermal',e.target.checked,async g=>{const d=await lyJson('yemen-thermal.json');d.points.forEach(p=>L.circleMarker([p[0],p[1]],{radius:4,color:'#000',weight:1,fillColor:'#ff6a00',fillOpacity:.8}).bindPopup(`<div dir="rtl" style="font-family:Cairo,sans-serif"><b>حرارة مرصودة بالقمر الصناعي</b><br>${esc(p[2])} ${esc(p[3].slice(0,2)+':'+p[3].slice(2))} UTC · ${esc(p[4])}<br>ثقة الرصد: ${esc(p[5])}<br><small>ليست ضربة مؤكدة. قد تكون حريقًا أو مشعل غاز. مصدر: NASA FIRMS.</small></div>`).addTo(g))}));
   $('lyHosp').addEventListener('change',e=>toggle('hosp',e.target.checked,g=>drawInfra(g,['h'])));
@@ -192,6 +198,47 @@ $('exCard').addEventListener('click',()=>{
   c.fillStyle='#b9cfcc';c.font='400 20px Cairo,sans-serif';c.fillText('نقاط الأحداث على إحداثيات مبسطة، بلا خريطة أساس. الحجم يدل على عدد القتلى المقدر. الإطار الأزرق: بيانات UCDP مبدئية.',W-50,H-70);
   c.fillText('المصدر: UCDP (GED وCandidate)، رخصة CC BY 4.0. دقة المواقع متفاوتة، والأعداد تقديرات منشورة وليست تحققًا. دليل المصادر المفتوحة للصحفيين العرب',W-50,H-38);
   cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='yemen-card.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)});$('exMsg').textContent='تم تنزيل البطاقة. '+CREDIT});
+
+const GEN={'Abyan':'أبين',"Ad Dali'":'الضالع',"Al Dhale'e":'الضالع','Aden':'عدن','Al Bayda':'البيضاء','Al Hodeidah':'الحديدة','Al Jawf':'الجوف','Al Maharah':'المهرة','Al Mahwit':'المحويت','Amran':'عمران','Dhamar':'ذمار','Hadramawt':'حضرموت','Hadramaut':'حضرموت','Hajjah':'حجة','Ibb':'إب','Lahj':'لحج',"Ma'rib":'مأرب','Marib':'مأرب','Raymah':'ريمة',"Sa'dah":'صعدة',"Sana'a":'صنعاء',"Sana'a City":'أمانة العاصمة','Shabwah':'شبوة','Socotra':'سقطرى',"Ta'iz":'تعز','Taizz':'تعز'};
+/* ---- Context tab (food prices, FEWS NET) and governorate boundaries ---- */
+let CTX=null;
+function line(cv,months,vals,color){const w=cv.clientWidth||500,h=cv.height,dpr=window.devicePixelRatio||1;cv.width=w*dpr;cv.height=h*dpr;const c=cv.getContext('2d');c.scale(dpr,dpr);c.clearRect(0,0,w,h);if(!vals.length)return;const mx=Math.max(...vals)*1.08,mn=Math.min(0,Math.min(...vals));const X=i=>w-12-i*(w-24)/Math.max(1,vals.length-1),Y=v=>h-18-(v-mn)/(mx-mn||1)*(h-30);
+  c.strokeStyle=color;c.lineWidth=2;c.beginPath();vals.forEach((v,i)=>{i?c.lineTo(X(vals.length-1-i),Y(v)):c.moveTo(X(vals.length-1),Y(v))});c.stroke();
+  c.fillStyle='#52646d';c.font='11px Cairo,sans-serif';c.textAlign='center';[0,Math.floor(vals.length/2),vals.length-1].forEach(i=>c.fillText(months[i],X(vals.length-1-i),h-3));c.textAlign='right';c.fillText(num(Math.round(Math.max(...vals)*100)/100)+' (الأعلى)',w-4,12)}
+function drawFood(){const f=CTX.food;if(!f)return;const k=$('fpSel').value,s=f.series[k];if(!s)return;line($('fpChart'),s.months,s.median_usd,'#0a827d');
+  const lat=f.latest_by_governorate[k]||{};$('fpLatest').innerHTML=`<p class="muted small">آخر شهر متاح: ${esc(f.last_month)}. وحدة السعر: ${esc(s.unit)}.</p><table class="ym-tbl"><tr><th>المحافظة</th><th>السعر بالدولار</th></tr>${Object.entries(lat).sort((a,b)=>b[1]-a[1]).map(([g,v])=>`<tr><td>${esc(GEN[g]||gAr(g))}</td><td>${v}</td></tr>`).join('')}</table>`}
+async function loadContext(){
+  try{CTX=await lyJson('yemen-context.json')}catch(e){$('tab-ctx').insertAdjacentHTML('beforeend','<p class="muted">تعذر تحميل بيانات السياق.</p>');return}
+  if(CTX.food){$('fpSel').innerHTML=Object.entries(CTX.food.series).map(([k,v])=>`<option value="${esc(k)}">${esc(v.ar)}</option>`).join('');$('fpSel').addEventListener('change',drawFood)}
+  document.querySelector('[data-tab=ctx]').addEventListener('click',()=>{setTimeout(()=>{drawFood();if(CTX.fews){const s=CTX.fews.series,now=new Date().toISOString().slice(0,7);line($('fwChart'),s.map(x=>x[0]),s.map(x=>x[1]/1e6),'#c0392b');$('fwNote').innerHTML=`ملايين الأشخاص المصنفين في المرحلة 3 فأعلى حسب FEWS NET (آخر وثيقة: ${esc(CTX.fews.last_document)}). الأشهر بعد ${now} تقديرات مستقبلية من المصدر نفسه. المصدر: FEWS NET عبر HDX، رخصة CC BY. التقديرات وطنية ولا تغطي مناطق أو أحياء محددة.`}},50)})
+}
+const RSSG={'':['all','كل اليمن'],'أبين':['abyan'],'عدن':['aden'],'البيضاء':['bayda'],'الضالع':['dhale'],'الحديدة':['hodeidah'],'الجوف':['jawf'],'المهرة':['mahra'],'المحويت':['mahwit'],'عمران':['amran'],'ذمار':['dhamar'],'حضرموت':['hadramaut'],'حجة':['hajjah'],'إب':['ibb'],'لحج':['lahj'],'مأرب':['marib'],'ريمة':['raymah'],'صعدة':['saada'],'صنعاء':['sanaa'],'أمانة العاصمة':['sanaa-city'],'شبوة':['shabwah'],'سقطرى':['socotra'],'تعز':['taiz']};
+function initRss(){const sel=$('rssSel');sel.innerHTML=Object.entries(RSSG).map(([k,v])=>`<option value="${v[0]}">${esc(v[1]||k)}</option>`).join('');const set=()=>{$('rssLink').href=LIVE+'yemen-rss-'+sel.value+'.xml'};sel.addEventListener('change',set);set();$('rssCopy').addEventListener('click',async()=>{try{await navigator.clipboard.writeText($('rssLink').href);$('rssCopy').textContent='تم النسخ'}catch(e){}})}
+
+/* ---- Mini summary under the map: top governorates and a small trend, following current filters ---- */
+function drawMini(){
+  const m=$('mini');if(!m)return;const top={};filtered.forEach(e=>{const g=gAr(e.gov)||'غير محدد';top[g]=(top[g]||0)+1});
+  const t=Object.entries(top).sort((a,b)=>b[1]-a[1]).slice(0,5),mx=t.length?t[0][1]:1;
+  m.innerHTML=`<h4>أكثر 5 محافظات أحداثًا (حسب التصفية الحالية)</h4><div class="ym-bars">${t.map(([g,n])=>`<div><span>${esc(g)}</span><i style="width:${Math.max(4,n/mx*100)}%"></i><span>${num(n)}</span></div>`).join('')||'<span class="muted">لا أحداث</span>'}</div><h4 style="margin-top:12px">الاتجاه الشهري</h4><canvas id="miniCv" height="70"></canvas>`;
+  const cv=$('miniCv'),w=cv.clientWidth||300,h=70,dpr=window.devicePixelRatio||1;cv.width=w*dpr;cv.height=h*dpr;const c=cv.getContext('2d');c.scale(dpr,dpr);
+  const by={};filtered.forEach(e=>{const k=e.d.slice(0,7);by[k]=(by[k]||0)+1});const ks=Object.keys(by).sort().slice(-24);if(!ks.length)return;const v=Math.max(...ks.map(k=>by[k])),bw=(w-4)/ks.length;
+  ks.forEach((k,i)=>{const bh=by[k]/v*(h-14);c.fillStyle='#0a827d';c.fillRect(w-2-(ks.length-i)*bw+.5,h-12-bh,Math.max(1,bw-1),bh)});c.fillStyle='#52646d';c.font='10px Cairo,sans-serif';c.textAlign='right';c.fillText(ks[ks.length-1],w-2,h-1);c.textAlign='left';c.fillText(ks[0],2,h-1);
+}
+/* ---- Ticker of latest media signals (unverified) ---- */
+function drawTicker(){
+  const t=$('ticker');if(!t)return;const rows=SIG.slice().sort((a,b)=>a.last<b.last?1:-1).slice(0,14);
+  if(!rows.length){t.hidden=true;return}t.hidden=false;
+  t.innerHTML=`<b>إشارات إعلامية حديثة · غير محققة</b><span class="ym-tick-track">${rows.map((g,i)=>`<button type="button" data-i="${i}">${esc(sigWhere(g))}: ${esc(g.cameo_ar)} · ${esc(ago(g.last))}</button>`).join('')}</span>`;
+  t._rows=rows;
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.ym-tick-track button');if(!b)return;const g=$('ticker')._rows[+b.dataset.i];if(g){map.setView([g.lat,g.lon],Math.max(map.getZoom(),9));L.popup().setLatLng([g.lat,g.lon]).setContent(sigPopup(g)).openOn(map)}});
+/* ---- Floating mini live-stream player (click to load; only when a channel is live and embeddable) ---- */
+function miniPlayer(name,vid){
+  const p=$('miniPlayer');if(!p||sessionStorage.getItem('ymMpClosed'))return;p.hidden=false;$('mpTitle').textContent='بث مباشر: '+name;
+  $('mpBody').innerHTML=`<button type="button" class="ym-play" id="mpPlay">تشغيل البث داخل الأداة</button>`;
+  $('mpPlay').addEventListener('click',()=>{$('mpBody').innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&mute=1" width="100%" height="160" style="border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="بث مباشر"></iframe>`});
+  $('mpMin').onclick=()=>p.classList.toggle('min');$('mpClose').onclick=()=>{p.hidden=true;sessionStorage.setItem('ymMpClosed','1')};
+}
 async function boot(){
   map=L.map('map',{center:[15.5,47.5],zoom:6,minZoom:5,maxZoom:14,worldCopyJump:false});
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© مساهمو <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · بيانات الأحداث: UCDP GED وUCDP Candidate (CC BY 4.0)',maxZoom:18}).addTo(map);
@@ -199,7 +246,7 @@ async function boot(){
   heat=L.heatLayer([],{radius:18,blur:20,maxZoom:9,minOpacity:.35,gradient:{.2:'#ffe08a',.45:'#f5a623',.7:'#d9480f',1:'#8b0000'}}).addTo(map);
   ptsLayer=L.layerGroup().addTo(map);sigLayer=L.layerGroup().addTo(map);
   map.on('moveend',()=>{if($('inView').checked)drawList()});
-  await loadEvents();init2();loadParams();render();loadNews();loadCams();loadStreams();loadSignals();initLayers();
+  await loadEvents();init2();loadParams();render();loadNews();loadCams();loadStreams();loadSignals();initLayers();loadContext();initRss();
   setInterval(()=>{loadNews();loadCams()},600000);setInterval(loadSignals,300000);$('sigShow').addEventListener('change',drawSignals);$('sigWin').addEventListener('change',drawSignals);
   $('sigList').addEventListener('click',e=>{const b=e.target.closest('.sig');if(!b)return;const g=sigRowsCache[+b.dataset.i];if(g){map.setView([g.lat,g.lon],Math.max(map.getZoom(),9));L.popup().setLatLng([g.lat,g.lon]).setContent(sigPopup(g)).openOn(map)}});
   setInterval(async()=>{try{await loadEvents();render()}catch(e){}},3600000);
