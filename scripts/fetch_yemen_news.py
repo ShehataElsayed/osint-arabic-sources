@@ -3,7 +3,8 @@ Only title, link, domain, language and date are stored (no article text). GDELT 
 Runs from the scheduled workflow; never fails the build if GDELT is down (keeps the old file)."""
 import json, time, urllib.parse, urllib.request
 from pathlib import Path
-OUT = Path(__file__).resolve().parents[1] / 'site' / 'data' / 'yemen-news.json'
+import sys
+OUT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parents[1] / 'site' / 'data' / 'yemen-news.json'
 QUERIES = {
     'ar': '(اليمن OR صنعاء OR الحوثي OR عدن) (غارة OR غارات OR قصف OR هجوم OR صاروخ)',
     'en': 'Yemen (airstrike OR strike OR missile OR attack OR Houthi)',
