@@ -152,3 +152,10 @@ Source: https://ucdp.uu.se/downloads/ (candidateged). License: CC BY 4.0 per the
 - NASA FIRMS VIIRS active fire (thermal anomalies): public domain / CC0 as listed on HDX (https://data.humdata.org/dataset/nasa-firms-active-fire-russia-and-asia-viirs). Not strikes.
 - NASA GIBS (EOSDIS) VIIRS true-color imagery tiles: NASA open data, credit "NASA GIBS / EOSDIS" (https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api).
 - OpenStreetMap hospitals, airports, ports, power plants: ODbL 1.0, (c) OpenStreetMap contributors (https://www.openstreetmap.org/copyright). A derived database of these places is shared under ODbL.
+
+## Context datasets (Yemen page, "سياق" tab and boundaries)
+- WFP/FAO food prices for Yemen via HDX: CC BY-IGO (https://data.humdata.org/dataset/wfp-food-prices-for-yemen).
+- FEWS NET acutely food insecure population via HDX: CC BY (https://data.humdata.org/dataset/yemen_current_situation_fewsnet_fipe).
+- OCHA COD-AB Yemen subnational boundaries via HDX (source: Central Statistical Organization): CC BY-IGO (https://data.humdata.org/dataset/cod-ab-yem). Simplified for display.
+- VIEWS conflict forecasts (CC BY-SA): link-out only, no data copied.
+Credits shown on the page. Data are context, not conflict events.

@@ -45,3 +45,30 @@ button.ghost,.ym-export button,.ym-tabs button{border:1px solid #c9dcd8;backgrou
 .ym-layers{margin:.6rem 0;padding:.5rem .8rem;border:1px solid var(--line,#d5dfe3);border-radius:12px;background:#fff}.ym-layers summary{cursor:pointer;font-weight:700}.ym-layers-body{display:grid;gap:.4rem;margin-top:.5rem}.ym-layers-body label{display:flex;gap:.5rem;align-items:center}
 .ym-dossier dl{display:grid;grid-template-columns:max-content 1fr;gap:.3rem 1rem}.ym-dossier dt{font-weight:700}.ym-dossier dd{margin:0}.ym-unknown{background:#fff8e6;border:1px solid #f0d890;border-radius:12px;padding:.4rem 1rem;margin:1rem 0}.cite{background:#f1f5f6;border-radius:10px;padding:.6rem .9rem}
 .ym-cmp{display:flex;gap:.6rem;flex-wrap:wrap}.ym-cmp fieldset{border:1px solid #d5dfe3;border-radius:10px;display:flex;gap:.3rem}.ym-tbl{width:100%;border-collapse:collapse;font-size:.9rem;margin:.4rem 0}.ym-tbl th,.ym-tbl td{border-bottom:1px solid #e3eaec;padding:.3rem .4rem;text-align:right}
+
+/* layout: fill the space around the map */
+.ym-grid{align-items:start}
+.ym-main{display:flex;flex-direction:column;gap:10px;min-width:0}
+.ym-mapwrap{align-self:stretch}
+#map{height:clamp(520px,calc(100vh - 150px),780px)}
+.ym-side{position:sticky;top:8px;max-height:calc(100vh - 16px);overflow:hidden}
+.ym-side .ym-pane{overflow:auto;max-height:calc(100vh - 290px)}
+.ym-list{max-height:none}
+.ym-under{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px}
+.ym-under .ym-detail{margin-top:0;grid-column:1}.ym-under #detailHint{grid-column:1;margin:0;align-self:center;background:#fff;border:1px dashed var(--line);border-radius:14px;padding:14px}
+.ym-mini{grid-column:2;grid-row:1 / span 2;background:#fff;border:1px solid var(--line);border-radius:17px;padding:12px 14px;box-shadow:0 8px 26px #1439390b}
+.ym-mini h4{margin:0 0 6px;font-size:14px}.ym-mini canvas{width:100%;display:block}
+.ym-bars{display:grid;gap:5px;margin-top:8px}.ym-bars div{display:grid;grid-template-columns:76px 1fr 44px;gap:6px;align-items:center;font-size:13px}.ym-bars i{display:block;height:10px;border-radius:5px;background:linear-gradient(90deg,#0a827d,#16354a)}
+.ym-ticker{overflow:hidden;background:#eef4ff;border:1px solid #c7d9fb;border-radius:12px;padding:6px 0;white-space:nowrap;position:relative}
+.ym-ticker b{position:absolute;inset-inline-start:0;top:0;bottom:0;display:flex;align-items:center;padding:0 12px;background:#dbe8ff;z-index:1;font-size:13px}
+.ym-tick-track{display:inline-block;padding-inline-start:130px;animation:ymtick 70s linear infinite}
+.ym-ticker:hover .ym-tick-track,.ym-ticker:focus-within .ym-tick-track{animation-play-state:paused}
+.ym-tick-track button{all:unset;cursor:pointer;margin-inline-end:26px;font-size:13.5px}.ym-tick-track button:hover{text-decoration:underline}
+@keyframes ymtick{from{transform:translateX(0)}to{transform:translateX(100%)}}
+@media(prefers-reduced-motion:reduce){.ym-tick-track{animation:none;overflow:auto}}
+.ym-miniplayer{position:fixed;bottom:12px;inset-inline-start:12px;width:300px;max-width:calc(100vw - 24px);background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 10px 30px #0003;padding:8px 10px;z-index:900}
+.ym-mp-head{display:flex;gap:6px;align-items:center}.ym-mp-head strong{flex:1;font-size:13px}.ym-mp-head button{border:1px solid #c9dcd8;background:#fff;border-radius:8px;width:26px;height:26px;cursor:pointer}
+.ym-miniplayer.min #mpBody,.ym-miniplayer.min small{display:none}
+.ym-embed .ym-ticker,.ym-embed .ym-under,.ym-embed .ym-miniplayer{display:none}
+@media(max-width:900px){.ym-side{position:static;max-height:none;overflow:visible}.ym-side .ym-pane{max-height:420px}.ym-under{grid-template-columns:1fr}.ym-mini{grid-column:1;grid-row:auto}#map{height:460px}}
+.ym-tabs{flex-wrap:wrap}

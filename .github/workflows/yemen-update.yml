@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 permissions:
   contents: write
+  issues: read
 concurrency:
   group: yemen-live
   cancel-in-progress: true
@@ -26,9 +27,12 @@ jobs:
           python3 scripts/build_yemen_candidate.py /tmp/live/yemen-candidate.json.new && mv /tmp/live/yemen-candidate.json.new /tmp/live/yemen-candidate.json || true
           cp site/data/yemen-news.json /tmp/live/yemen-news.json
           pip install -q pyshp
-          cp site/data/yemen-thermal.json site/data/yemen-infra.json /tmp/live/
+          cp site/data/yemen-thermal.json site/data/yemen-infra.json site/data/yemen-context.json /tmp/live/
           # thermal every run; OpenStreetMap context layer once a day (be polite to Overpass)
           if [ "$(date -u +%H)" = "03" ] && [ "$(date -u +%M)" -lt 30 ]; then python3 scripts/build_yemen_layers.py /tmp/live || true; else python3 scripts/build_yemen_layers.py /tmp/live thermal || true; fi
+          if [ "$(date -u +%H)" = "03" ] && [ "$(date -u +%M)" -lt 30 ]; then python3 scripts/build_yemen_context.py /tmp/live || true; fi
+          GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }} python3 scripts/build_yemen_reviewed.py /tmp/live/yemen-reviewed.json ${{ github.repository }} || cp site/data/yemen-reviewed.json /tmp/live/
+          python3 scripts/build_yemen_rss.py /tmp/live/yemen-signals.json /tmp/live || true
           # YouTube pages are fetched gently: once per hour, one request per channel, sequential with a 1 s pause.
           # Other runs reuse the last published file. Any failure leaves an empty list and the page shows links only.
           if [ "$(date -u +%M)" -lt 30 ]; then
