@@ -15,6 +15,14 @@
 <label>مجموعة البيانات<select id="fSet"><option value="all">الكل (النهائية + المبدئية)</option><option value="ged">النهائية فقط (GED)</option><option value="cand">المبدئية فقط (شهرية)</option></select></label>
 <label>العرض<select id="fLayer"><option value="both">حرارية ونقاط</option><option value="heat">حرارية فقط</option><option value="pts">نقاط فقط</option></select></label>
 <button type="button" id="fReset" class="ghost">إعادة ضبط</button></section>
+<details class="ym-layers" id="layers"><summary>طبقات إضافية (سياق، وليست أحداثًا موثقة)</summary><div class="ym-layers-body">
+<label><input type="checkbox" id="lyGibs"> صور أقمار صناعية يومية (NASA GIBS)</label>
+<label><input type="checkbox" id="lyThermal"> حرارة مرصودة بالأقمار آخر 48 ساعة (NASA FIRMS)</label>
+<label><input type="checkbox" id="lyHosp"> مستشفيات (OpenStreetMap)</label>
+<label><input type="checkbox" id="lyAir"> مطارات وموانئ (OpenStreetMap)</label>
+<label><input type="checkbox" id="lyPower"> محطات كهرباء مسماة (OpenStreetMap)</label>
+<p class="muted small" id="lyNote">الحرارة المرصودة قد تكون حرائق زراعية أو مشاعل غاز أو انفجارًا، ولا تدل وحدها على ضربة. الصور اليومية قد تحجبها الغيوم، ودقتها بضع مئات من الأمتار. بيانات OpenStreetMap قد تنقصها أو تتقادم.</p></div></details>
+
 <section class="ym-grid"><div class="ym-mapwrap"><div id="map" role="application" aria-label="خريطة أحداث النزاع في اليمن"></div>
 <div class="ym-legend" aria-hidden="true"><b>مفتاح النقاط</b><span><i style="background:#fff;border:2px solid #0b3d91"></i>إطار أزرق داكن: بيانات UCDP مبدئية</span><span><i style="background:#c0392b"></i>نزاع تشارك فيه حكومة</span><span><i style="background:#d68910"></i>بين جماعات غير حكومية</span><span><i style="background:#6c3483"></i>عنف ضد مدنيين</span><span><i style="border:2px dashed #1f5fbf;background:#7fb2ff55"></i>إشارة آلية غير محققة</span><span><i style="border:2px dashed #b35c00;background:#ffc27a88"></i>مرشح: مصدران مستقلان أو أكثر</span><span><i style="border:2px solid #0a6b3a;background:#7fe0a8"></i>موثق بعد مراجعة بشرية</span></div></div>
 <aside class="ym-side"><div class="ym-stats" id="stats" aria-live="polite"></div>

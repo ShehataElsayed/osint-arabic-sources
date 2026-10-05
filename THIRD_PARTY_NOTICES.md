@@ -147,3 +147,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ## UCDP Candidate Events Dataset (provisional monthly releases)
 Source: https://ucdp.uu.se/downloads/ (candidateged). License: CC BY 4.0 per the UCDP downloads page. Data are provisional and revised by UCDP; shown separately from the final GED and labeled as such.
+
+## Optional context layers (Yemen page)
+- NASA FIRMS VIIRS active fire (thermal anomalies): public domain / CC0 as listed on HDX (https://data.humdata.org/dataset/nasa-firms-active-fire-russia-and-asia-viirs). Not strikes.
+- NASA GIBS (EOSDIS) VIIRS true-color imagery tiles: NASA open data, credit "NASA GIBS / EOSDIS" (https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api).
+- OpenStreetMap hospitals, airports, ports, power plants: ODbL 1.0, (c) OpenStreetMap contributors (https://www.openstreetmap.org/copyright). A derived database of these places is shared under ODbL.
