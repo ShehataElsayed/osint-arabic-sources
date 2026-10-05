@@ -131,3 +131,16 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+
+---
+
+## Yemen conflict map (site/yemen.html)
+
+- Leaflet 1.9.4 (BSD-2-Clause, Vladimir Agafonkin and contributors), vendored in site/vendor/leaflet with its license.
+- Leaflet.heat 0.2.0 (BSD-2-Clause, Vladimir Agafonkin), bundles simpleheat (BSD-2-Clause). License: site/vendor/leaflet/LICENSE-leaflet-heat.
+- Event data: UCDP Georeferenced Event Dataset (GED) v26.1, Uppsala Conflict Data Program, licensed CC BY 4.0 (https://ucdp.uu.se/downloads/). Cite: Davies, Pettersson, Oberg (2026), Journal of Peace Research; Sundberg and Melander (2013), Journal of Peace Research 50(4). The data was filtered to Yemen from 2010 and reformatted; no values were changed. This is a derived file, not an official UCDP product.
+- News headline index: GDELT DOC 2.0 (https://www.gdeltproject.org/), titles and links only.
+- Base map tiles: OpenStreetMap contributors, ODbL (https://www.openstreetmap.org/copyright).
+- Not included: ACLED (terms do not allow redistribution), Yemen Data Project files (no written reuse license found; permission needed).
+- GeoNames (https://www.geonames.org/), CC BY 4.0: Arabic place names used to label nearest known places (data/yemen-places-ar.json is a derived extract; names are as published by GeoNames contributors).
+- GDELT 2.0 Event Database: media-derived signals (site/data/yemen-signals.json); credit GDELT.

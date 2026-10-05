@@ -1,0 +1,37 @@
+name: Update Yemen live feeds
+# Writes only to the orphan branch "live-data" (never to main). The page reads the files from
+# https://raw.githubusercontent.com/ShehataElsayed/osint-arabic-sources/live-data/ and falls back to the bundled copies.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: yemen-live
+  cancel-in-progress: true
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build feeds
+        run: |
+          mkdir -p /tmp/live
+          python3 scripts/fetch_gdelt_events.py /tmp/live/yemen-signals.json 72
+          cp site/data/yemen-news.json /tmp/live/yemen-news.json
+          # keep the last good file if GDELT was unavailable
+          python3 scripts/fetch_yemen_news.py /tmp/live/yemen-news.json
+          [ -f /tmp/live/yemen-signals.json ] || cp site/data/yemen-signals.json /tmp/live/
+      - name: Publish to live-data branch
+        run: |
+          cd /tmp/live
+          git init -q -b live-data
+          git config user.name "yemen-feed-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add .
+          git commit -q -m "Yemen live feeds $(date -u +%FT%TZ)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" live-data
