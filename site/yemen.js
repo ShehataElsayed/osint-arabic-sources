@@ -7,11 +7,11 @@ const COLORS={1:'#c0392b',2:'#d68910',3:'#6c3483'};
 const PREC={1:'موقع الحدث محدد بدقة',2:'ضمن 25 كم من النقطة المعروضة',3:'نقطة مركزية لمديرية، وليست موقع الحدث',4:'نقطة مركزية لمحافظة، وليست موقع الحدث',5:'ميزة خطية أو منطقة غير محددة الحدود',6:'الدولة فقط'};
 const params=new URLSearchParams(location.hash.slice(1));
 if(params.get('embed')==='1')document.body.classList.add('ym-embed');
-let EV=[],map,heat,ptsLayer,filtered=[],playTimer=null,selected=null,bars=[];
-const F={from:$('fFrom'),to:$('fTo'),prec:$('fPrec'),type:$('fType'),gov:$('fGov'),min:$('fMin'),q:$('fQ'),layer:$('fLayer')};
+let CAND=null,EV=[],map,heat,ptsLayer,filtered=[],playTimer=null,selected=null,bars=[];
+const F={from:$('fFrom'),to:$('fTo'),prec:$('fPrec'),type:$('fType'),gov:$('fGov'),min:$('fMin'),q:$('fQ'),layer:$('fLayer'),set:$('fSet')};
 const num=n=>Number(n).toLocaleString('en-US');
 let AR={gov:{},party:{}},TR={d:{},h:{}},SIG=[],LIVE='https://raw.githubusercontent.com/ShehataElsayed/osint-arabic-sources/live-data/';
-function ev(a){return{id:a[0],d:a[1],d2:a[2],lat:a[3],lon:a[4],prec:a[5],type:a[6],best:a[7],low:a[8],high:a[9],civ:a[10],a:a[11],b:a[12],gov:a[13],place:a[14],src:a[15],head:a[16],sd:a[17],near:a[18]||''}}
+function ev(a){return{id:a[0],d:a[1],d2:a[2],lat:a[3],lon:a[4],prec:a[5],type:a[6],best:a[7],low:a[8],high:a[9],civ:a[10],a:a[11],b:a[12],gov:a[13],place:a[14],src:a[15],head:a[16],sd:a[17],near:a[18]||'',cs:a[19]||'',cand:!!a[19]||a[20]===1}}
 const gAr=g=>AR.gov[g]||g,pAr=p=>AR.party[p]||p;
 const where=e=>e.near?`قرب ${e.near}${e.gov?'، '+gAr(e.gov):''}`:(gAr(e.gov)||'اليمن');
 const tHead=e=>TR.h[e.head]?{t:TR.h[e.head],mt:true}:{t:e.head,mt:false},tDesc=e=>TR.d[e.place]?{t:TR.d[e.place],mt:true}:{t:e.place,mt:false};
@@ -19,20 +19,20 @@ function loadParams(){for(const k of Object.keys(F)){const v=params.get(k);if(v!
 function saveParams(){const p=new URLSearchParams();for(const k of Object.keys(F)){if(F[k].value&&F[k].value!==F[k].defaultValue&&!(F[k].tagName==='SELECT'&&F[k].selectedIndex===0))p.set(k,F[k].value)}if(document.body.classList.contains('ym-embed'))p.set('embed','1');history.replaceState(null,'','#'+p.toString())}
 function apply(skipDate){
   const from=F.from.value,to=F.to.value,pr=+F.prec.value,ty=F.type.value,gv=F.gov.value,mn=+F.min.value||0,q=F.q.value.trim().toLowerCase();
-  const pass=e=>(skipDate||((!from||e.d>=from)&&(!to||e.d<=to)))&&e.prec<=pr&&(!ty||e.type==ty)&&(!gv||gAr(e.gov)===gv)&&e.best>=mn&&(!q||(pAr(e.a)+' '+pAr(e.b)+' '+where(e)+' '+tDesc(e).t+' '+e.place+' '+gAr(e.gov)+' '+e.head).toLowerCase().includes(q));
+  const st=F.set.value;const pass=e=>(st==='all'||(st==='cand')===!!e.cand)&&(skipDate||((!from||e.d>=from)&&(!to||e.d<=to)))&&e.prec<=pr&&(!ty||e.type==ty)&&(!gv||gAr(e.gov)===gv)&&e.best>=mn&&(!q||(pAr(e.a)+' '+pAr(e.b)+' '+where(e)+' '+tDesc(e).t+' '+e.place+' '+gAr(e.gov)+' '+e.head).toLowerCase().includes(q));
   return EV.filter(pass);
 }
 function render(){
   filtered=apply(false);saveParams();
   const best=filtered.reduce((s,e)=>s+e.best,0),low=filtered.reduce((s,e)=>s+e.low,0),high=filtered.reduce((s,e)=>s+e.high,0),civ=filtered.reduce((s,e)=>s+e.civ,0);
-  $('stats').innerHTML=`<div><b>${num(filtered.length)}</b><small>حدث</small></div><div><b>${num(best)}</b><small>قتلى (أفضل تقدير) · بين ${num(low)} و${num(high)}</small></div><div><b>${num(civ)}</b><small>منهم مدنيون</small></div>`;
+  $('stats').innerHTML=`<div><b>${num(filtered.length)}</b><small>حدث</small></div><div><b>${num(best)}</b><small>قتلى (أفضل تقدير) · بين ${num(low)} و${num(high)}</small></div><div><b>${num(civ)}</b><small>منهم مدنيون</small></div>${filtered.some(e=>e.cand)?`<div><b>${num(filtered.filter(e=>e.cand).length)}</b><small>منها مبدئية (UCDP شهري، تُراجع لاحقًا)</small></div>`:''}`;
   drawMap();drawList();drawChart();
 }
 function drawMap(){
   const l=F.layer.value;
   const k=Math.min(1,Math.sqrt(110/Math.max(filtered.length,1)));heat.setLatLngs(l==='pts'?[]:filtered.map(e=>[e.lat,e.lon,Math.min(1,(0.25+Math.log(1+e.best)/4)*k)]));
   ptsLayer.clearLayers();
-  if(l!=='heat'){const r=renderer;for(const e of filtered){const m=L.circleMarker([e.lat,e.lon],{renderer:r,radius:3+Math.min(7,Math.sqrt(e.best)),color:'#fff',weight:.7,fillColor:COLORS[e.type],fillOpacity:.85});m.on('click',()=>select(e));ptsLayer.addLayer(m)}}
+  if(l!=='heat'){const r=renderer;for(const e of filtered){const m=L.circleMarker([e.lat,e.lon],{renderer:r,radius:3+Math.min(7,Math.sqrt(e.best)),color:e.cand?'#0b3d91':'#fff',weight:e.cand?2:.7,fillColor:COLORS[e.type],fillOpacity:.85});m.on('click',()=>select(e));ptsLayer.addLayer(m)}}
 }
 let renderer;
 function drawList(){
@@ -45,7 +45,7 @@ function drawList(){
 function select(e){
   selected=e;const d=$('detail');d.hidden=false;const h=tHead(e),ds=tDesc(e);
   const mt=x=>x.mt?'<span class="mt">ترجمة آلية</span>':'';const tx=x=>x.mt?esc(x.t):'<span class="mt off">لم تُترجم بعد، الأصل في «النص الأصلي» أدناه</span>';
-  d.innerHTML=`<h3>${esc(where(e))}</h3><dl><dt>التاريخ</dt><dd>${esc(e.d)}${e.d2!==e.d?' إلى '+esc(e.d2):''}</dd><dt>النوع</dt><dd>${esc(TYPES[e.type])}</dd><dt>الطرفان</dt><dd>${esc(pAr(e.a))} ← ${esc(pAr(e.b))}</dd><dt>المحافظة</dt><dd>${esc(gAr(e.gov))}</dd><dt>القتلى</dt><dd>أفضل تقدير ${num(e.best)} (بين ${num(e.low)} و${num(e.high)})، مدنيون: ${num(e.civ)}</dd><dt>وصف الموقع</dt><dd>${tx(ds)} ${mt(ds)}</dd><dt>المصدر</dt><dd>${esc(e.src)}${e.sd?' · '+esc(e.sd):''}<br>${tx(h)} ${mt(h)}</dd><dt>السجل</dt><dd><a href="https://ucdp.uu.se/event/${e.id}" rel="noopener" target="_blank" style="direction:ltr;unicode-bidi:isolate">UCDP GED #${e.id}</a></dd></dl>
+  d.innerHTML=`<h3>${esc(where(e))}</h3>${e.cand?`<p class="mt">بيانات UCDP مبدئية (شهرية). قد تُعدَّل لاحقًا${e.cs&&e.cs!=='Clear'?'. علامة مراجعة من UCDP نفسها: '+esc(e.cs):''}</p>`:''}<dl><dt>التاريخ</dt><dd>${esc(e.d)}${e.d2!==e.d?' إلى '+esc(e.d2):''}</dd><dt>النوع</dt><dd>${esc(TYPES[e.type])}</dd><dt>الطرفان</dt><dd>${esc(pAr(e.a))} ← ${esc(pAr(e.b))}</dd><dt>المحافظة</dt><dd>${esc(gAr(e.gov))}</dd><dt>القتلى</dt><dd>أفضل تقدير ${num(e.best)} (بين ${num(e.low)} و${num(e.high)})، مدنيون: ${num(e.civ)}</dd><dt>وصف الموقع</dt><dd>${tx(ds)} ${mt(ds)}</dd><dt>المصدر</dt><dd>${esc(e.src)}${e.sd?' · '+esc(e.sd):''}<br>${tx(h)} ${mt(h)}</dd><dt>السجل</dt><dd><a href="https://ucdp.uu.se/event/${e.id}" rel="noopener" target="_blank" style="direction:ltr;unicode-bidi:isolate">UCDP GED #${e.id}</a></dd></dl>
   <details><summary>النص الأصلي (بالإنجليزية)</summary><p dir="ltr" style="text-align:left">${esc(e.place)}<br>${esc(e.head)}<br>${esc(e.a)} → ${esc(e.b)}</p></details>
   <p class="prec">دقة الموقع ${e.prec} من 6: ${esc(PREC[e.prec])}.${e.near?' اسم المكان الظاهر هو أقرب موقع معروف في GeoNames (حساب آلي) وقد لا يطابق الموقع الفعلي.':''} تقدير منشور وليس تحققًا مستقلًا.</p>`;
   map.setView([e.lat,e.lon],Math.max(map.getZoom(),9));
@@ -73,10 +73,10 @@ $('play').addEventListener('click',()=>{
 function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)}
 const csvq=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
 const CREDIT='المصدر: UCDP GED (جامعة أوبسالا)، رخصة CC BY 4.0. دقة الموقع متفاوتة والأعداد تقديرات منشورة وليست تحققًا.';
-$('exCsv').addEventListener('click',()=>{const H=['id','date_start','date_end','lat','lon','location_precision','type','deaths_best','deaths_low','deaths_high','civilians','side_a_ar','side_b_ar','governorate_ar','place_ar_nearest','description_ar_machine_translated','source','headline_ar_machine_translated','description_original_en','headline_original_en','ucdp_url'];
-  const rows=filtered.map(e=>[e.id,e.d,e.d2,e.lat,e.lon,e.prec,TYPES[e.type],e.best,e.low,e.high,e.civ,pAr(e.a),pAr(e.b),gAr(e.gov),e.near,TR.d[e.place]||'',e.src,TR.h[e.head]||'',e.place,e.head,'https://ucdp.uu.se/event/'+e.id].map(csvq).join(','));
+$('exCsv').addEventListener('click',()=>{const H=['id','date_start','date_end','lat','lon','location_precision','type','deaths_best','deaths_low','deaths_high','civilians','side_a_ar','side_b_ar','governorate_ar','place_ar_nearest','description_ar_machine_translated','source','headline_ar_machine_translated','description_original_en','headline_original_en','ucdp_url','dataset'];
+  const rows=filtered.map(e=>[e.id,e.d,e.d2,e.lat,e.lon,e.prec,TYPES[e.type],e.best,e.low,e.high,e.civ,pAr(e.a),pAr(e.b),gAr(e.gov),e.near,TR.d[e.place]||'',e.src,TR.h[e.head]||'',e.place,e.head,e.cand?'':'https://ucdp.uu.se/event/'+e.id,e.cand?'UCDP Candidate':'UCDP GED'].map(csvq).join(','));
   download('yemen-events.csv','\ufeff'+H.join(',')+'\n'+rows.join('\n')+'\n# '+CREDIT+'\n','text/csv;charset=utf-8');$('exMsg').textContent='تم تنزيل '+num(filtered.length)+' حدثًا. '+CREDIT});
-$('exGeo').addEventListener('click',()=>{const g={type:'FeatureCollection',attribution:CREDIT,features:filtered.map(e=>({type:'Feature',geometry:{type:'Point',coordinates:[e.lon,e.lat]},properties:{id:e.id,date_start:e.d,date_end:e.d2,location_precision:e.prec,type:TYPES[e.type],deaths_best:e.best,deaths_low:e.low,deaths_high:e.high,civilians:e.civ,side_a:pAr(e.a),side_b:pAr(e.b),governorate:gAr(e.gov),nearest_place_ar:e.near,description_ar_machine:TR.d[e.place]||'',headline_ar_machine:TR.h[e.head]||'',description_original_en:e.place,headline_original_en:e.head,source:e.src,url:'https://ucdp.uu.se/event/'+e.id}}))};
+$('exGeo').addEventListener('click',()=>{const g={type:'FeatureCollection',attribution:CREDIT,features:filtered.map(e=>({type:'Feature',geometry:{type:'Point',coordinates:[e.lon,e.lat]},properties:{id:e.id,date_start:e.d,date_end:e.d2,location_precision:e.prec,type:TYPES[e.type],deaths_best:e.best,deaths_low:e.low,deaths_high:e.high,civilians:e.civ,side_a:pAr(e.a),side_b:pAr(e.b),governorate:gAr(e.gov),nearest_place_ar:e.near,description_ar_machine:TR.d[e.place]||'',headline_ar_machine:TR.h[e.head]||'',description_original_en:e.place,headline_original_en:e.head,source:e.src,url:e.cand?'':'https://ucdp.uu.se/event/'+e.id,dataset:e.cand?'UCDP Candidate (provisional)':'UCDP GED'}}))};
   download('yemen-events.geojson',JSON.stringify(g),'application/geo+json');$('exMsg').textContent='تم تنزيل GeoJSON. '+CREDIT});
 async function copy(t,m){try{await navigator.clipboard.writeText(t);$('exMsg').textContent=m}catch(e){$('exMsg').textContent='تعذر النسخ تلقائيًا. انسخ يدويًا: '+t}}
 $('exLink').addEventListener('click',()=>{saveParams();copy(location.href.replace(/embed=1&?/,''),'تم نسخ الرابط بالعوامل الحالية.')});
@@ -127,15 +127,15 @@ async function loadCams(){
   catch(e){}
 }
 async function loadEvents(){
-  const d=await getJson('./data/yemen-events.json');EV=d.events.map(ev);
+  const d=await getJson('./data/yemen-events.json');EV=d.events.map(ev);try{let c;try{c=await fetch(LIVE+'yemen-candidate.json?t='+Math.floor(Date.now()/600000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){c=await getJson('./data/yemen-candidate.json')}CAND=c;EV=EV.concat(c.events.map(a=>{const x=ev(a);x.cand=true;return x})).sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0)}catch(e){}
   AR=d.ar||AR;try{TR=await getJson('./data/yemen-translations.json')}catch(e){}
-  if($('lastEv'))$('lastEv').textContent=d.last_event;$('ver').textContent=d.version;
+  $('ver').textContent=d.version;
   const govs=[...new Set(EV.map(e=>gAr(e.gov)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ar'));
   if($('fGov').options.length<2)$('fGov').insertAdjacentHTML('beforeend',govs.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join(''));
 }
 async function boot(){
   map=L.map('map',{center:[15.5,47.5],zoom:6,minZoom:5,maxZoom:14,worldCopyJump:false});
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© مساهمو <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · بيانات الأحداث: UCDP GED (CC BY 4.0)',maxZoom:18}).addTo(map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© مساهمو <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · بيانات الأحداث: UCDP GED وUCDP Candidate (CC BY 4.0)',maxZoom:18}).addTo(map);
   renderer=L.canvas({padding:.5});
   heat=L.heatLayer([],{radius:18,blur:20,maxZoom:9,minOpacity:.35,gradient:{.2:'#ffe08a',.45:'#f5a623',.7:'#d9480f',1:'#8b0000'}}).addTo(map);
   ptsLayer=L.layerGroup().addTo(map);sigLayer=L.layerGroup().addTo(map);

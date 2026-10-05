@@ -144,3 +144,6 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 - Not included: ACLED (terms do not allow redistribution), Yemen Data Project files (no written reuse license found; permission needed).
 - GeoNames (https://www.geonames.org/), CC BY 4.0: Arabic place names used to label nearest known places (data/yemen-places-ar.json is a derived extract; names are as published by GeoNames contributors).
 - GDELT 2.0 Event Database: media-derived signals (site/data/yemen-signals.json); credit GDELT.
+
+## UCDP Candidate Events Dataset (provisional monthly releases)
+Source: https://ucdp.uu.se/downloads/ (candidateged). License: CC BY 4.0 per the UCDP downloads page. Data are provisional and revised by UCDP; shown separately from the final GED and labeled as such.
