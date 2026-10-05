@@ -17,7 +17,7 @@ def feed(title, sigs, fn):
         dt = datetime.strptime(g['last'], '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc)
         links = ''.join(f"<li>{escape(x['d'])}: {escape(x['u'])}</li>" for x in g['sources'][:5])
         items.append(f"<item><title>{escape(where + ' - ' + g['cameo_ar'])}</title><link>{escape(s0)}</link><guid isPermaLink=\"false\">{g['lat']},{g['lon']},{g['cameo']},{g['last']}</guid><pubDate>{format_datetime(dt)}</pubDate><description>{escape('<p>' + NOTE + '</p><ul>' + links + '</ul>')}</description></item>")
-    x = f'<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>{escape(title)}</title><link>https://github.com/ShehataElsayed/osint-arabic-sources</link><description>{escape(NOTE)} المصدر: GDELT.</description><language>ar</language>{"".join(items)}</channel></rss>'
+    x = f'<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>{escape(title)}</title><link>https://github.com/ShehataElsayed/osint-arabic-sources</link><description>{escape(NOTE)} المصدر: GDELT.</description><language>ar</language><lastBuildDate>{format_datetime(datetime.now(timezone.utc))}</lastBuildDate>{"".join(items)}</channel></rss>'
     (out / fn).write_text(x, encoding='utf-8')
 sigs = d.get('signals', [])
 feed('إشارات إعلامية عن اليمن (غير محققة)', sigs, 'yemen-rss-all.xml')
