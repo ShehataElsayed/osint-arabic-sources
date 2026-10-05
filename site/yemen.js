@@ -26,7 +26,7 @@ function render(){
   filtered=apply(false);saveParams();
   const best=filtered.reduce((s,e)=>s+e.best,0),low=filtered.reduce((s,e)=>s+e.low,0),high=filtered.reduce((s,e)=>s+e.high,0),civ=filtered.reduce((s,e)=>s+e.civ,0);
   $('stats').innerHTML=`<div><b>${num(filtered.length)}</b><small>حدث</small></div><div><b>${num(best)}</b><small>قتلى (أفضل تقدير) · بين ${num(low)} و${num(high)}</small></div><div><b>${num(civ)}</b><small>منهم مدنيون</small></div>${filtered.some(e=>e.cand)?`<div><b>${num(filtered.filter(e=>e.cand).length)}</b><small>منها مبدئية (UCDP شهري، تُراجع لاحقًا)</small></div>`:''}`;
-  drawMap();drawList();drawChart();
+  drawMap();drawList();drawChart();drawAnalysis();
 }
 function drawMap(){
   const l=F.layer.value;
@@ -47,7 +47,7 @@ function select(e){
   const mt=x=>x.mt?'<span class="mt">ترجمة آلية</span>':'';const tx=x=>x.mt?esc(x.t):'<span class="mt off">لم تُترجم بعد، الأصل في «النص الأصلي» أدناه</span>';
   d.innerHTML=`<h3>${esc(where(e))}</h3>${e.cand?`<p class="mt">بيانات UCDP مبدئية (شهرية). قد تُعدَّل لاحقًا${e.cs&&e.cs!=='Clear'?'. علامة مراجعة من UCDP نفسها: '+esc(e.cs):''}</p>`:''}<dl><dt>التاريخ</dt><dd>${esc(e.d)}${e.d2!==e.d?' إلى '+esc(e.d2):''}</dd><dt>النوع</dt><dd>${esc(TYPES[e.type])}</dd><dt>الطرفان</dt><dd>${esc(pAr(e.a))} ← ${esc(pAr(e.b))}</dd><dt>المحافظة</dt><dd>${esc(gAr(e.gov))}</dd><dt>القتلى</dt><dd>أفضل تقدير ${num(e.best)} (بين ${num(e.low)} و${num(e.high)})، مدنيون: ${num(e.civ)}</dd><dt>وصف الموقع</dt><dd>${tx(ds)} ${mt(ds)}</dd><dt>المصدر</dt><dd>${esc(e.src)}${e.sd?' · '+esc(e.sd):''}<br>${tx(h)} ${mt(h)}</dd><dt>السجل</dt><dd><a href="https://ucdp.uu.se/event/${e.id}" rel="noopener" target="_blank" style="direction:ltr;unicode-bidi:isolate">UCDP GED #${e.id}</a></dd></dl>
   <details><summary>النص الأصلي (بالإنجليزية)</summary><p dir="ltr" style="text-align:left">${esc(e.place)}<br>${esc(e.head)}<br>${esc(e.a)} → ${esc(e.b)}</p></details>
-  <p class="prec">دقة الموقع ${e.prec} من 6: ${esc(PREC[e.prec])}.${e.near?' اسم المكان الظاهر هو أقرب موقع معروف في GeoNames (حساب آلي) وقد لا يطابق الموقع الفعلي.':''} تقدير منشور وليس تحققًا مستقلًا.</p>`;
+  <p><a href="./yemen-event.html?id=${e.id}${e.cand?'&c=1':''}" target="_blank" rel="noopener">صفحة الحدث الكاملة والاستشهاد والصور</a></p><p class="prec">دقة الموقع ${e.prec} من 6: ${esc(PREC[e.prec])}.${e.near?' اسم المكان الظاهر هو أقرب موقع معروف في GeoNames (حساب آلي) وقد لا يطابق الموقع الفعلي.':''} تقدير منشور وليس تحققًا مستقلًا.</p>`;
   map.setView([e.lat,e.lon],Math.max(map.getZoom(),9));
   if(!document.body.classList.contains('ym-embed'))d.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -85,7 +85,7 @@ for(const k of Object.keys(F)){F[k].addEventListener('change',render);if(k==='q'
 $('fReset').addEventListener('click',()=>{for(const k of Object.keys(F)){F[k].value=F[k].defaultValue;if(F[k].tagName==='SELECT')F[k].selectedIndex=0}init2();render()});
 $('inView').addEventListener('change',drawList);
 $('list').addEventListener('click',e=>{const b=e.target.closest('.ym-item');if(!b)return;const x=EV.find(v=>v.id==b.dataset.id);if(x)select(x)});
-document.querySelectorAll('.ym-tabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.ym-tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));for(const t of['list','sig','news','cams'])$('tab-'+t).hidden=t!==b.dataset.tab}));
+document.querySelectorAll('.ym-tabs button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.ym-tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));for(const t of['list','sig','an','news','cams'])$('tab-'+t).hidden=t!==b.dataset.tab}));
 function init2(){const last=EV.length?EV[EV.length-1].d:'';const y=last?new Date(+last.slice(0,4)-1,+last.slice(5,7)-1,+last.slice(8,10)+1):null;F.from.value=y?y.toISOString().slice(0,10):'';F.to.value=''}
 async function getJson(u){const r=await fetch(u+'?t='+Math.floor(Date.now()/600000));if(!r.ok)throw new Error(u);return r.json()}
 
@@ -148,6 +148,50 @@ function initLayers(){
   $('lyAir').addEventListener('change',e=>toggle('air',e.target.checked,g=>drawInfra(g,['a','o'])));
   $('lyPower').addEventListener('change',e=>toggle('pow',e.target.checked,g=>drawInfra(g,['p'])));
 }
+
+/* ---- Compare periods + stacked trend ---- */
+const AN={aFrom:$('aFrom'),aTo:$('aTo'),bFrom:$('bFrom'),bTo:$('bTo')};
+function anDefaults(){const last=EV.length?EV[EV.length-1].d:new Date().toISOString().slice(0,10);const y=+last.slice(0,4),m=+last.slice(5,7),dd=+last.slice(8,10);const f=(yr,mo,d)=>new Date(Date.UTC(yr,mo-1,d)).toISOString().slice(0,10);
+  AN.aTo.value=last;AN.aFrom.value=f(y-1,m,dd+1);AN.bTo.value=f(y-1,m,dd);AN.bFrom.value=f(y-2,m,dd+1)}
+function sumBy(rows,keyf){const m={};for(const e of rows){const k=keyf(e);const o=m[k]||(m[k]={n:0,d:0,c:0});o.n++;o.d+=e.best;o.c+=e.civ}return m}
+function pct(a,b){return b?((a-b)/b*100):null}
+function drawAnalysis(){
+  if($('tab-an').hidden||!EV.length)return;if(!AN.aFrom.value)anDefaults();
+  const base=apply(true),inR=(f,t)=>base.filter(e=>(!f||e.d>=f)&&(!t||e.d<=t));
+  const A=inR(AN.aFrom.value,AN.aTo.value),B=inR(AN.bFrom.value,AN.bTo.value);
+  const tot=r=>({n:r.length,d:r.reduce((s,e)=>s+e.best,0),c:r.reduce((s,e)=>s+e.civ,0)});const ta=tot(A),tb=tot(B);
+  const ch=(a,b)=>{const p=pct(a,b);return p==null?'—':(p>0?'+':'')+Math.round(p)+'%'};
+  let h=`<table class="ym-tbl"><tr><th></th><th>أ</th><th>ب</th><th>التغير</th></tr><tr><td>الأحداث</td><td>${num(ta.n)}</td><td>${num(tb.n)}</td><td dir="ltr">${ch(ta.n,tb.n)}</td></tr><tr><td>القتلى (أفضل تقدير)</td><td>${num(ta.d)}</td><td>${num(tb.d)}</td><td dir="ltr">${ch(ta.d,tb.d)}</td></tr><tr><td>منهم مدنيون</td><td>${num(ta.c)}</td><td>${num(tb.c)}</td><td dir="ltr">${ch(ta.c,tb.c)}</td></tr></table>`;
+  const ga=sumBy(A,e=>gAr(e.gov)||'غير محدد'),gb=sumBy(B,e=>gAr(e.gov)||'غير محدد');
+  const names=[...new Set([...Object.keys(ga),...Object.keys(gb)])].sort((x,y)=>((ga[y]||{n:0}).n+(gb[y]||{n:0}).n)-((ga[x]||{n:0}).n+(gb[x]||{n:0}).n)).slice(0,12);
+  h+='<h4>حسب المحافظة (أعلى 12)</h4><table class="ym-tbl"><tr><th>المحافظة</th><th>أحداث أ</th><th>أحداث ب</th><th>قتلى أ</th><th>قتلى ب</th></tr>'+names.map(n=>`<tr><td>${esc(n)}</td><td>${num((ga[n]||{n:0}).n)}</td><td>${num((gb[n]||{n:0}).n)}</td><td>${num((ga[n]||{d:0}).d)}</td><td>${num((gb[n]||{d:0}).d)}</td></tr>`).join('')+'</table>';
+  if(base.some(e=>e.cand))h+='<p class="muted small">تشمل الفترات أحداثًا مبدئية من UCDP الشهري إن كانت مجموعة البيانات "الكل". الأحداث المبدئية قد تُعدَّل.</p>';
+  $('cmpOut').innerHTML=h;
+  // stacked monthly chart, last 36 months with data
+  const cv=$('stack'),w=cv.clientWidth||600,hh=170,dpr=window.devicePixelRatio||1;cv.width=w*dpr;cv.height=hh*dpr;const c=cv.getContext('2d');c.scale(dpr,dpr);c.clearRect(0,0,w,hh);
+  const m={};for(const e of base){const k=e.d.slice(0,7);(m[k]||(m[k]={1:0,2:0,3:0}))[e.type]++}
+  const keys=Object.keys(m).sort().slice(-36);if(!keys.length)return;const mx=Math.max(...keys.map(k=>m[k][1]+m[k][2]+m[k][3])),bw=(w-10)/keys.length;
+  keys.forEach((k,i)=>{let y=hh-18;const x=w-5-(i+1)*bw;for(const t of[1,2,3]){const v=m[k][t],bh=v/mx*(hh-30);c.fillStyle=COLORS[t];c.fillRect(x+.5,y-bh,Math.max(1,bw-1),bh);y-=bh}if(i%6===0){c.fillStyle='#52646d';c.font='11px Cairo,sans-serif';c.textAlign='center';c.fillText(k,x+bw/2,hh-4)}});
+  $('stackKey').innerHTML=[1,2,3].map(t=>`<span style="color:${COLORS[t]}">■</span> ${TYPES[t]}`).join(' · ');
+}
+Object.values(AN).forEach(i=>i.addEventListener('change',drawAnalysis));
+document.querySelectorAll('.ym-tabs button').forEach(b=>b.addEventListener('click',()=>{if(b.dataset.tab==='an')drawAnalysis()}));
+
+/* ---- KML export and shareable PNG card (drawn locally, no map tiles) ---- */
+const xm=s=>String(s==null?'':s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+$('exKml').addEventListener('click',()=>{const pm=filtered.map(e=>`<Placemark><name>${xm(where(e))}</name><description>${xm(`${e.d} · ${TYPES[e.type]} · قتلى (أفضل تقدير): ${e.best} · دقة الموقع ${e.prec}/6${e.cand?' · UCDP مبدئي':''} · ${CREDIT}`)}</description><Point><coordinates>${e.lon},${e.lat},0</coordinates></Point></Placemark>`).join('');
+  download('yemen-events.kml',`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>أحداث اليمن</name><description>${xm(CREDIT)}</description>${pm}</Document></kml>`,'application/vnd.google-earth.kml+xml');$('exMsg').textContent='تم تنزيل KML. '+CREDIT});
+$('exCard').addEventListener('click',()=>{
+  const W=1280,H=720,cv=document.createElement('canvas');cv.width=W;cv.height=H;const c=cv.getContext('2d');c.fillStyle='#0f2430';c.fillRect(0,0,W,H);
+  c.direction='rtl';c.textAlign='right';c.fillStyle='#fff';c.font='700 40px Cairo,sans-serif';c.fillText('خريطة النزاع في اليمن',W-50,70);
+  const from=F.from.value||'البداية',to=F.to.value||(EV.length?EV[EV.length-1].d:'');c.font='400 24px Cairo,sans-serif';c.fillStyle='#b9cfcc';c.fillText(`الفترة: ${from} إلى ${to} · ${num(filtered.length)} حدثًا · قتلى (تقدير): ${num(filtered.reduce((s,e)=>s+e.best,0))}`,W-50,112);
+  const mx={l:50,t:140,w:W-100,h:H-140-110};c.fillStyle='#16384a';c.fillRect(mx.l,mx.t,mx.w,mx.h);
+  const lat0=12,lat1=19,lon0=41.5,lon1=54.7,kx=mx.w/(lon1-lon0),ky=mx.h/(lat1-lat0),k=Math.min(kx,ky*Math.cos(15*Math.PI/180)*1);
+  const px=e=>mx.l+(e.lon-lon0)*kx,py=e=>mx.t+mx.h-(e.lat-lat0)*ky;
+  for(const e of filtered){c.beginPath();c.arc(px(e),py(e),2.5+Math.min(7,Math.sqrt(e.best)),0,7);c.fillStyle=COLORS[e.type]+'cc';c.fill();if(e.cand){c.strokeStyle='#7fb2ff';c.lineWidth=2;c.stroke()}}
+  c.fillStyle='#b9cfcc';c.font='400 20px Cairo,sans-serif';c.fillText('نقاط الأحداث على إحداثيات مبسطة، بلا خريطة أساس. الحجم يدل على عدد القتلى المقدر. الإطار الأزرق: بيانات UCDP مبدئية.',W-50,H-70);
+  c.fillText('المصدر: UCDP (GED وCandidate)، رخصة CC BY 4.0. دقة المواقع متفاوتة، والأعداد تقديرات منشورة وليست تحققًا. دليل المصادر المفتوحة للصحفيين العرب',W-50,H-38);
+  cv.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='yemen-card.png';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),5000)});$('exMsg').textContent='تم تنزيل البطاقة. '+CREDIT});
 async function boot(){
   map=L.map('map',{center:[15.5,47.5],zoom:6,minZoom:5,maxZoom:14,worldCopyJump:false});
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© مساهمو <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · بيانات الأحداث: UCDP GED وUCDP Candidate (CC BY 4.0)',maxZoom:18}).addTo(map);

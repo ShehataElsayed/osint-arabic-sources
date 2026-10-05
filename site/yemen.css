@@ -43,3 +43,5 @@ button.ghost,.ym-export button,.ym-tabs button{border:1px solid #c9dcd8;backgrou
 .ym-detail details{margin:6px 0}.leaflet-popup-content{font-family:Cairo,Tahoma,sans-serif}
 .ym-play{display:block;margin:.4rem 0;padding:.35rem .7rem;font:inherit;cursor:pointer}
 .ym-layers{margin:.6rem 0;padding:.5rem .8rem;border:1px solid var(--line,#d5dfe3);border-radius:12px;background:#fff}.ym-layers summary{cursor:pointer;font-weight:700}.ym-layers-body{display:grid;gap:.4rem;margin-top:.5rem}.ym-layers-body label{display:flex;gap:.5rem;align-items:center}
+.ym-dossier dl{display:grid;grid-template-columns:max-content 1fr;gap:.3rem 1rem}.ym-dossier dt{font-weight:700}.ym-dossier dd{margin:0}.ym-unknown{background:#fff8e6;border:1px solid #f0d890;border-radius:12px;padding:.4rem 1rem;margin:1rem 0}.cite{background:#f1f5f6;border-radius:10px;padding:.6rem .9rem}
+.ym-cmp{display:flex;gap:.6rem;flex-wrap:wrap}.ym-cmp fieldset{border:1px solid #d5dfe3;border-radius:10px;display:flex;gap:.3rem}.ym-tbl{width:100%;border-collapse:collapse;font-size:.9rem;margin:.4rem 0}.ym-tbl th,.ym-tbl td{border-bottom:1px solid #e3eaec;padding:.3rem .4rem;text-align:right}
