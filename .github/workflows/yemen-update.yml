@@ -23,6 +23,13 @@ jobs:
           mkdir -p /tmp/live
           python3 scripts/fetch_gdelt_events.py /tmp/live/yemen-signals.json 72
           cp site/data/yemen-news.json /tmp/live/yemen-news.json
+          # YouTube pages are fetched gently: once per hour, one request per channel, sequential with a 1 s pause.
+          # Other runs reuse the last published file. Any failure leaves an empty list and the page shows links only.
+          if [ "$(date -u +%M)" -lt 30 ]; then
+            python3 scripts/resolve_yemen_streams.py /tmp/live/yemen-streams-live.json || echo '{"live":[]}' > /tmp/live/yemen-streams-live.json
+          else
+            curl -fsS --max-time 20 "https://raw.githubusercontent.com/${{ github.repository }}/live-data/yemen-streams-live.json" -o /tmp/live/yemen-streams-live.json || echo '{"live":[]}' > /tmp/live/yemen-streams-live.json
+          fi
           # keep the last good file if GDELT was unavailable
           python3 scripts/fetch_yemen_news.py /tmp/live/yemen-news.json
           [ -f /tmp/live/yemen-signals.json ] || cp site/data/yemen-signals.json /tmp/live/
