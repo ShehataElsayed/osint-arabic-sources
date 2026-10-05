@@ -112,9 +112,12 @@ async function loadSignals(){
   if(!d)return;try{let r;try{r=await fetch(LIVE+'yemen-reviewed.json?t='+Math.floor(Date.now()/300000)).then(x=>{if(!x.ok)throw 0;return x.json()})}catch(e){r=await getJson('./data/yemen-reviewed.json')}REV={};(r.reviewed||[]).forEach(x=>{if(x.status==='documented')REV[x.key]=x})}catch(e){}SIG=d.signals||[];$('sigMeta').textContent=`آخر تحديث للملف: ${d.updated.replace('T',' ').replace('Z',' UTC')} (${ago(d.updated)}). ${d.label}.`;drawSignals();
 }
 async function loadNews(){
-  try{let n;try{n=await fetch(LIVE+'yemen-news.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){n=await getJson('./data/yemen-news.json')}const all=n.items||[];let items=all.filter(i=>i.l==='arabic');const onlyEn=!items.length&&all.length;if(onlyEn)items=all.filter(i=>i.l==='english');
+  try{let n;try{n=await fetch(LIVE+'yemen-news.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){n=await getJson('./data/yemen-news.json')}const YEM=/\b(yemen|yemeni|yemenis|houthi|houthis|ansar allah|sanaa|sana'a|aden|taiz|taizz|hodeidah|hudaydah|hodeida|marib|ma'rib|saada|sa'ada|shabwa|shabwah|hadramout|hadramaut|mukalla|abyan|socotra|mahra|bab al-mandab|bab el-mandeb)\b|اليمن|يمني|يمنية|الحوثي|حوثي|صنعاء|عدن|تعز|الحديدة|مأرب|صعدة|شبوة|حضرموت|المكلا|أبين|سقطرى|المهرة|باب المندب/i;
+    const seen=new Set();const norm=t=>String(t).toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g,' ').trim();
+    const all=(n.items||[]).filter(i=>YEM.test((i.t||'')+' '+(i.u||''))).filter(i=>{const k=norm(i.t),u=(i.u||'').replace(/[?#].*$/,'');if(seen.has(k)||seen.has(u))return false;seen.add(k);seen.add(u);return true});
+    let items=all.filter(i=>i.l==='arabic');const onlyEn=!items.length&&all.length;if(onlyEn)items=all.filter(i=>i.l==='english');
     const up=n.updated.replace('T',' ').replace('Z',' UTC');
-    $('newsMeta').textContent=items.length?(onlyEn?`لا توجد عناوين عربية في آخر تحديث. هذه عناوين بمصادر إنجليزية، وهي غير مترجمة. فهرس آلي من GDELT. آخر تحديث: ${up}. غير محرَّر، فتحقق من المصدر.`:`فهرس آلي من GDELT. آخر تحديث: ${up}. غير محرَّر، فتحقق من المصدر.`):'لا عناوين محدثة حاليًا.';
+    $('newsMeta').textContent=items.length?(onlyEn?`لا توجد عناوين عربية في آخر تحديث. هذه عناوين بمصادر إنجليزية، وهي غير مترجمة. فهرس آلي من GDELT. آخر تحديث: ${up}. غير محرَّر، فتحقق من المصدر.`:`فهرس آلي من GDELT. آخر تحديث: ${up}. غير محرَّر، فتحقق من المصدر.`):'لا أخبار عن اليمن حاليًا.';
     $('news').innerHTML=items.slice(0,60).map(i=>`<a class="ym-item" href="${esc(/^https?:/.test(i.u)?i.u:'#')}" target="_blank" rel="noopener noreferrer"><b${i.l==='english'?' dir="ltr" lang="en"':''}>${esc(i.t)}</b><small>${i.l==='english'?'مصدر إنجليزي · ':''}${esc(i.d)} · ${esc(i.at.replace('T',' ').replace('Z',''))}</small></a>`).join('')}
   catch(e){$('newsMeta').textContent='الفهرس الآلي للأخبار لم يُنشر بعد في هذا الإصدار.'}
 }
