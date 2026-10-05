@@ -75,7 +75,7 @@ npm run check:js       # syntax check
 python3 -m http.server 8000 --directory _site
 ```
 
-No ZIP file is used by the build. The ZIP files in the repository root are old archives.
+No ZIP file is used by the build.
 
 ## Deployment
 
@@ -91,6 +91,10 @@ Fixing links, suggesting sources and improving explanations are all welcome. Rea
 
 ## License and sources
 
-Copyright © 2026 Shehata El-sayed. The scope of the license is in [LICENSE](LICENSE). Third-party material keeps its own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [docs/licenses.md](docs/licenses.md).
+Copyright © 2026 Shehata El-sayed. The repository has three license layers, explained in [LICENSE](LICENSE):
+
+- **Original code** (`worker/`, `scripts/`, `tests/`, and the site JavaScript written for this project): Apache License 2.0, full text in [LICENSE-APACHE](LICENSE-APACHE).
+- **Original Arabic content and design:** CC BY-SA 4.0.
+- **Third-party material** keeps its own license: the OSINT Framework-derived map (MIT), the fact-check snippet index (CC BY-NC-SA 4.0, non-commercial), Pagefind (MIT) and the Cairo font (SIL OFL 1.1). See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [docs/licenses.md](docs/licenses.md).
 
 Design and development: Shehata El-sayed.

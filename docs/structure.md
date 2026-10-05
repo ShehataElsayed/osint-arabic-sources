@@ -15,6 +15,5 @@
 | `tests/` | Structure tests (Python), RAG and Worker logic (Node), browser smoke test. |
 | `docs/` | Documentation. |
 | `.github/workflows/deploy.yml` | Builds, tests and deploys to GitHub Pages on merge to `main`. |
-| `*.zip` in the root | Old archives from earlier project stages. Not used by the build. |
 
 Two odd paths in `site/`: `site/site/Cairo.ttf` (the build copies the font from there) and `site/ite/index.htmls` (an old unused file). Both are left as they are because the build depends on the first.
