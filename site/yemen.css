@@ -1,9 +1,9 @@
 .ym{padding-bottom:30px}
-.ym-hero{text-align:center;padding:30px 8px 10px}
-.ym-hero h1{font-size:clamp(30px,5vw,46px);margin:8px 0 6px;background:linear-gradient(100deg,#16354a,#0a827d 55%,#2aa89a);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.35}
-.ym-hero p{color:var(--muted);max-width:760px;margin:0 auto}
+.ym-hero{text-align:center;padding:10px 8px 2px}
+.ym-hero h1{font-size:clamp(24px,3.4vw,34px);margin:4px 0 2px;background:linear-gradient(100deg,#16354a,#0a827d 55%,#2aa89a);-webkit-background-clip:text;background-clip:text;color:transparent;line-height:1.35}
+.ym-hero p{color:var(--muted);max-width:980px;margin:0 auto;font-size:14.5px;line-height:1.6}
 .tag-exp{display:inline-block;background:#fff2d6;color:#7a5200;border-radius:20px;padding:1px 14px;font-size:14px}
-.ym-warn{background:#fff8e7;color:#6b4a00;border:1px solid #f0dca8;border-radius:14px;padding:10px 16px;margin:12px 0;font-size:14.5px}
+.ym-warn{background:#fff8e7;color:#6b4a00;border:1px solid #f0dca8;border-radius:14px;padding:6px 14px;margin:8px 0;font-size:14px}
 .ym-bar{display:flex;flex-wrap:wrap;gap:10px;align-items:end;background:#fff;border:1px solid var(--line);border-radius:17px;padding:14px 16px;box-shadow:0 8px 26px #1439390b}
 .ym-bar label{display:flex;flex-direction:column;font-size:13px;color:var(--muted);gap:2px}
 .ym-bar input,.ym-bar select{border:1px solid #c9dcd8;border-radius:10px;padding:6px 10px;background:#fff;color:var(--ink);min-width:120px;max-width:230px}
@@ -72,3 +72,5 @@ button.ghost,.ym-export button,.ym-tabs button{border:1px solid #c9dcd8;backgrou
 .ym-embed .ym-ticker,.ym-embed .ym-under,.ym-embed .ym-miniplayer{display:none}
 @media(max-width:900px){.ym-side{position:static;max-height:none;overflow:visible}.ym-side .ym-pane{max-height:420px}.ym-under{grid-template-columns:1fr}.ym-mini{grid-column:1;grid-row:auto}#map{height:460px}}
 .ym-tabs{flex-wrap:wrap}
+
+.ym-fbox{background:#fff;border:1px solid var(--line);border-radius:14px;margin:0 0 8px}.ym-fbox>summary{cursor:pointer;font-weight:700;padding:8px 14px;list-style:none;display:flex;align-items:center;gap:8px}.ym-fbox>summary::before{content:'\25C2';color:#0a827d}.ym-fbox[open]>summary::before{content:'\25BE'}.ym-fbox .ym-bar{border:0;border-top:1px solid var(--line);border-radius:0 0 14px 14px;margin:0}.ym-grid{margin-top:8px}

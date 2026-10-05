@@ -5,7 +5,7 @@
 <section class="ym-hero"><span class="tag-exp">تجريبي</span><h1>خريطة النزاع في اليمن</h1>
 <p>خريطة حرارية وقائمة أحداث وجدول زمني من بيانات مفتوحة مرخصة، مع المصدر ودرجة دقة الموقع لكل حدث. هذه خريطة للأحداث الموثقة في قاعدة بيانات بحثية، وليست سجلًا لكل قصف.</p></section>
 <div class="ym-warn" role="note">قد تتأخر تغطية الأحداث عن الوقت الحالي. <a href="#limits">التفاصيل والحدود</a></div>
-<section class="ym-bar" aria-label="عوامل التصفية">
+<details class="ym-fbox" id="filters"><summary>عوامل التصفية (التاريخ، الدقة، النوع، المحافظة، البحث)</summary><section class="ym-bar" aria-label="عوامل التصفية">
 <label>من<input type="date" id="fFrom"></label><label>إلى<input type="date" id="fTo"></label>
 <label>دقة الموقع<select id="fPrec"><option value="2">موقع محدد أو ضمن 25 كم (افتراضي)</option><option value="1">موقع محدد فقط</option><option value="4">حتى مستوى المحافظة</option><option value="6">كل الأحداث (تشمل نقاط مركزية)</option></select></label>
 <label>نوع الحدث<select id="fType"><option value="">الكل</option><option value="1">نزاع تشارك فيه حكومة</option><option value="2">نزاع بين جماعات غير حكومية</option><option value="3">عنف من طرف واحد ضد مدنيين</option></select></label>
@@ -14,7 +14,7 @@
 <label>بحث بالطرف أو المكان<input type="search" id="fQ" placeholder="مثال: الحديدة"></label>
 <label>مجموعة البيانات<select id="fSet"><option value="all">الكل (النهائية + المبدئية)</option><option value="ged">النهائية فقط (GED)</option><option value="cand">المبدئية فقط (شهرية)</option></select></label>
 <label>العرض<select id="fLayer"><option value="both">حرارية ونقاط</option><option value="heat">حرارية فقط</option><option value="pts">نقاط فقط</option></select></label>
-<button type="button" id="fReset" class="ghost">إعادة ضبط</button></section>
+<button type="button" id="fReset" class="ghost">إعادة ضبط</button></section></details>
 <details class="ym-layers" id="layers"><summary>طبقات إضافية (سياق، وليست أحداثًا موثقة)</summary><div class="ym-layers-body">
 <label><input type="checkbox" id="lyAdm"> حدود المحافظات (OCHA COD، CC BY-IGO)</label>
 <label><input type="checkbox" id="lyGibs"> صور أقمار صناعية يومية (NASA GIBS)</label>
