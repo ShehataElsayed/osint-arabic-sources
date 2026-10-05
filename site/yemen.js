@@ -44,8 +44,8 @@ function drawList(){
 }
 function select(e){
   selected=e;const d=$('detail');d.hidden=false;const h=tHead(e),ds=tDesc(e);
-  const mt=x=>x.mt?'<span class="mt">ترجمة آلية</span>':'<span class="mt off">بالإنجليزية، لم تُترجم بعد</span>';
-  d.innerHTML=`<h3>${esc(where(e))}</h3><dl><dt>التاريخ</dt><dd>${esc(e.d)}${e.d2!==e.d?' إلى '+esc(e.d2):''}</dd><dt>النوع</dt><dd>${esc(TYPES[e.type])}</dd><dt>الطرفان</dt><dd>${esc(pAr(e.a))} ← ${esc(pAr(e.b))}</dd><dt>المحافظة</dt><dd>${esc(gAr(e.gov))}</dd><dt>القتلى</dt><dd>أفضل تقدير ${num(e.best)} (بين ${num(e.low)} و${num(e.high)})، مدنيون: ${num(e.civ)}</dd><dt>وصف الموقع</dt><dd>${esc(ds.t)} ${mt(ds)}</dd><dt>المصدر</dt><dd>${esc(e.src)}${e.sd?' · '+esc(e.sd):''}<br>${esc(h.t)} ${mt(h)}</dd><dt>السجل</dt><dd><a href="https://ucdp.uu.se/event/${e.id}" rel="noopener" target="_blank" style="direction:ltr;unicode-bidi:isolate">UCDP GED #${e.id}</a></dd></dl>
+  const mt=x=>x.mt?'<span class="mt">ترجمة آلية</span>':'';const tx=x=>x.mt?esc(x.t):'<span class="mt off">لم تُترجم بعد، الأصل في «النص الأصلي» أدناه</span>';
+  d.innerHTML=`<h3>${esc(where(e))}</h3><dl><dt>التاريخ</dt><dd>${esc(e.d)}${e.d2!==e.d?' إلى '+esc(e.d2):''}</dd><dt>النوع</dt><dd>${esc(TYPES[e.type])}</dd><dt>الطرفان</dt><dd>${esc(pAr(e.a))} ← ${esc(pAr(e.b))}</dd><dt>المحافظة</dt><dd>${esc(gAr(e.gov))}</dd><dt>القتلى</dt><dd>أفضل تقدير ${num(e.best)} (بين ${num(e.low)} و${num(e.high)})، مدنيون: ${num(e.civ)}</dd><dt>وصف الموقع</dt><dd>${tx(ds)} ${mt(ds)}</dd><dt>المصدر</dt><dd>${esc(e.src)}${e.sd?' · '+esc(e.sd):''}<br>${tx(h)} ${mt(h)}</dd><dt>السجل</dt><dd><a href="https://ucdp.uu.se/event/${e.id}" rel="noopener" target="_blank" style="direction:ltr;unicode-bidi:isolate">UCDP GED #${e.id}</a></dd></dl>
   <details><summary>النص الأصلي (بالإنجليزية)</summary><p dir="ltr" style="text-align:left">${esc(e.place)}<br>${esc(e.head)}<br>${esc(e.a)} → ${esc(e.b)}</p></details>
   <p class="prec">دقة الموقع ${e.prec} من 6: ${esc(PREC[e.prec])}.${e.near?' اسم المكان الظاهر هو أقرب موقع معروف في GeoNames (حساب آلي) وقد لا يطابق الموقع الفعلي.':''} تقدير منشور وليس تحققًا مستقلًا.</p>`;
   map.setView([e.lat,e.lon],Math.max(map.getZoom(),9));
@@ -112,6 +112,13 @@ async function loadNews(){
     $('news').innerHTML=items.slice(0,60).map(i=>`<a class="ym-item" href="${esc(/^https?:/.test(i.u)?i.u:'#')}" target="_blank" rel="noopener noreferrer"><b>${esc(i.t)}</b><small>${esc(i.d)} · ${esc(i.at.replace('T',' ').replace('Z',''))}</small></a>`).join('')}
   catch(e){$('newsMeta').textContent='الفهرس الآلي للأخبار لم يُنشر بعد في هذا الإصدار.'}
 }
+async function loadStreams(){
+  try{const [c,l]=await Promise.all([getJson('./data/yemen-streams.json'),fetch(LIVE+'yemen-streams-live.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()}).catch(()=>({live:[]}))]);
+    const live={};(l.live||[]).forEach(x=>live[x.channel_id]=x.video_id);
+    $('streams').innerHTML='<p class="muted small">بث قنوات إخبارية رسمية، وليست كاميرات مراقبة. تتحقق الأداة آليًا من أن القناة تبث الآن وتسمح بالتضمين. التشغيل يتم من يوتيوب بعد ضغطك.</p>'+c.channels.map(x=>{const v=live[x.channel_id];return `<div class="ym-item"><b>${esc(x.name)}</b><small>${esc(x.kind)} · ${v?'بث مباشر الآن':'لم يُرصد بث مباشر قابل للتضمين'}</small>${v&&/^[\w-]{11}$/.test(v)?`<button type="button" class="ym-play" data-v="${v}">تشغيل داخل الأداة</button>`:''}<a href="${esc(x.url)}" target="_blank" rel="noopener noreferrer">فتح على يوتيوب</a></div>`}).join('');
+    $('streams').addEventListener('click',ev=>{const b=ev.target.closest('.ym-play');if(!b)return;b.outerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${b.dataset.v}?autoplay=1" width="100%" height="200" style="border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="بث مباشر"></iframe>`})
+  }catch(e){$('streams').innerHTML='<p class="muted">تعذر تحميل قائمة القنوات.</p>'}
+}
 async function loadCams(){
   try{const c=await getJson('./data/yemen-cameras.json');const cams=c.cameras||[];$('camCount').textContent=num(cams.length);
     if(!cams.length){$('cams').innerHTML='<p class="muted">لا توجد كاميرات موثقة في السجل حاليًا. لم نجد بثًا عامًا رسميًا لكاميرات مراقبة داخل اليمن يمكن تضمينه بأمان وبشكل قانوني. لن نضيف كاميرات مخترَقة أو غير مؤمَّنة. اقترح كاميرا تملك حق نشرها عبر <a href="https://github.com/ShehataElsayed/osint-arabic-sources/issues/new?title=%D8%A7%D9%82%D8%AA%D8%B1%D8%A7%D8%AD+%D9%83%D8%A7%D9%85%D9%8A%D8%B1%D8%A7" rel="noopener">بلاغ على GitHub</a>.</p>';return}
@@ -122,7 +129,7 @@ async function loadCams(){
 async function loadEvents(){
   const d=await getJson('./data/yemen-events.json');EV=d.events.map(ev);
   AR=d.ar||AR;try{TR=await getJson('./data/yemen-translations.json')}catch(e){}
-  $('lastEv').textContent=d.last_event;$('ver').textContent=d.version;
+  if($('lastEv'))$('lastEv').textContent=d.last_event;$('ver').textContent=d.version;
   const govs=[...new Set(EV.map(e=>gAr(e.gov)).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ar'));
   if($('fGov').options.length<2)$('fGov').insertAdjacentHTML('beforeend',govs.map(g=>`<option value="${esc(g)}">${esc(g)}</option>`).join(''));
 }
@@ -133,7 +140,7 @@ async function boot(){
   heat=L.heatLayer([],{radius:18,blur:20,maxZoom:9,minOpacity:.35,gradient:{.2:'#ffe08a',.45:'#f5a623',.7:'#d9480f',1:'#8b0000'}}).addTo(map);
   ptsLayer=L.layerGroup().addTo(map);sigLayer=L.layerGroup().addTo(map);
   map.on('moveend',()=>{if($('inView').checked)drawList()});
-  await loadEvents();init2();loadParams();render();loadNews();loadCams();loadSignals();
+  await loadEvents();init2();loadParams();render();loadNews();loadCams();loadStreams();loadSignals();
   setInterval(()=>{loadNews();loadCams()},600000);setInterval(loadSignals,300000);$('sigShow').addEventListener('change',drawSignals);$('sigWin').addEventListener('change',drawSignals);
   $('sigList').addEventListener('click',e=>{const b=e.target.closest('.sig');if(!b)return;const g=sigRowsCache[+b.dataset.i];if(g){map.setView([g.lat,g.lon],Math.max(map.getZoom(),9));L.popup().setLatLng([g.lat,g.lon]).setContent(sigPopup(g)).openOn(map)}});
   setInterval(async()=>{try{await loadEvents();render()}catch(e){}},3600000);

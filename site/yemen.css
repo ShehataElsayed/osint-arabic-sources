@@ -41,3 +41,4 @@ button.ghost,.ym-export button,.ym-tabs button{border:1px solid #c9dcd8;backgrou
 .mt{display:inline-block;background:#e8f0ff;color:#1f3f7a;border-radius:10px;padding:0 8px;font-size:12px;margin-inline-start:4px}.mt.off{background:#f3eee0;color:#6b5a1f}
 .ym-sigwarn{background:#eef4ff;border:1px solid #c7d9fb;border-radius:12px;padding:8px 12px;font-size:13.5px;margin:0 0 8px}.ym-item.sig{border-style:dashed;border-color:#8fb4f0}
 .ym-detail details{margin:6px 0}.leaflet-popup-content{font-family:Cairo,Tahoma,sans-serif}
+.ym-play{display:block;margin:.4rem 0;padding:.35rem .7rem;font:inherit;cursor:pointer}
