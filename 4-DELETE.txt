@@ -1,3 +1,0 @@
-scripts/1-build_yemen_rss.py
-site/2-yemen.js
-.github/workflows/unpack.yml

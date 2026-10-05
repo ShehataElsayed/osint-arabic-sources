@@ -112,9 +112,10 @@ async function loadSignals(){
   if(!d)return;try{let r;try{r=await fetch(LIVE+'yemen-reviewed.json?t='+Math.floor(Date.now()/300000)).then(x=>{if(!x.ok)throw 0;return x.json()})}catch(e){r=await getJson('./data/yemen-reviewed.json')}REV={};(r.reviewed||[]).forEach(x=>{if(x.status==='documented')REV[x.key]=x})}catch(e){}SIG=d.signals||[];$('sigMeta').textContent=`آخر تحديث للملف: ${d.updated.replace('T',' ').replace('Z',' UTC')} (${ago(d.updated)}). ${d.label}.`;drawSignals();
 }
 async function loadNews(){
-  try{let n;try{n=await fetch(LIVE+'yemen-news.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){n=await getJson('./data/yemen-news.json')}const items=(n.items||[]).filter(i=>i.l==='arabic');
-    $('newsMeta').textContent=items.length?`فهرس آلي من GDELT. آخر تحديث: ${n.updated.replace('T',' ').replace('Z',' UTC')}. غير محرَّر، فتحقق من المصدر.`:'لا عناوين محدثة حاليًا.';
-    $('news').innerHTML=items.slice(0,60).map(i=>`<a class="ym-item" href="${esc(/^https?:/.test(i.u)?i.u:'#')}" target="_blank" rel="noopener noreferrer"><b>${esc(i.t)}</b><small>${esc(i.d)} · ${esc(i.at.replace('T',' ').replace('Z',''))}</small></a>`).join('')}
+  try{let n;try{n=await fetch(LIVE+'yemen-news.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){n=await getJson('./data/yemen-news.json')}const all=n.items||[];let items=all.filter(i=>i.l==='arabic');const onlyEn=!items.length&&all.length;if(onlyEn)items=all.filter(i=>i.l==='english');
+    const up=n.updated.replace('T',' ').replace('Z',' UTC');
+    $('newsMeta').textContent=items.length?(onlyEn?`لا توجد عناوين عربية في آخر تحديث. هذه عناوين بمصادر إنجليزية، وهي غير مترجمة. فهرس آلي من GDELT. آخر تحديث: ${up}. غير محرَّر، فتحقق من المصدر.`:`فهرس آلي من GDELT. آخر تحديث: ${up}. غير محرَّر، فتحقق من المصدر.`):'لا عناوين محدثة حاليًا.';
+    $('news').innerHTML=items.slice(0,60).map(i=>`<a class="ym-item" href="${esc(/^https?:/.test(i.u)?i.u:'#')}" target="_blank" rel="noopener noreferrer"><b${i.l==='english'?' dir="ltr" lang="en"':''}>${esc(i.t)}</b><small>${i.l==='english'?'مصدر إنجليزي · ':''}${esc(i.d)} · ${esc(i.at.replace('T',' ').replace('Z',''))}</small></a>`).join('')}
   catch(e){$('newsMeta').textContent='الفهرس الآلي للأخبار لم يُنشر بعد في هذا الإصدار.'}
 }
 async function loadStreams(){
