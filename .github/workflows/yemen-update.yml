@@ -25,6 +25,10 @@ jobs:
           cp site/data/yemen-candidate.json /tmp/live/yemen-candidate.json
           python3 scripts/build_yemen_candidate.py /tmp/live/yemen-candidate.json.new && mv /tmp/live/yemen-candidate.json.new /tmp/live/yemen-candidate.json || true
           cp site/data/yemen-news.json /tmp/live/yemen-news.json
+          pip install -q pyshp
+          cp site/data/yemen-thermal.json site/data/yemen-infra.json /tmp/live/
+          # thermal every run; OpenStreetMap context layer once a day (be polite to Overpass)
+          if [ "$(date -u +%H)" = "03" ] && [ "$(date -u +%M)" -lt 30 ]; then python3 scripts/build_yemen_layers.py /tmp/live || true; else python3 scripts/build_yemen_layers.py /tmp/live thermal || true; fi
           # YouTube pages are fetched gently: once per hour, one request per channel, sequential with a 1 s pause.
           # Other runs reuse the last published file. Any failure leaves an empty list and the page shows links only.
           if [ "$(date -u +%M)" -lt 30 ]; then
