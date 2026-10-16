@@ -1,0 +1,50 @@
+{
+ "note": "Self-authored Arabic query set. Relevance judged by the author from tool names and descriptions in the guide; small, so results are indicative only.",
+ "dev": [
+  {"q":"أريد معرفة مصدر صورة وهل نشرت قبل ذلك","rel":["Yandex Images","TinEye Reverse Image Search","Google Images","Bing Images"]},
+  {"q":"كيف أتتبع سفينة وأعرف مسارها","rel":["Vessel Tracker","Ship AIS","Vessel Finder","Global Fishing Watch"]},
+  {"q":"أتابع رحلة طائرة مباشرة","rel":["Flightradar24.com","ADS-B Exchange","ADS-B.NL"]},
+  {"q":"أبحث عن قنوات تيليجرام حول موضوع","rel":["TGStat","Telegago (T)","Telegram-OSINT (T)","Google CSE for Telegram links"]},
+  {"q":"هل هذا الحساب موجود بنفس الاسم على منصات أخرى","rel":["WhatsMyName (T)","Namechk","NameCheckup","Sylva Identity Discovery (T)"]},
+  {"q":"هل تسربت بيانات بريدي أو بريد شخص","rel":["Have I been pwned?","DeHashed (R)","breach.vip","Epieos Email Tool"]},
+  {"q":"من يملك هذا الموقع وتاريخ تسجيله","rel":["Who.is","Domain Dossier","DomainTools Whois","Whois ARIN","IP2WHOIS"]},
+  {"q":"من المالك الحقيقي لشركة","rel":["OpenOwnership","OCCRP Aleph (R)","Companies House (R)"]},
+  {"q":"ترجمة نص من لغة أجنبية","rel":["DeepL Translator","Google Translate","Bing Translate","Free Translation"]},
+  {"q":"صور أقمار صناعية لموقع لمقارنة التغير","rel":["EarthExplorer","LandsatLook Viewer","Wayback Imagery","Google Maps"]},
+  {"q":"بحث متقدم في تغريدات بتاريخ محدد","rel":["Twitter Advanced Search","Twitter Date Search"]},
+  {"q":"هل المقطع مولد بالذكاء الاصطناعي","rel":["TruthScan Deepfake Detector","AI or Not","InVID-WeVerify Verification Plugin"]},
+  {"q":"فحص صورة للتلاعب والتعديل","rel":["FotoForensics","Forensically","InVID-WeVerify Verification Plugin"]},
+  {"q":"أرشيف نسخة قديمة من صفحة محذوفة","rel":["Internet Archive: Wayback Machine","Wayback Machine Chrome Extension","Waybackpack (T)"]},
+  {"q":"أجهزة متصلة بالإنترنت مكشوفة","rel":["Shodan","ZoomEye.ai","Netlas.io"]},
+  {"q":"أعرف مكان تصوير فيديو على يوتيوب","rel":["Search YouTube by Location","InVID-WeVerify Verification Plugin"]},
+  {"q":"بحث عن وجه شخص في صورة","rel":["FaceCheck Facial Recognition Search","PimEyes Face Search Engine","Surfface Face & People Search Engine"]},
+  {"q":"شبكات واي فاي على الخريطة","rel":["WiGLE: Wireless Network Mapping"]},
+  {"q":"أرقام الهواتف ومن يقف خلفها","rel":["Thats Them","ThatsThem","SpyDialer","OSINT Industries"]},
+  {"q":"أحتاج ضبط نتائج بحث غوغل بأوامر خاصة","rel":["Google Images","Google Videos"]}
+ ],
+ "heldout": [
+  {"q":"تحديد موقع عنوان IP جغرافيًا","rel":["IP2Location.com","IP Location Finder","utrace","Trace My IP","MaxMind Demo"]},
+  {"q":"أبحث في صور موقع الحدث عبر محركات الصور","rel":["Google Images","Bing Images","Yandex Images"]},
+  {"q":"اسم مستخدم أريد تتبعه","rel":["WhatsMyName (T)","Namechk","NameCheckup","Slash","Lullar"]},
+  {"q":"رحلات الطيران وحركة الطائرات","rel":["Flightradar24.com","ADS-B Exchange","ADS-B.NL"]},
+  {"q":"أحتاج سجلات شركات رسمية","rel":["Companies House (R)","OCCRP Aleph (R)","OpenOwnership","Public Register Online"]},
+  {"q":"ما هو الأرشيف الذي يحفظ مقاطع الفيديو","rel":["Internet Archive Videos"]},
+  {"q":"قنوات تلغرام","rel":["TGStat","Telegago (T)","Telegram-OSINT (T)","Telegram (T)","Google CSE for Telegram links"]},
+  {"q":"كشف الصور المزيفة","rel":["FotoForensics","Forensically","TruthScan Deepfake Detector","AI or Not"]},
+  {"q":"هل تعرض بريدي للاختراق","rel":["Have I been pwned?","DeHashed (R)","breach.vip"]},
+  {"q":"تحليل نطاق وخوادمه","rel":["Domain Dossier","DNS Dumpster","Who.is","DomainTools Whois"]},
+  {"q":"الصيد البحري وسفن الصيد","rel":["Global Fishing Watch","Vessel Tracker","Vessel Finder"]},
+  {"q":"ترجمة آلية","rel":["DeepL Translator","Google Translate","Bing Translate"]},
+  {"q":"مقارنة صور الأقمار الصناعية عبر الزمن","rel":["EarthExplorer","LandsatLook Viewer","Wayback Imagery"]},
+  {"q":"أجهزة مكشوفة على الشبكة","rel":["Shodan","ZoomEye.ai","Netlas.io"]},
+  {"q":"البحث العكسي عن الصور","rel":["TinEye Reverse Image Search","Yandex Images","Google Images"]},
+  {"q":"وصول إلى النسخ المؤرشفة من المواقع","rel":["Internet Archive: Wayback Machine","Waybackpack (T)","Wayback Machine Chrome Extension"]},
+  {"q":"بحث عن شخص بالاسم","rel":["Thats Them","ThatsThem","OSINT Industries","FootprintIQ"]},
+  {"q":"فيديو على يوتيوب وموقعه","rel":["Search YouTube by Location","InVID-WeVerify Verification Plugin"]},
+  {"q":"تحقق من فيديو منتشر","rel":["InVID-WeVerify Verification Plugin","TruthScan Deepfake Detector","AI or Not"]},
+  {"q":"قواعد بيانات تسريبات كلمات المرور","rel":["Have I been pwned?","DeHashed (R)","breach.vip","Vigilante.pw"]}
+ ],
+ "out_of_scope": [
+  "وصفة كبسة بالدجاج","نتيجة مباراة الأهلي أمس","سعر الذهب اليوم","كيف أتعلم العزف على العود","أفضل مطعم في القاهرة","حالة الطقس غدا","تفسير الأحلام","شراء سيارة مستعملة"
+ ]
+}

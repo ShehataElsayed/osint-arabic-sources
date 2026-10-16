@@ -87,7 +87,17 @@ async function modelJson(prompt, env, f, temperature) {
 // Source verification: do the sources cited in the model answer exist, and does the page text support the claim.
 // Page text is compared locally (term overlap and numbers); it is never sent to the model and never shown.
 const SRC_DENY = ['afp.com', 'misbar.com', 'arafacts'];
-const stok = s => nrm(s).split(' ').filter(t => t.length > 2);
+// Light Arabic stemming: strips common prefixes/suffixes (min 3 letters left) so inflected forms of the same word overlap.
+export function stemAr(w) {
+  if (!/[\u0600-\u06ff]/.test(w)) return w;
+  let x = w;
+  for (const p of ['وال', 'بال', 'كال', 'فال', 'لل', 'ال', 'و', 'ب', 'ل', 'ف', 'ك']) if (x.startsWith(p) && x.length - p.length >= 3) { x = x.slice(p.length); break; }
+  for (const q of ['ات', 'ان', 'ون', 'ين', 'يه', 'ها', 'هم', 'ه', 'ي']) if (x.endsWith(q) && x.length - q.length >= 3) { x = x.slice(0, -q.length); break; }
+  return x;
+}
+const stok = s => nrm(s).split(' ').filter(t => t.length > 2).map(stemAr);
+const NEG = new Set(['لا', 'لم', 'لن', 'ليس', 'ليست', 'ليسوا', 'غير', 'بدون', 'عدم', 'نفي', 'نفت', 'نفى', 'تنفي', 'ينفي', 'تنفى', 'ينفى', 'لايوجد', 'ما']);
+const negCount = s => nrm(s).split(' ').filter(t => NEG.has(t) && t !== 'ما').length;
 const cos = (a, b) => { const va = new Map(), vb = new Map(); stok(a).forEach(t => va.set(t, (va.get(t) || 0) + 1)); stok(b).forEach(t => vb.set(t, (vb.get(t) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [t, c] of va) { na += c * c; if (vb.has(t)) d += c * vb.get(t); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
 const digits = s => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,٬\s]/g, '');
 export function safeSourceUrl(u) {
@@ -134,6 +144,17 @@ export function reliabilityOf(tier, id, page) {
   const identified = Boolean(page?.site_name || page?.has_about || page?.has_contact || id?.registrant);
   return id && id.age_years != null && id.age_years >= 5 && identified ? 'medium' : 'unknown';
 }
+// Pure support decision for one page. Similarity uses stemmed terms; numbers must appear in the best sentence or its neighbours
+// (not anywhere on the page); a sentence whose negation differs from the claim's is not treated as support (weak heuristic).
+export function supportOf(claimText, sents, nums) {
+  const scored = sents.map((x, i) => ({ x, i, s: cos(claimText, x) })).sort((a, b) => b.s - a.s);
+  const best = scored[0], similarity = best ? Math.round(best.s * 100) / 100 : 0;
+  const want = (nums || []).map(digits).filter(Boolean);
+  const win = best ? digits([sents[best.i - 1], sents[best.i], sents[best.i + 1]].filter(Boolean).join(' ')) : '';
+  const numbers_ok = want.length ? want.every(n => win.includes(n)) : null;
+  const negation_conflict = best ? (negCount(claimText) % 2) !== (negCount(best.x) % 2) : false;
+  return { cands: scored.slice(0, 10).map(c => c.x.slice(0, 300)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
+}
 export async function checkSource(src, claimText, nums, f = fetch) {
   const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false };
   if (!url) return out;
@@ -146,12 +167,9 @@ export async function checkSource(src, claimText, nums, f = fetch) {
     out.exists = true; out.url = url;
     const tm = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i); out.title = cleanText((tm ? tm[1] : '').replace(/&nbsp;|&amp;/g, ' '), 160);
     const sents = text.split(/[.!؟?\n]+/).map(x => x.replace(/\s+/g, ' ').trim()).filter(x => x.length > 15 && x.split(' ').length >= 6);
-    const scored = sents.map(x => ({ x, s: cos(claimText, x) })).sort((a, b) => b.s - a.s);
-    out.page = pageIdentity(raw); out.cands = scored.slice(0, 10).map(c => c.x.slice(0, 300)); out.similarity = scored.length ? scored[0].s : 0; out.quote = scored.length && scored[0].s >= 0.15 ? cleanText(scored[0].x, 300) : '';
-    out.similarity = Math.round(out.similarity * 100) / 100;
-    const body = digits(text), want = (nums || []).map(digits).filter(Boolean);
-    out.numbers_ok = want.length ? want.every(n => body.includes(n)) : null;
-    out.verified = out.similarity >= 0.4 && out.numbers_ok !== false;
+    const sup = supportOf(claimText, sents, nums);
+    out.page = pageIdentity(raw); out.cands = sup.cands; out.similarity = sup.similarity; out.quote = sup.quote;
+    out.numbers_ok = sup.numbers_ok; out.negation_conflict = sup.negation_conflict; out.verified = sup.verified;
   } catch { /* unreachable */ }
   return out;
 }
