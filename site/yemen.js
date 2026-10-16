@@ -239,7 +239,7 @@ function drawTicker(){
 document.addEventListener('click',e=>{const b=e.target.closest('.ym-tick-track button');if(!b)return;const g=$('ticker')._rows[+b.dataset.i];if(g){map.setView([g.lat,g.lon],Math.max(map.getZoom(),9));L.popup().setLatLng([g.lat,g.lon]).setContent(sigPopup(g)).openOn(map)}});
 /* ---- Floating mini live-stream player (click to load; only when a channel is live and embeddable) ---- */
 function miniPlayer(name,vid){
-  const p=$('miniPlayer');if(!p||sessionStorage.getItem('ymMpClosed'))return;p.hidden=false;$('mpTitle').textContent='بث مباشر: '+name;
+  const p=$('miniPlayer');if(!p||sessionStorage.getItem('ymMpClosed'))return;p.hidden=false;if(matchMedia('(max-width:760px)').matches)p.classList.add('min');$('mpTitle').textContent='بث مباشر: '+name;
   $('mpBody').innerHTML=`<button type="button" class="ym-play" id="mpPlay">تشغيل البث داخل الأداة</button>`;
   $('mpPlay').addEventListener('click',()=>{$('mpBody').innerHTML=`<iframe src="https://www.youtube-nocookie.com/embed/${vid}?autoplay=1&mute=1" width="100%" height="160" style="border:0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" title="بث مباشر"></iframe>`});
   $('mpMin').onclick=()=>p.classList.toggle('min');$('mpClose').onclick=()=>{p.hidden=true;sessionStorage.setItem('ymMpClosed','1')};
