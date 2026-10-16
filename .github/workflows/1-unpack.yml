@@ -2,7 +2,7 @@ name: unpack
 on:
   push:
     paths:
-      - 'pkg*.tgz'
+      - '*pkg*.tgz'
 permissions:
   contents: write
 jobs:
@@ -13,7 +13,8 @@ jobs:
       - name: Extract package and commit
         run: |
           set -e
-          f=$(ls *pkg*.tgz | head -1)
+          f=$(ls *pkg*.tgz 2>/dev/null | head -1 || true)
+          if [ -z "$f" ]; then echo none; exit 0; fi
           tar xzf "$f"
           git rm -q -f -- "$f" || rm -f "$f"
           git config user.name "github-actions"
