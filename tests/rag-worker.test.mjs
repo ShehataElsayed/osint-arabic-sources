@@ -136,3 +136,15 @@ test('open-web search: blocked domains dropped, capped, quiet without key', asyn
   const r = await exaWeb('blocked-test', { EXA_API_KEY: 'k' }, f, 3);
   assert.deepEqual(r.map(x => x.host), ['www.who.int', 'un.org']);
 });
+
+import { supportOf, stemAr } from '../worker/rag-worker.js';
+test('supportOf: negating page and distant numbers are not support; inflected forms overlap', () => {
+  assert.equal(stemAr('والمدارس'), 'مدارس');
+  const neg = supportOf('أعلنت الوزارة إغلاق المدارس في المحافظة', ['نفت الوزارة إغلاق المدارس في المحافظة وأكدت استمرار الدراسة'], []);
+  assert.equal(neg.negation_conflict, true); assert.equal(neg.verified, false);
+  const filler = 'وتتابع الجهات المعنية الموقف عن كثب وتصدر تحديثات دورية للرأي العام';
+  const far = supportOf('قتل 20 شخصا في الهجوم على القرية', ['قتل عدد من الأشخاص في الهجوم على القرية بحسب شهود عيان محليين', filler, 'أما حصيلة الفيضانات في العام الماضي فبلغت 20 قتيلا'], ['20']);
+  assert.equal(far.numbers_ok, false); assert.equal(far.verified, false);
+  const ok = supportOf('أغلقت المدارس أبوابها بسبب الفيضانات', ['قررت الوزارة أن المدرسة أغلقت أبوابها بسبب الفيضان في المحافظات الشمالية'], []);
+  assert.equal(ok.verified, true);
+});

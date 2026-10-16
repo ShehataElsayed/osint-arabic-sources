@@ -1,20 +1,17 @@
 import { BACKEND_URL, EXTERNAL_AI } from './rag-config.js';
 import { $, el, startTurn, typeInto, wireComposer, NOTICE } from './chat-ui.js';
 let tools, pipeline;
-const norm = s => s.toLowerCase().normalize('NFKD').replace(/[\u064b-\u065f\u0670]/g, '').replace(/[أإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+import { buildIndex, search } from './tool-search.js';
+let index;
 const load = async () => tools || (tools = await (await fetch('./search-tools.json')).json());
-// Candidates: IDF-weighted keyword match over the tool name and first sentence of its description.
-function keyword(q, items) {
-  const docs = items.map(t => norm(t.name + ' ' + t.description.split(/[.؛]/)[0]));
-  const terms = [...new Set(norm(q).split(' ').filter(x => x.length > 3))].map(w => { const stem = w.length > 4 ? w.replace(/^(ال|و|ب|ل)/, '') : w, df = docs.filter(d => d.includes(stem)).length; return { stem, wt: df ? Math.min(2, .6 + Math.log(items.length / df) / 3) : 0 }; });
-  return items.map((t, i) => ({ t, id: i, score: terms.reduce((s, x) => s + (docs[i].includes(x.stem) ? x.wt : 0), 0) })).sort((a, b) => b.score - a.score).slice(0, 24);
-}
+const getIndex = items => index || (index = buildIndex(items));
 function card(t, i, extra) {
   const c = el('article', null, 'src-card fade'); c.style.animationDelay = (i * 0.12) + 's';
   c.append(el('strong', t.name));
   for (const [label, txt] of extra || []) { const p = el('p', null, 'tool-line'); p.append(el('b', label + ' '), document.createTextNode(txt)); c.append(p); }
   c.append(el('small', t.description));
   const a = el('a', 'افتح الأداة ↗'); a.href = t.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.dataset.osintTool = t.name; c.append(a);
+  if (window.OSINTTaskFile) c.append(' ', window.OSINTTaskFile.button(() => ({ name: t.name, url: t.url, type: 'unknown', from: 'البحث الذكي', note: 'أداة مقترحة من البحث الذكي التجريبي. لم تُراجع بعد.' })));
   return c;
 }
 async function semantic(q, cands) {
@@ -25,9 +22,9 @@ async function semantic(q, cands) {
 let last = null;
 async function ask(q) {
   $('greet').hidden = true; const body = startTurn($('thread'), q);
-  const all = await load(), cands = keyword(q, all).filter(x => x.score > 0).slice(0, 15); last = { q, cands };
+  const all = await load(), found = search(getIndex(all), q), cands = found.confident ? found.candidates : []; last = { q, cands };
   body.replaceChildren(); const title = el('h3', null, 'answer-title'); body.append(title);
-  if (!cands.length) { await typeInto(title, 'لا توجد أدوات مطابقة داخل الدليل، جرّب كلمات أخرى.'); return; }
+  if (!cands.length) { await typeInto(title, 'لا أجد أداة مناسبة لهذا الطلب في الدليل بثقة كافية. جرّب وصف المهمة بكلمات أخرى (مثل: صورة، سفينة، نطاق، تسريب)، أو تصفّح خريطة الأدوات.'); return; }
   let picks = null, web = [];
   if (EXTERNAL_AI && BACKEND_URL) {
     try { const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'recommend', query: q, candidates: cands.map(x => ({ id: x.id, name: x.t.name, description: x.t.description })) }) }); if (r.ok) { const j = await r.json(); picks = j.picks; web = Array.isArray(j.web) ? j.web : []; } } catch { /* keyword fallback */ }
@@ -55,3 +52,6 @@ $('local').onclick = async () => {
   catch (e) { $('status').textContent = 'تعذر تشغيل النموذج على هذا الجهاز: ' + e.message; }
 };
 if (EXTERNAL_AI) $('notice').textContent = NOTICE;
+
+const initQ = new URLSearchParams(location.search).get('q');
+if (initQ && initQ.trim()) { const q = initQ.trim().slice(0, 300); $('q').value = q; ask(q).catch(e => startTurn($('thread'), q).replaceChildren(el('p', 'تعذّر إكمال الطلب: ' + e.message, 'why'))); }

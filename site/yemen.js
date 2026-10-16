@@ -48,6 +48,7 @@ function select(e){
   d.innerHTML=`<h3>${esc(where(e))}</h3>${e.cand?`<p class="mt">بيانات UCDP مبدئية (شهرية). قد تُعدَّل لاحقًا${e.cs&&e.cs!=='Clear'?'. علامة مراجعة من UCDP نفسها: '+esc(e.cs):''}</p>`:''}<dl><dt>التاريخ</dt><dd>${esc(e.d)}${e.d2!==e.d?' إلى '+esc(e.d2):''}</dd><dt>النوع</dt><dd>${esc(TYPES[e.type])}</dd><dt>الطرفان</dt><dd>${esc(pAr(e.a))} ← ${esc(pAr(e.b))}</dd><dt>المحافظة</dt><dd>${esc(gAr(e.gov))}</dd><dt>القتلى</dt><dd>أفضل تقدير ${num(e.best)} (بين ${num(e.low)} و${num(e.high)})، مدنيون: ${num(e.civ)}</dd><dt>وصف الموقع</dt><dd>${tx(ds)} ${mt(ds)}</dd><dt>المصدر</dt><dd>${esc(e.src)}${e.sd?' · '+esc(e.sd):''}<br>${tx(h)} ${mt(h)}</dd><dt>السجل</dt><dd><a href="https://ucdp.uu.se/event/${e.id}" rel="noopener" target="_blank" style="direction:ltr;unicode-bidi:isolate">UCDP GED #${e.id}</a></dd></dl>
   <details><summary>النص الأصلي (بالإنجليزية)</summary><p dir="ltr" style="text-align:left">${esc(e.place)}<br>${esc(e.head)}<br>${esc(e.a)} → ${esc(e.b)}</p></details>
   <p><a href="./yemen-event.html?id=${e.id}${e.cand?'&c=1':''}" target="_blank" rel="noopener">صفحة الحدث الكاملة والاستشهاد والصور</a></p><p class="prec">دقة الموقع ${e.prec} من 6: ${esc(PREC[e.prec])}.${e.near?' اسم المكان الظاهر هو أقرب موقع معروف في GeoNames (حساب آلي) وقد لا يطابق الموقع الفعلي.':''} تقدير منشور وليس تحققًا مستقلًا.</p>`;
+  if(window.OSINTTaskFile){const p=document.createElement('p');p.append(window.OSINTTaskFile.button(()=>({name:'حدث UCDP '+e.id+': '+where(e),url:new URL('./yemen-event.html?id='+e.id+(e.cand?'&c=1':''),location.href).href,type:'database',from:'خريطة اليمن',note:'حدث منشور من UCDP بتاريخ '+e.d+'، المصدر: '+(e.src||'غير متاح')+'. تقدير منشور وليس تحققًا مستقلًا.'})));d.append(p)}
   map.setView([e.lat,e.lon],Math.max(map.getZoom(),9));
   if(!document.body.classList.contains('ym-embed'))d.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -109,7 +110,7 @@ let sigRowsCache=[];
 function sigPopup(g){return `<div dir="rtl" style="font-family:Cairo,sans-serif;min-width:200px"><b>${REV[sigKey(g)]?'موثق بعد مراجعة بشرية':cand(g)?'مرشح للتوثيق: مصادر مستقلة متعددة، لم يُراجع بعد':'إشارة إعلامية آلية، غير محققة'}</b><br>${esc(sigWhere(g))}<br>${esc(g.cameo_ar)} · آخر ظهور ${esc(ago(g.last))}<br>${g.place_ar?'':'<small>الاسم الأصلي: <span dir="ltr">'+esc(g.place_en)+'</span></small><br>'}<small>تقييم آلي لتعدد المصادر: ${esc(corr(g).lab)} (${esc(corr(g).why)}). هذا ليس تحققًا، وقد تنقل المواقع الخبر عن مصدر واحد.</small><br><small>تُستخرج آليًا من أخبار، وقد يكون الموقع أو النوع خاطئًا. افتح المصدر وتحقق.</small><br>${REV[sigKey(g)]?`<small>المراجع: ${esc(REV[sigKey(g)].reviewer)} · ${esc(REV[sigKey(g)].date)} · <a href="${esc(REV[sigKey(g)].issue||'#')}" target="_blank" rel="noopener noreferrer">سجل المراجعة</a></small><br>`:`<a href="https://github.com/ShehataElsayed/osint-arabic-sources/issues/new?template=yemen-review.yml&signal_key=${encodeURIComponent(sigKey(g))}&place=${encodeURIComponent(sigWhere(g))}" target="_blank" rel="noopener noreferrer">اقترح مراجعة هذه الإشارة</a><br>`}${g.sources.slice(0,4).map(s=>`<a href="${esc(s.u)}" target="_blank" rel="noopener noreferrer" style="direction:ltr;unicode-bidi:isolate;display:block">${esc(s.d||'مصدر')}</a>`).join('')}</div>`}
 async function loadSignals(){
   let d=null;try{d=await fetch(LIVE+'yemen-signals.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){try{d=await getJson('./data/yemen-signals.json')}catch(e2){}}
-  if(!d)return;try{let r;try{r=await fetch(LIVE+'yemen-reviewed.json?t='+Math.floor(Date.now()/300000)).then(x=>{if(!x.ok)throw 0;return x.json()})}catch(e){r=await getJson('./data/yemen-reviewed.json')}REV={};(r.reviewed||[]).forEach(x=>{if(x.status==='documented')REV[x.key]=x})}catch(e){}SIG=d.signals||[];$('sigMeta').textContent=`آخر تحديث للملف: ${d.updated.replace('T',' ').replace('Z',' UTC')} (${ago(d.updated)}). ${d.label}.`;drawSignals();
+  if(!d)return;try{let r;try{r=await fetch(LIVE+'yemen-reviewed.json?t='+Math.floor(Date.now()/300000)).then(x=>{if(!x.ok)throw 0;return x.json()})}catch(e){r=await getJson('./data/yemen-reviewed.json')}REV={};(r.reviewed||[]).forEach(x=>{if(x.status==='documented')REV[x.key]=x})}catch(e){}SIG=d.signals||[];freshChip(d.updated);$('sigMeta').textContent=`آخر تحديث للملف: ${d.updated.replace('T',' ').replace('Z',' UTC')} (${ago(d.updated)}). ${d.label}.`;drawSignals();
 }
 async function loadNews(){
   try{let n;try{n=await fetch(LIVE+'yemen-news.json?t='+Math.floor(Date.now()/300000)).then(r=>{if(!r.ok)throw 0;return r.json()})}catch(e){n=await getJson('./data/yemen-news.json')}const YEM=/\b(yemen|yemeni|yemenis|houthi|houthis|ansar allah|sanaa|sana'a|aden|taiz|taizz|hodeidah|hudaydah|hodeida|marib|ma'rib|saada|sa'ada|shabwa|shabwah|hadramout|hadramaut|mukalla|abyan|socotra|mahra|bab al-mandab|bab el-mandeb)\b|اليمن|يمني|يمنية|الحوثي|حوثي|صنعاء|عدن|تعز|الحديدة|مأرب|صعدة|شبوة|حضرموت|المكلا|أبين|سقطرى|المهرة|باب المندب/i;
@@ -257,3 +258,17 @@ async function boot(){
 }
 boot().catch(e=>{$('stats').innerHTML='<p class="muted">تعذر تحميل بيانات الأحداث.</p>'});
 })();
+
+/* Freshness chip: age of the near-live signals file, amber after 3 hours. */
+let FRESH_AT=null;
+function freshChip(iso){const t=Date.parse(iso);if(!isFinite(t))return;FRESH_AT=t;paintFresh()}
+function paintFresh(){
+  if(FRESH_AT==null)return;let c=document.getElementById('freshChip');
+  if(!c){c=document.createElement('span');c.id='freshChip';c.className='fresh-chip';c.setAttribute('role','status');const h=document.querySelector('.ym-hero h1');if(!h)return;h.insertAdjacentElement('afterend',c)}
+  const m=Math.max(0,Math.round((Date.now()-FRESH_AT)/60000));
+  const u=(n,one,two,few,many)=>n===1?one:n===2?two:n<=10?n+' '+few:n+' '+many;
+  const txt=m<1?'أقل من دقيقة':m<60?u(m,'دقيقة','دقيقتين','دقائق','دقيقة'):m<1440?u(Math.floor(m/60),'ساعة','ساعتين','ساعات','ساعة'):u(Math.floor(m/1440),'يوم','يومين','أيام','يومًا');
+  c.textContent='آخر تحديث قبل '+txt;c.classList.toggle('stale',m>180);
+  c.title=m>180?'البيانات متأخرة؛ التحديث التلقائي قد يتأخر لساعات.':'';
+}
+setInterval(paintFresh,60000);

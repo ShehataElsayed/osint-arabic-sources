@@ -206,6 +206,7 @@ $('build').addEventListener('click', () => {
     s.items.forEach((item, i) => {
       h += '<div class="cmd"><code>' + esc(item.cmd) + '</code><span class="cmdbtns">'
         + '<button type="button" class="copybtn" data-c="' + esc(item.cmd) + '">نسخ</button>'
+        + '<button type="button" class="tf-btn tf-cmd" data-c="' + esc(item.cmd) + '" data-o="' + esc(item.open) + '">أضف إلى الحالة</button>'
         + '<a class="btn" href="' + esc(item.open) + '" target="_blank" rel="noopener noreferrer">فتح ↗</a></span></div>';
     });
     h += '</div>';
@@ -218,6 +219,13 @@ $('build').addEventListener('click', () => {
 });
 
 document.addEventListener('click', (e) => {
+  const t = e.target.closest('.tf-cmd');
+  if (t && window.OSINTTaskFile) {
+    const r = window.OSINTTaskFile.add({ name: 'أمر بحث: ' + t.dataset.c.slice(0, 120), url: t.dataset.o, type: 'other', from: 'الأوامر الاستقصائية', note: 'أمر بحث استقصائي: ' + t.dataset.c + '. لم تُراجع نتائجه بعد.' });
+    t.textContent = r.ok ? 'أُضيف ✓' : 'تعذر الحفظ';
+    setTimeout(() => t.textContent = 'أضف إلى الحالة', 1800);
+    return;
+  }
   const b = e.target.closest('.copybtn');
   if (!b) return;
   navigator.clipboard.writeText(b.dataset.c).then(() => {
