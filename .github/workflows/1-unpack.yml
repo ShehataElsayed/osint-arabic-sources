@@ -1,0 +1,23 @@
+name: unpack
+on:
+  push:
+    paths:
+      - 'pkg*.tgz'
+permissions:
+  contents: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract package and commit
+        run: |
+          set -e
+          f=$(ls *pkg*.tgz | head -1)
+          tar xzf "$f"
+          git rm -q -f -- "$f" || rm -f "$f"
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "Unified nav, task-first home, task file, Arabic retrieval and grounding improvements"
+          git push
