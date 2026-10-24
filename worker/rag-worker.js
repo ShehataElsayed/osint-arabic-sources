@@ -100,6 +100,17 @@ async function modelJson(prompt, env, f, temperature, maxTokens = 2048) {
 // Multilingual embeddings (gemini-embedding-001): RETRIEVAL SIGNAL ONLY. Vectors select the most similar
 // passage; they never prove entailment. Support still requires the grounded guards (digits/years, negation
 // parity) applied to the actual passage text, and stays labeled as an automated signal.
+// Cross-language bridge: one batched literal translation of claims/shown sentences into English so
+// non-Arabic sources can be matched in their OWN language. Translation is a matching aid, never
+// entailment: numbers/negation/entity guards still run on the matched-language strings, and use is
+// disclosed per claim row and in warnings. On any failure or length mismatch it returns [] (lexical only).
+export async function translateList(texts, env, f = fetch) {
+  const list = (Array.isArray(texts) ? texts : []).map(t => String(t || '').slice(0, 300));
+  if (!list.length || !((env?.GEMINI_API_KEY && env?.GEMINI_MODEL) || (env?.OPENROUTER_API_KEY && env?.OPENROUTER_MODEL))) return [];
+  const r = await modelJson(`ترجم الجمل العربية التالية إلى الإنجليزية ترجمة حرفية دقيقة تحافظ على الأرقام والأسماء والنفي كما هي بلا حذف أو إضافة. أعد JSON فقط بالشكل {"en":["..."]} وبنفس عدد العناصر وترتيبها:\n${list.map((t, i) => `${i + 1}. ${t}`).join('\n')}`, env, f, 0);
+  const en = Array.isArray(r?.json?.en) ? r.json.en.map(x => String(x || '').replace(/\s+/g, ' ').trim().slice(0, 400)) : [];
+  return en.length === list.length && en.every(Boolean) ? en : [];
+}
 export async function embedTexts(texts, env, f = fetch) {
   const list = (Array.isArray(texts) ? texts : []).map(t => String(t || '').slice(0, 1000)).filter(Boolean).slice(0, 100);
   if (!env?.GEMINI_API_KEY || !list.length) return null;
@@ -145,7 +156,7 @@ export function stemAr(w) {
 }
 const stok = s => nrm(s).split(' ').filter(t => t.length > 2).map(stemAr);
 export const ragTokens = stok;
-const NEG = new Set(['لا', 'لم', 'لن', 'ليس', 'ليست', 'ليسوا', 'غير', 'بدون', 'عدم', 'نفي', 'نفت', 'نفى', 'تنفي', 'ينفي', 'تنفى', 'ينفى', 'لايوجد', 'ما']);
+const NEG = new Set(['لا', 'لم', 'لن', 'ليس', 'ليست', 'ليسوا', 'غير', 'بدون', 'عدم', 'نفي', 'نفت', 'نفى', 'تنفي', 'ينفي', 'تنفى', 'ينفى', 'لايوجد', 'ما', 'not', 'no', 'never', 'without', 'hardly', 'denies', 'denied', 'deny']);
 const negCount = s => nrm(s).split(' ').filter(t => NEG.has(t) && t !== 'ما').length;
 const cos = (a, b) => { const va = new Map(), vb = new Map(); stok(a).forEach(t => va.set(t, (va.get(t) || 0) + 1)); stok(b).forEach(t => vb.set(t, (vb.get(t) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [t, c] of va) { na += c * c; if (vb.has(t)) d += c * vb.get(t); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
 const digits = s => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,٬\s]/g, '');
@@ -204,7 +215,7 @@ export function supportOf(claimText, sents, nums) {
   const negation_conflict = best ? (negCount(claimText) % 2) !== (negCount(best.x) % 2) : false;
   return { cands: scored.slice(0, 10).map(c => c.x.slice(0, 300)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
 }
-export async function checkSource(src, claimText, nums, f = fetch, env = {}) {
+export async function checkSource(src, claimText, nums, f = fetch, env = {}, altText = '') {
   const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' };
   if (!url) return out;
   out.host = new URL(url).hostname; out.tier = tierOf(out.host);
@@ -221,8 +232,10 @@ export async function checkSource(src, claimText, nums, f = fetch, env = {}) {
     const tm = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i); out.title = cleanText((tm ? tm[1] : '').replace(/&nbsp;|&amp;/g, ' '), 160);
     const sents = text.split(/[.!؟?\n]+/).map(x => x.replace(/\s+/g, ' ').trim()).filter(x => x.length > 15 && x.split(' ').length >= 6);
     const sup = supportOf(claimText, sents, nums);
-    out.page = pageIdentity(raw); out.cands = sup.cands; out.similarity = sup.similarity; out.quote = sup.quote;
-    out.numbers_ok = sup.numbers_ok; out.negation_conflict = sup.negation_conflict; out.verified = sup.verified;
+    const supAlt = altText ? supportOf(altText, sents, nums) : null;
+    const bestSup = supAlt && supAlt.similarity > sup.similarity ? supAlt : sup;
+    out.page = pageIdentity(raw); out.cands = bestSup.cands; out.similarity = bestSup.similarity; out.quote = bestSup.quote;
+    out.numbers_ok = bestSup.numbers_ok; out.negation_conflict = bestSup.negation_conflict; out.verified = bestSup.verified;
   }
   return out;
 }
@@ -391,11 +404,16 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   const numbers = (Array.isArray(d.json.numbers) ? d.json.numbers : []).slice(0, 6).map(n => cleanText(n, 30)).filter(Boolean);
   const named = (Array.isArray(d.json.sources) ? d.json.sources : []).slice(0, 8);
   const claimText = [q, ...claims.slice(0, 3)].join(' ');
+  // One batched translation of question + claims (single model call) feeds every cross-language match below.
+  const tr = claims.length ? await translateList([q, ...claims], env, f) : [];
+  const qEn = tr.length === claims.length + 1 ? tr[0] : '';
+  const claimsEn = qEn ? tr.slice(1) : [];
+  const claimTextEn = [qEn, ...claimsEn.slice(0, 3)].filter(Boolean).join(' ');
   // Model-named sources are discovery leads only: each must actually open and carry text to count.
-  const checked = await Promise.all(named.map(async s => { const r = await checkSource(s, claimText, numbers, f, env); if (r.exists) return r; const fix = await repairSource(s, claimText, numbers, f, env); return fix ? { ...fix, name: r.name } : r; }));
+  const checked = await Promise.all(named.map(async s => { const r = await checkSource(s, claimText, numbers, f, env, claimTextEn); if (r.exists) return r; const fix = await repairSource(s, claimText, numbers, f, env); return fix ? { ...fix, name: r.name } : r; }));
   const have = new Set(checked.filter(x => x.exists).map(x => x.url));
   const extra = (await exaWeb(claimText, env, f, 3)).filter(x => !have.has(x.url));
-  const extraChecked = await Promise.all(extra.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f, env)), by_search: true })));
+  const extraChecked = await Promise.all(extra.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f, env, claimTextEn)), by_search: true })));
   checked.push(...extraChecked.filter(x => x.exists));
   // Broad free discovery: widen the pool beyond model-named sources. Discovered articles are NOT decoration —
   // each opens through the same checkSource pipeline and feeds claims, citation markers and quotes. One article
@@ -414,7 +432,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
       seen.add(dom); picks.push(a);
       if (picks.length >= room) break;
     }
-    const dChecked = await Promise.all(picks.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f, env)), by_search: true, discovered: true })));
+    const dChecked = await Promise.all(picks.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f, env, claimTextEn)), by_search: true, discovered: true })));
     checked.push(...dChecked.filter(x => x.exists));
   }
   // Shallow-page escalation: an opened homepage or portal whose text supports nothing is a lead, not
@@ -448,23 +466,32 @@ export async function askAssistant(question, candidates, env, f = fetch) {
     return best;
   };
   const claimRows = claims.map((c, ci) => {
-    const best = pickBest(c, semantic ? claimVecs[ci] : null);
-    const supported = Boolean(best && groundedOk(c, best.x.text, best.s, semantic));
-    return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0, evidence: supported ? cleanText(best.x.text, 300) : '', source_ref: supported ? best.x.ref : 0 };
+    let best = pickBest(c, semantic ? claimVecs[ci] : null);
+    let winText = c, xl = false;
+    if (!semantic && claimsEn[ci]) {
+      const b2 = pickBest(claimsEn[ci], null);
+      if (b2 && (!best || b2.s > best.s)) { best = b2; winText = claimsEn[ci]; xl = true; }
+    }
+    const supported = Boolean(best && groundedOk(winText, best.x.text, best.s, semantic));
+    return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0, evidence: supported ? cleanText(best.x.text, 300) : '', source_ref: supported ? best.x.ref : 0, cross_lang: supported && xl };
   });
   // Citation reconciliation: every marker in the shown answer is RE-DERIVED from the fetched passages.
   // A sentence earns [S#] only when an opened source holds a passage that lexically supports it
   // (same threshold and negation parity as claims) — never merely because the model wrote it.
+  let usedXl = false;
   const groundMarkers = async text => {
     const paras = text.split('\n').map(para => para.split(/(?<=[.!؟])\s+/).map(sent => sent.replace(/\s*\[S?\d{1,2}\]/g, '').trim()).filter(Boolean)).filter(p => p.length);
     const flat = paras.flat();
     const mvecs = semantic && flat.length ? await embedTexts(flat, env, f) : null;
     const useV = Boolean(mvecs && mvecs.length === flat.length);
+    const flatXl = (!useV && claimsEn.length && allCands.some(x => !/[\u0600-\u06ff]/.test(x.text)) && flat.length) ? await translateList(flat, env, f) : [];
     let k = 0;
     return paras.map(sents => sents.map(clean => {
-      const vec = useV ? mvecs[k] : null; k++;
-      const best = useV ? pickBest(clean, vec) : pickBest(clean, null);
-      if (!(best && groundedOk(clean, best.x.text, best.s, useV))) return clean;
+      const fi = k; const vec = useV ? mvecs[fi] : null; k++;
+      let best = useV ? pickBest(clean, vec) : pickBest(clean, null);
+      let winText = clean;
+      if (!useV && flatXl[fi]) { const b2 = pickBest(flatXl[fi], null); if (b2 && (!best || b2.s > best.s)) { best = b2; winText = flatXl[fi]; usedXl = true; } }
+      if (!(best && groundedOk(winText, best.x.text, best.s, useV))) return clean;
       const m = clean.match(/^(.*?)([.!؟])$/);
       return m ? `${m[1]} [S${best.x.ref}]${m[2]}` : `${clean} [S${best.x.ref}]`;
     }).join(' ')).filter(Boolean).join('\n');
@@ -486,7 +513,12 @@ export async function askAssistant(question, candidates, env, f = fetch) {
     if (accepted) {
       const rc = await modelJson(`استخرج من النص التالي حتى 5 ادعاءات جوهرية قابلة للفحص، وتجاهل الجمل التي تقول صراحة إن أمرًا ما غير موثق أو بلا سند. أعد JSON فقط: {"claims":["..."]}\nالنص: ${t.slice(0, 2000)}`, env, f, 0);
       const newClaims = (Array.isArray(rc.json?.claims) ? rc.json.claims : []).slice(0, 5).map(c => cleanText(c, 220)).filter(c => c && !/لم نعثر|غير موثق|لا سند|بلا سند/.test(c));
-      const injected = newClaims.filter(c => { const best = pickBest(c, null); return !(best && groundedOk(c, best.x.text, best.s, false)); });
+      const newClaimsEn = newClaims.length ? await translateList(newClaims, env, f) : [];
+      const injected = newClaims.filter((c, ci) => {
+        let best = pickBest(c, null), winText = c;
+        if (newClaimsEn[ci]) { const b2 = pickBest(newClaimsEn[ci], null); if (b2 && (!best || b2.s > best.s)) { best = b2; winText = newClaimsEn[ci]; } }
+        return !(best && groundedOk(winText, best.x.text, best.s, false));
+      });
       if (injected.length) { accepted = false; var rewriteInjected = true; }
     }
     if (accepted) { finalAnswer = await groundMarkers(t); qualified = true; }
@@ -537,6 +569,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (d.json.time_sensitive === true) warnings.push('موضوع حساس زمنيًا؛ تحقق من أحدث تطور قبل النشر');
   warnings.push('جمع المصادر عينة مفتوحة محدودة من الويب (مصادر سمّاها النموذج واكتشاف آلي مجاني بسقف يقارب عشر صفحات)، وليست مسحًا شاملًا لكل ما هو منشور');
   if (checked.some(x => x.via === 'exa')) warnings.push('بعض الصفحات تعذّر فتحها مباشرة فجُلب نصها عبر وسيط بحث خارجي (Exa) مع إبقاء النسب لعنوان المصدر الأصلي');
+  if (claimRows.some(r => r.cross_lang) || usedXl) warnings.push('بعض المطابقات أُجريت عبر ترجمة آلية إلى لغة المصدر؛ التطابق بعد الترجمة إشارة آلية لا إثبات استدلال، والمعروض هو نص المصدر الأصلي');
   warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   if (semantic) warnings.push('المطابقة الدلالية إشارة استرجاع آلية: قد لا تكشف استبدال الكيانات أو تناقضًا دقيقًا رغم فحوص الأرقام والنفي — راجع نص المصدر الأصلي');

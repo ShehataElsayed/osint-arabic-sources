@@ -395,3 +395,55 @@ test('ask: provider-neutral — same pipeline over OpenRouter env', async () => 
   const off = await askAssistant('سؤال', CANDS, {}, scripted());
   assert.deepEqual(off, { error: 'off' });
 });
+
+test('ask: cross-language bridge supports Arabic claims from an English source, disclosed', async () => {
+  const EN_URL = 'https://www.unctad.org/publication/red-sea-crisis';
+  const EN_PAGE = `<html><head><title>UNCTAD Red Sea report</title></head><body>
+<p>Suez Canal transits fell by more than 50 percent in the first quarter of 2024 compared with the same period a year earlier</p>
+<p>Container ship arrivals at the port of Eilat dropped sharply during the same period of the crisis</p>
+</body></html>`;
+  const draft = JSON.stringify({
+    answer: 'انخفضت حركة العبور في قناة السويس بأكثر من 50% في الربع الأول 2024 [S1]. ادعاء بلا سند عن ميناء جدة [S1].',
+    claims: ['انخفضت حركة العبور في قناة السويس بأكثر من 50% في الربع الأول 2024', 'تضاعفت حركة ميناء جدة ثلاث مرات في 2024'],
+    numbers: ['50', '2024'], time_sensitive: false,
+    sources: [{ name: 'UNCTAD Red Sea report', url: EN_URL }],
+  });
+  const f = async (url, o = {}) => {
+    const u = String(url);
+    if (u.includes('generativelanguage.googleapis.com')) {
+      const prompt = JSON.parse(o.body).contents[0].parts[0].text;
+      const wrap = t => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: t }] } }] }) });
+      if (prompt.includes('أجب عن السؤال التالي')) return wrap(draft);
+      if (prompt.includes('ترجم الجمل العربية التالية')) {
+        const n = (prompt.match(/^\d+\./gm) || []).length;
+        const dict = [
+          'How did the Red Sea attacks affect shipping', 'Suez Canal transits fell by more than 50 percent in the first quarter of 2024',
+          'Jeddah port traffic tripled in 2024',
+          'Suez Canal transits fell by more than 50 percent in the first quarter of 2024', 'An unsupported claim about Jeddah port',
+        ];
+        const en = Array.from({ length: n }, (_, i) => dict[i] || `translation ${i + 1} of an Arabic sentence about shipping`);
+        return wrap(JSON.stringify({ en }));
+      }
+      if (prompt.includes('أعد كتابة الإجابة')) return wrap(JSON.stringify({ answer: 'انخفضت حركة العبور في قناة السويس بأكثر من 50% في الربع الأول 2024 حسب التقرير. لم نعثر على سند موثق لادعاء ميناء جدة فحُذف.' }));
+      if (prompt.includes('استخرج من النص التالي')) return wrap(JSON.stringify({ claims: ['انخفضت حركة العبور في قناة السويس بأكثر من 50% في الربع الأول 2024'] }));
+      if (prompt.includes('اختر رقم الجملة')) return wrap('{"index":1}');
+      if (prompt.includes('أنت مدقق ناقد')) return wrap('{"contradiction":0.1}');
+      if (prompt.includes('زوايا صحفية')) return wrap('{"issues":["فجوة"],"angles":["زاوية"]}');
+      if (prompt.includes('اختر حتى 4 أدوات')) return wrap('{"picks":[]}');
+      return wrap('{}');
+    }
+    if (u.includes('rdap.org')) return { ok: false, status: 404, json: async () => ({}) };
+    if (u.includes('api.gdeltproject.org') || u.includes('wikipedia.org')) return { ok: false, status: 429, json: async () => ({}) };
+    if (u.startsWith(EN_URL)) return { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => EN_PAGE };
+    throw new Error('unexpected fetch: ' + u);
+  };
+  const r = await askAssistant('كيف أثرت هجمات البحر الأحمر على الملاحة؟', CANDS, ENV, f);
+  const c1 = r.claims.find(c => c.text.includes('قناة السويس'));
+  const c2 = r.claims.find(c => c.text.includes('جدة'));
+  assert.ok(c1 && c1.supported, 'Arabic claim supported via translation from the English source');
+  assert.equal(c1.cross_lang, true, 'flagged as translation-assisted');
+  assert.ok(c1.evidence.includes('50 percent'), 'evidence is the original English passage');
+  assert.ok(c2 && !c2.supported, 'unsupported claim still rejected (translation does not invent support)');
+  assert.ok(r.warnings.some(w => w.includes('ترجمة آلية')), 'translation assistance disclosed');
+  assert.notEqual(r.decision, 'insufficient', 'pipeline no longer starves on language mismatch');
+});
