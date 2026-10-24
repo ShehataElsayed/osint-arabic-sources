@@ -134,6 +134,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 ---
 
+> **Archived 2026-10-25:** the Yemen tool is no longer part of the deployed guide. Its code and data are preserved under `archive/yemen/`; the notices below apply to that archived copy.
+
 ## Yemen conflict map (site/yemen.html)
 
 - Leaflet 1.9.4 (BSD-2-Clause, Vladimir Agafonkin and contributors), vendored in site/vendor/leaflet with its license.

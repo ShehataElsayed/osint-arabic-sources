@@ -1,6 +1,8 @@
-# How the verification experiment works (rag.html)
+# How the verification experiment works (assistant.html, viral-claim mode)
 
-This document describes current behavior. Code: `worker/rag-worker.js` (Worker) and `site/rag.js` (page). Tests: `tests/rag-worker.test.mjs`.
+The viral-claim mode of the NewsRAG assistant keeps the pipeline below. The assistant adds a second mode (ask your own sources with Gemini-grounded citations, Worker mode `rag`); the RAG mode ports the Python library's core ask() contract (provenance sources, exact-offset chunks, BM25 + optional Gemini-embedding retrieval, citation-ID validation, abstention) - it does not recreate the experimental lab modules.
+
+This document describes current behavior. Code: `worker/rag-worker.js` (Worker) and `site/assistant.js` (page). Tests: `tests/rag-worker.test.mjs`, `tests/rag-mode.test.mjs`, `tests/assistant-report.test.mjs`.
 
 ## Principle
 
