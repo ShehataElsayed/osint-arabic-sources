@@ -34,6 +34,7 @@ function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWR
     }
     if (u.includes('rdap.org')) return { ok: false, status: 404, json: async () => ({}) };
     if (u.includes('api.gdeltproject.org')) return gdelt ? gdelt(u) : { ok: false, status: 429, json: async () => ({}) };
+    if (u.includes('wikipedia.org/w/api.php')) return { ok: false, status: 429, json: async () => ({}) };
     for (const [prefix, handler] of Object.entries(pages)) if (u.startsWith(prefix)) return typeof handler === 'function' ? handler(u) : handler;
     throw new Error('unexpected fetch: ' + u);
   };
@@ -257,4 +258,24 @@ test('ask: discovery failure degrades silently (429 from GDELT)', async () => {
   assert.equal(r.generated, true);
   assert.equal(r.sources.filter(x => x.exists).length, 1, 'named source only when discovery unavailable');
   assert.ok(r.warnings.some(w => w.includes('عينة مفتوحة محدودة')), 'limits disclosed');
+});
+
+test('ask: shallow homepage escalates to deeper sitemap page that supports the claim', async () => {
+  const draft = JSON.stringify({
+    answer: 'خلاصة عن حرارة البحر [S1].',
+    claims: ['ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير'],
+    numbers: [], time_sensitive: false,
+    sources: [{ name: 'البوابة الرسمية للأرصاد', url: 'https://shallow.gov/' }],
+  });
+  const home = { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => '<html><head><title>البوابة</title></head><body><p>الرئيسية اتصل بنا عن الجهة روابط سريعة</p></body></html>' };
+  const smap = { ok: true, status: 200, headers: { get: () => 'application/xml' }, text: async () => '<?xml version="1.0"?><urlset><url><loc>https://shallow.gov/deep-report</loc></url></urlset>' };
+  const deep = { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE };
+  const f = scripted({ 'https://shallow.gov/sitemap.xml': smap, 'https://shallow.gov/robots.txt': notFound, 'https://shallow.gov/deep-report': deep, 'https://shallow.gov/': home }, { draft });
+  const r = await askAssistant('ما أثر موجات الحر البحرية؟', CANDS, ENV, f);
+  assert.equal(r.generated, true);
+  const src = r.sources[0];
+  assert.equal(src.url, 'https://shallow.gov/deep-report', 'adopted the deeper page');
+  assert.equal(src.escalated, true);
+  assert.equal(src.original, 'https://shallow.gov/', 'original homepage kept on record');
+  assert.ok(r.claims[0].supported, 'claim supported after escalation');
 });

@@ -222,6 +222,18 @@ export async function exaWeb(query, env, f = fetch, n = 4) {
 // as a free service rate-limited to one request every 5 seconds — one low-volume call per question, errors
 // swallowed so discovery degrades silently. Articles are discovery leads only: they enter the same
 // open-and-check pipeline as model-named sources and can support claims and citation markers.
+// Free reference discovery: Arabic Wikipedia search API. No key; Wikimedia allows low-volume automated
+// queries with a descriptive User-Agent. Articles enter the same open-and-check pipeline as everything else.
+export async function wikipediaArticles(query, f = fetch, n = 2) {
+  const q = String(query || '').trim().slice(0, 120); if (!q) return [];
+  try {
+    const u = `https://ar.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&format=json&srlimit=${Math.min(5, n)}`;
+    const r = await f(u, { headers: { 'user-agent': 'osint-guide-ask/1.0 (journalism research assistant)' }, signal: AbortSignal.timeout(6000) });
+    if (!r.ok) return [];
+    const hits = (await r.json()).query?.search || [];
+    return hits.map(h => ({ title: cleanText(h.title || '', 140), url: 'https://ar.wikipedia.org/wiki/' + encodeURIComponent(String(h.title || '').replace(/ /g, '_')), host: 'ar.wikipedia.org' })).filter(h => h.title).slice(0, n);
+  } catch { return []; }
+}
 export async function gdeltArticles(query, f = fetch, n = 6) {
   const q = String(query || '').trim().slice(0, 120); if (!q) return [];
   try {
@@ -236,7 +248,14 @@ export async function gdeltArticles(query, f = fetch, n = 6) {
 export async function repairSource(src, claimText, nums, f = fetch, env = {}) {
   const u = safeSourceUrl(src?.url); let host; try { host = new URL(u || src?.url).hostname; } catch { return null; }
   if (!u) return null;
-  const cands = pickFromSitemap(await sitemapLocs(host, f), `${src?.name || ''} ${claimText}`, host);
+  const locs = await sitemapLocs(host, f);
+  let cands = pickFromSitemap(locs, `${src?.name || ''} ${claimText}`, host);
+  // Slug-token matching misses when the claim is Arabic and the URL slug is English (the common case on
+  // official sites): fall back to a small same-host sample and let the page CONTENT decide relevance.
+  if (!cands.length) {
+    const h = host.replace(/^www\./, '');
+    cands = locs.filter(x => { try { return safeSourceUrl(x) && new URL(x).hostname.replace(/^www\./, '') === h && new URL(x).pathname.replace(/\//g, '').length > 0; } catch { return false; } }).slice(0, 3);
+  }
   for (const c of cands) { const r = await checkSource({ ...src, url: c }, claimText, nums, f); if (r.exists) return { ...r, repaired: true, original: u, via: 'sitemap' }; }
   for (const c of (await exaSameDomain(host, `${src?.name || ''} ${claimText}`, env, f)).filter(c => c !== u).slice(0, 2)) { const r = await checkSource({ ...src, url: c }, claimText, nums, f); if (r.exists) return { ...r, repaired: true, original: u, via: 'search' }; }
   return null;
@@ -298,7 +317,7 @@ export async function answer(question, env, f = fetch) {
 export async function askAssistant(question, candidates, env, f = fetch) {
   const q = String(question || '').trim().slice(0, 400);
   if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL || !q) return { error: 'off' };
-  const draftP = `أنت مساعد صحفي. أجب عن السؤال التالي إجابة مفصلة طويلة منظمة بالعربية من معرفتك: افتح بخلاصة مباشرة ثم قسّم الإجابة إلى عناوين فرعية وفقرات، وقدّم أمثلة متنوعة من سياقات وجهات مختلفة، وميّز ما هو مؤكد مما هو محل خلاف أو تحديث. إن كان السؤال عن حدث حديث جدًا أو متغير فاذكر ذلك صراحة داخل الإجابة. ثم اذكر من ثلاثة إلى ثمانية مصادر بعنوان كامل ورابط https كامل لصفحة محددة تعرف أنها موجودة فعلًا، ولا تخترع روابط ولا اقتباسات، ونوّع جهات النشر بحيث تأتي من نطاقات مستقلة قدر الإمكان. أشر إلى المصدر داخل الإجابة بصيغة [S1] [S2] بحسب ترتيب قائمتك، ولا تشر إلا إلى مصدر ذكرته. أعد JSON فقط: {"answer":"...","claims":["حتى 8 ادعاءات جوهرية قابلة للفحص من الإجابة"],"numbers":["أرقام أو تواريخ مفتاحية"],"time_sensitive":true|false,"sources":[{"name":"العنوان الكامل والجهة","url":"https://..."}]}. السؤال: ${q}`;
+  const draftP = `أنت مساعد صحفي. أجب عن السؤال التالي إجابة مفصلة طويلة منظمة بالعربية من معرفتك: افتح بخلاصة مباشرة ثم قسّم الإجابة إلى عناوين فرعية وفقرات، وقدّم أمثلة متنوعة من سياقات وجهات مختلفة، وميّز ما هو مؤكد مما هو محل خلاف أو تحديث. إن كان السؤال عن حدث حديث جدًا أو متغير فاذكر ذلك صراحة داخل الإجابة. ثم اذكر من ثلاثة إلى ثمانية مصادر بعنوان كامل ورابط https كامل لصفحة محددة تعرف أنها موجودة فعلًا، ولا تخترع روابط ولا اقتباسات، ولا تذكر صفحات رئيسية أو بوابات عامة بل رابط صفحة المحتوى المحددة، ونوّع جهات النشر بحيث تأتي من نطاقات مستقلة قدر الإمكان. أشر إلى المصدر داخل الإجابة بصيغة [S1] [S2] بحسب ترتيب قائمتك، ولا تشر إلا إلى مصدر ذكرته. أعد JSON فقط: {"answer":"...","claims":["حتى 8 ادعاءات جوهرية قابلة للفحص من الإجابة"],"numbers":["أرقام أو تواريخ مفتاحية"],"time_sensitive":true|false,"sources":[{"name":"العنوان الكامل والجهة","url":"https://..."}]}. السؤال: ${q}`;
   const d = await modelJson(draftP, env, f, 0.4, 8192);
   if (d.error === 'http_429') return { error: 'busy' };
   if (!d.json || typeof d.json.answer !== 'string' || !d.json.answer.trim()) return { error: 'upstream' };
@@ -320,7 +339,8 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (room) {
     const seen = new Set(checked.filter(x => x.exists).map(x => registrable(x.host)));
     const picks = [];
-    for (const a of await gdeltArticles(keywords(q), f, room + 4)) {
+    const pool = [...(await wikipediaArticles(keywords(q), f, 2)), ...(await gdeltArticles(keywords(q), f, room + 4))];
+    for (const a of pool) {
       const dom = registrable(a.host);
       if (seen.has(dom) || have.has(a.url)) continue;
       seen.add(dom); picks.push(a);
@@ -329,6 +349,13 @@ export async function askAssistant(question, candidates, env, f = fetch) {
     const dChecked = await Promise.all(picks.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f)), by_search: true, discovered: true })));
     checked.push(...dChecked.filter(x => x.exists));
   }
+  // Shallow-page escalation: an opened homepage or portal whose text supports nothing is a lead, not
+  // evidence. Search the site's own sitemap for a deeper page matching the question; adopt it only when
+  // it matches strictly better, keeping the original URL on record.
+  await Promise.all(checked.filter(x => x.exists && x.similarity < 0.25).map(async x => {
+    const fix = await repairSource({ name: x.name, url: x.url }, claimText, numbers, f, env);
+    if (fix && fix.exists && fix.similarity > x.similarity) { const orig = x.url; Object.assign(x, fix); x.escalated = true; x.original = orig; }
+  }));
   await Promise.all(checked.filter(x => x.exists).map(async x => { x.identity = await rdapInfo(x.host, f); x.rel = reliabilityOf(x.tier, x.identity, x.page); }));
   // Verbatim quote picking: the model only chooses among sentences already cut from the fetched page.
   await Promise.all(checked.filter(x => x.exists && x.cands.length).slice(0, 6).map(async x => {
@@ -437,7 +464,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   return {
     decision, answer: finalAnswer, answer_qualified: qualified, claims: claimRows, confidence: { score, band, criteria: crit },
-    sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), discovered: Boolean(x.discovered), original: x.repaired ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
+    sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), discovered: Boolean(x.discovered), escalated: Boolean(x.escalated), original: (x.repaired || x.escalated) ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
     issues, angles, tools: Array.isArray(tools) ? tools : [], factcheck: fcHits, time_sensitive: d.json.time_sensitive === true, warnings, generated: true
   };
 }
