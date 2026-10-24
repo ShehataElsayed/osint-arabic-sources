@@ -29,20 +29,21 @@ const fs=require('fs');
   const stored=JSON.parse(await page.evaluate(()=>localStorage.getItem('osint-verification-v2')));
   assert.ok(stored.cases[0].evidence.length>=1,'tool saved into case evidence');
   // assistant page: question-only flow against a fixture backend (fixtures live in tests only, never shipped).
-  const fixture={generated:true,
-   answer:'خلاصة مباشرة: ارتفعت درجات حرارة البحر بشكل قياسي [1]. تفصيل ثانٍ: يؤثر ذلك على الصيد والنظم البيئية [1].',
-   claims:[{text:'ارتفعت درجات حرارة البحر خلال العقد الأخير',supported:true,similarity:0.62},{text:'ادعاء غير مدعوم للاختبار',supported:false,similarity:0.05}],
-   confidence:{score:80,band:'high',criteria:[
-    {id:'sources_opened',label:'فتح المصادر المذكورة',score:1,detail:'فُتح 1 من 1'},
-    {id:'claim_support',label:'دعم المصادر للادعاءات الجوهرية',score:0.5,detail:'1 من 2 ادعاء مدعوم بنص مفتوح'},
-    {id:'independence',label:'استقلال المصادر',score:0.5,detail:'1 نطاق مستقل'},
-    {id:'source_quality',label:'موثوقية جهات النشر',score:1,detail:'مصدر رسمي بينها'},
-    {id:'self_critic',label:'نقد ذاتي للتناقض',score:1,detail:'0.10'}]},
-   sources:[{name:'تقرير المنظمة العالمية للأرصاد',url:'https://www.who.int/ar/news/item/x',claimed:'',host:'www.who.int',exists:true,title:'تقرير المنظمة العالمية للأرصاد',quote:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',picked:true,repaired:false,by_search:false,original:'',rel:'very_high',tier:'official',similarity:0.62,verified:true}],
+  const fixture={generated:true,answer_qualified:true,
+   answer:'خلاصة مباشرة: ارتفعت درجات حرارة البحر بشكل قياسي [S1]. لم نعثر على سند موثق لادعاء انخفاض الصيد في خليج السويس، فحُذف من الإجابة.',
+   claims:[{text:'ارتفعت درجات حرارة البحر خلال العقد الأخير',supported:true,similarity:0.62,evidence:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',source_ref:1},{text:'انخفض الصيد في خليج السويس بنسبة محددة',supported:false,similarity:0.05,evidence:'',source_ref:0}],
+   confidence:{score:69,band:'mid',criteria:[
+    {id:'sources_opened',label:'فتح المصادر المذكورة',score:1,detail:'فُتح 1 من 2'},
+    {id:'claim_support',label:'تطابق نصي بين الادعاءات ونصوص المصادر (لفظي، لا استدلالي)',score:0.5,detail:'1 من 2 ادعاء له سند نصي'},
+    {id:'independence',label:'استقلال نطاقات المصادر',score:0.5,detail:'1 نطاق مستقل'},
+    {id:'provenance',label:'شفافية جهات النشر (نطاق وتسجيل، لا دقة محتوى)',score:1,detail:'جهة رسمية بينها'},
+    {id:'self_critic',label:'نقد ذاتي للتناقض (تقدير آلي)',score:1,detail:'0.10'}]},
+   sources:[{name:'تقرير المنظمة العالمية للأرصاد',url:'https://www.who.int/ar/news/item/x',claimed:'',host:'www.who.int',exists:true,title:'تقرير المنظمة العالمية للأرصاد',quote:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',picked:true,repaired:false,by_search:false,original:'',rel:'very_high',tier:'official',similarity:0.62,verified:true,numbers_ok:null,negation_conflict:false,identity:{domain:'who.int',age_years:28,registrar:null,registrant:null,rdap:'ok'},page:{site_name:'WHO',author:null,has_about:true,has_contact:true}},
+    {name:'صفحة ميتة',url:'',claimed:'https://dead.example.com/gone',host:'dead.example.com',exists:false,title:'',quote:'',picked:false,repaired:false,by_search:false,original:'',rel:'unknown',tier:'unknown',similarity:0,verified:false,numbers_ok:null,negation_conflict:false,identity:null,page:null}],
    issues:['فجوة في البيانات الإقليمية المحدثة'],
    angles:['زاوية: أثر موجات الحر على صيادي الساحل وما تحتاجه من مقابلات وبيانات'],
    tools:[],factcheck:[],time_sensitive:false,
-   warnings:['مؤشر الثقة checklist آلي على معايير معلنة، وليس احتمالًا لصحة الإجابة']};
+   warnings:['حُذفت من الإجابة ادعاءات بلا سند نصي في المصادر المفتوحة أو طُوّقت صراحة بأنها غير موثقة','مؤشر الثقة checklist آلي على معايير معلنة، وليس احتمالًا لصحة الإجابة','تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال']};
   await page.route('https://osint-rag.egkrkr.workers.dev/**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixture)}));
   await page.goto('http://127.0.0.1:8765/assistant.html');
   assert.equal(await page.getByAltText('شعار OS').count(),1);
@@ -57,19 +58,26 @@ const fs=require('fs');
   assert.ok(rt.includes('خلاصة مباشرة'),'answer rendered');
   assert.ok(rt.includes('مؤشر الثقة — معايير معلنة'),'confidence card');
   assert.ok(rt.includes('وليس احتمالًا لصحة الإجابة'),'honest confidence caveat');
-  assert.ok(rt.includes('غير مدعوم'),'unsupported claim flagged');
+  assert.ok(rt.includes('لا يعني إثبات الاستدلال'),'lexical-not-entailment caveat');
+  assert.ok(rt.includes('المصادر المفتوحة (1)'),'only opened source counted');
+  assert.ok(rt.includes('لا سند نصي'),'unsupported claim flagged');
+  assert.ok(rt.includes('الإجابة بعد الفحص والتنقية'),'qualification badge shown');
+  assert.ok(rt.includes('لم نعثر على سند موثق'),'unsupported claim framed out of the answer');
+  assert.ok(rt.includes('تعذر فتح 1'),'dead source excluded and counted');
   assert.ok(rt.includes('فتح المصادر المذكورة'),'criteria checklist rendered');
-  assert.ok(rt.includes('المصادر المفتوحة (1)'),'source card count');
-  assert.ok(rt.includes('عالية جدًا'),'reliability pill');
+  
+  assert.ok(rt.includes('جهة رسمية — تصنيف نطاق'),'provenance pill, not accuracy');
+  assert.ok(rt.includes('مسجل منذ 28'),'rdap provenance shown');
+  assert.ok(rt.includes('خيوط اكتشاف لا تحققًا'),'discovery-leads caveat');
   assert.ok(rt.includes('الإشكاليات')&&rt.includes('زوايا صحفية'),'issues and angles');
   assert.ok(await page.locator('#askResult a[href^="https://www.who.int"]').count()===1,'source link present');
   assert.ok(await page.locator('#askResult .cite-chip').count()>=1,'citation chips in answer');
   assert.ok(!(await page.content()).includes('84.1'),'no historical lab metrics on assistant page');
   const gaugeAria=await page.locator('#askResult svg[role="img"]').getAttribute('aria-label');
-  assert.ok(gaugeAria.includes('80')&&gaugeAria.includes('ثقة مرتفعة نسبيًا'),'gauge accessible label');
+  assert.ok(gaugeAria.includes('69')&&gaugeAria.includes('ثقة متوسطة'),'gauge accessible label');
   const confCard=await page.evaluate(()=>{const c=document.querySelectorAll('#askResult .src-card')[1];return {op:+getComputedStyle(c).opacity,band:getComputedStyle(c.querySelector('.conf-band')).color};});
   assert.equal(confCard.op,1,'confidence card fully opaque');
-  assert.equal(confCard.band,'rgb(10, 130, 125)','guide teal for high band');
+  assert.equal(confCard.band,'rgb(184, 137, 50)','guide amber for mid band with unsupported claim');
   assert.equal(await page.evaluate(()=>sessionStorage.getItem('newsrag-sources-session-v1')),null,'no session source storage in question-only flow');
   assert.equal(await page.evaluate(()=>localStorage.getItem('newsrag-sources-v1')),null,'nothing written to localStorage');
   await page.unroute('https://osint-rag.egkrkr.workers.dev/**');

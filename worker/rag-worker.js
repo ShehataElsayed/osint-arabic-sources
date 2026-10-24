@@ -283,7 +283,7 @@ export async function answer(question, env, f = fetch) {
 export async function askAssistant(question, candidates, env, f = fetch) {
   const q = String(question || '').trim().slice(0, 400);
   if (!env.GEMINI_API_KEY || !env.GEMINI_MODEL || !q) return { error: 'off' };
-  const draftP = `أنت مساعد صحفي. أجب عن السؤال التالي إجابة مفصلة منظمة بالعربية من معرفتك: افتح بخلاصة مباشرة ثم فصّل في فقرات قصيرة، وميّز ما هو مؤكد مما هو محل خلاف أو تحديث. إن كان السؤال عن حدث حديث جدًا أو متغير فاذكر ذلك صراحة داخل الإجابة. ثم اذكر من مصدر إلى أربعة مصادر بعنوان كامل ورابط https كامل لصفحة محددة تعرف أنها موجودة فعلًا، ولا تخترع روابط ولا اقتباسات. أعد JSON فقط: {"answer":"...","claims":["حتى 5 ادعاءات جوهرية قابلة للفحص من الإجابة"],"numbers":["أرقام أو تواريخ مفتاحية"],"time_sensitive":true|false,"sources":[{"name":"العنوان الكامل والجهة","url":"https://..."}]}.
+  const draftP = `أنت مساعد صحفي. أجب عن السؤال التالي إجابة مفصلة منظمة بالعربية من معرفتك: افتح بخلاصة مباشرة ثم فصّل في فقرات قصيرة، وميّز ما هو مؤكد مما هو محل خلاف أو تحديث. إن كان السؤال عن حدث حديث جدًا أو متغير فاذكر ذلك صراحة داخل الإجابة. ثم اذكر من مصدر إلى أربعة مصادر بعنوان كامل ورابط https كامل لصفحة محددة تعرف أنها موجودة فعلًا، ولا تخترع روابط ولا اقتباسات. أشر إلى المصدر داخل الإجابة بصيغة [S1] [S2] بحسب ترتيب قائمتك، ولا تشر إلا إلى مصدر ذكرته. أعد JSON فقط: {"answer":"...","claims":["حتى 5 ادعاءات جوهرية قابلة للفحص من الإجابة"],"numbers":["أرقام أو تواريخ مفتاحية"],"time_sensitive":true|false,"sources":[{"name":"العنوان الكامل والجهة","url":"https://..."}]}.
 السؤال: ${q}`;
   const d = await modelJson(draftP, env, f, 0.4, 4096);
   if (d.error === 'http_429') return { error: 'busy' };
@@ -293,7 +293,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   const numbers = (Array.isArray(d.json.numbers) ? d.json.numbers : []).slice(0, 6).map(n => cleanText(n, 30)).filter(Boolean);
   const named = (Array.isArray(d.json.sources) ? d.json.sources : []).slice(0, 4);
   const claimText = [q, ...claims.slice(0, 3)].join(' ');
-  // Open + check model-named sources; repair through sitemap/same-domain search when a link dies.
+  // Model-named sources are discovery leads only: each must actually open and carry text to count.
   const checked = await Promise.all(named.map(async s => { const r = await checkSource(s, claimText, numbers, f); if (r.exists) return r; const fix = await repairSource(s, claimText, numbers, f, env); return fix ? { ...fix, name: r.name } : r; }));
   const have = new Set(checked.filter(x => x.exists).map(x => x.url));
   const extra = (await exaWeb(claimText, env, f, 3)).filter(x => !have.has(x.url));
@@ -307,13 +307,24 @@ export async function askAssistant(question, candidates, env, f = fetch) {
     const i = Number(r.json?.index);
     if (Number.isInteger(i) && i >= 1 && i <= x.cands.length) { x.quote = cleanText(x.cands[i - 1], 300); x.picked = Boolean(x.quote); }
   }));
-  // Per-claim support from the verbatim candidate sentences only (no model call, no page text leaves the worker).
-  const allCands = checked.filter(x => x.exists).flatMap(x => x.cands);
+  // Per-claim textual support: lexical similarity + negation parity against fetched sentences. This is a lexical
+  // match, not entailment validation; each row keeps the actual sentence and its source so the reader can judge.
+  const allCands = checked.flatMap((x, gi) => x.exists ? x.cands.map(t => ({ text: t, ref: gi + 1 })) : []);
   const claimRows = claims.map(c => {
-    const best = allCands.map(x => ({ x, s: cos(c, x) })).sort((a, b) => b.s - a.s)[0];
-    const supported = Boolean(best && best.s >= 0.4 && (negCount(c) % 2) === (negCount(best.x) % 2));
-    return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0 };
+    const best = allCands.map(x => ({ x, s: cos(c, x.text) })).sort((a, b) => b.s - a.s)[0];
+    const supported = Boolean(best && best.s >= 0.4 && (negCount(c) % 2) === (negCount(best.x.text) % 2));
+    return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0, evidence: supported ? cleanText(best.x.text, 300) : '', source_ref: supported ? best.x.ref : 0 };
   });
+  // Qualification pass: unsupported claims are removed or explicitly framed as unverified before output.
+  let finalAnswer = answerText, qualified = false;
+  const unsupported = claimRows.filter(r => !r.supported).map(r => r.text);
+  if (unsupported.length) {
+    const rw = await modelJson(`أعد كتابة الإجابة التالية بالعربية مع الالتزام: احذف الادعاءات التالية أو أطّرها صراحة بأنها غير موثقة في المصادر (مثل: «لم نعثر على سند موثق لذلك»)، وحافظ على باقي الإجابة وعلى إشارات المصادر [S#] كما هي، ولا تضف معلومات ولا روابط جديدة. أعد JSON فقط: {"answer":"..."}\nادعاءات بلا سند نصي في المصادر المفتوحة: ${unsupported.map((t, i) => `${i + 1}) ${t}`).join(' ')}\nالإجابة: ${answerText.slice(0, 2500)}`, env, f, 0.2, 4096);
+    const t = rw.json && typeof rw.json.answer === 'string' ? cleanText(rw.json.answer, 4000) : '';
+    if (t.length > 40 && !/https?:/i.test(t) && t.length <= answerText.length * 1.8) { finalAnswer = t; qualified = true; }
+  }
+  // Citation markers only count when the named source actually opened; strip the rest.
+  finalAnswer = finalAnswer.replace(/\[S(\d{1,2})\]/g, (m, n) => (checked[+n - 1] && checked[+n - 1].exists) ? `[S${n}]` : '');
   const opened = checked.filter(x => x.exists);
   const hosts = new Set(opened.map(x => registrable(x.host)));
   const critic = await modelJson(`أنت مدقق ناقد. السؤال: ${q}\nإجابة مقترحة: ${answerText.slice(0, 1200)}\nقيّم من 0 إلى 1 مدى احتمال أن الإجابة تناقض وقائع معروفة أو غير مدعومة. أعد JSON فقط: {"contradiction":0.0}`, env, f, 0);
@@ -321,30 +332,38 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   const fc = await factCheck(keywords(q), env.FACTCHECK_API_KEY, f);
   const fcHits = fc.slice(0, 3).map(x => ({ title: x.title, publisher: x.publisher, url: x.url, rating: x.rating }));
   // Transparent confidence criteria: each scored 0/0.5/1, averaged over available criteria only.
+  // Domain tier and registration data classify PROVENANCE, never content accuracy.
   const crit = [];
   const push = (id, label, score, detail) => crit.push({ id, label, score, detail });
   if (named.length) push('sources_opened', 'فتح المصادر المذكورة', opened.length / named.length >= 1 ? 1 : opened.length ? 0.5 : 0, `فُتح ${opened.length} من ${named.length}`);
   else push('sources_opened', 'فتح المصادر المذكورة', 0, 'لم يذكر النموذج مصدرًا');
-  if (claimRows.length) { const sup = claimRows.filter(r => r.supported).length / claimRows.length; push('claim_support', 'دعم المصادر للادعاءات الجوهرية', sup >= 0.8 ? 1 : sup >= 0.4 ? 0.5 : 0, `${claimRows.filter(r => r.supported).length} من ${claimRows.length} ادعاء مدعوم بنص مفتوح`); }
-  push('independence', 'استقلال المصادر', hosts.size >= 2 ? 1 : hosts.size === 1 ? 0.5 : 0, hosts.size ? `${hosts.size} نطاق مستقل` : 'لا مصدر مفتوح');
-  if (opened.length) push('source_quality', 'موثوقية جهات النشر', opened.some(x => x.rel === 'very_high' || x.rel === 'high') ? 1 : opened.some(x => x.rel === 'medium') ? 0.5 : 0, opened.map(x => x.rel).includes('very_high') ? 'مصدر رسمي بينها' : 'حسب هوية النطاق والناشر');
-  if (criticOk) push('self_critic', 'نقد ذاتي للتناقض', cs < GATE.contradiction ? 1 : 0, cs.toFixed(2));
+  if (claimRows.length) { const sup = claimRows.filter(r => r.supported).length / claimRows.length; push('claim_support', 'تطابق نصي بين الادعاءات ونصوص المصادر (لفظي، لا استدلالي)', sup >= 0.8 ? 1 : sup >= 0.4 ? 0.5 : 0, `${claimRows.filter(r => r.supported).length} من ${claimRows.length} ادعاء له سند نصي`); }
+  push('independence', 'استقلال نطاقات المصادر', hosts.size >= 2 ? 1 : hosts.size === 1 ? 0.5 : 0, hosts.size ? `${hosts.size} نطاق مستقل` : 'لا مصدر مفتوح');
+  if (opened.length) push('provenance', 'شفافية جهات النشر (نطاق وتسجيل، لا دقة محتوى)', opened.some(x => x.tier === 'official' || x.rel === 'high') ? 1 : opened.some(x => x.rel === 'medium') ? 0.5 : 0, opened.some(x => x.tier === 'official') ? 'جهة رسمية بينها' : 'حسب النطاق وبيانات التسجيل');
+  if (criticOk) push('self_critic', 'نقد ذاتي للتناقض (تقدير آلي)', cs < GATE.contradiction ? 1 : 0, cs.toFixed(2));
   if (env.FACTCHECK_API_KEY) push('factcheck_db', 'قاعدة مدققي الحقائق', fcHits.length ? 1 : 0.5, fcHits.length ? `${fcHits.length} نتيجة مطابقة` : 'لا نتيجة مطابقة');
-  const score = Math.round(100 * crit.reduce((a, c) => a + c.score, 0) / (crit.length || 1));
+  let score = Math.round(100 * crit.reduce((a, c) => a + c.score, 0) / (crit.length || 1));
+  // Hard caps: an unsupported material claim keeps the indicator out of the high band.
+  const un = claimRows.filter(r => !r.supported).length;
+  if (claimRows.length && un === claimRows.length) score = Math.min(score, 39);
+  else if (un > 0) score = Math.min(score, 69);
   const band = score >= 70 ? 'high' : score >= 40 ? 'mid' : 'low';
   // Issues + angles, grounded in the answer and the verified quotes only.
   const verifiedQuotes = checked.filter(x => x.exists && x.quote).map(x => x.quote).slice(0, 4).join('\n- ');
-  const aj = await modelJson(`السؤال: ${q}\nالإجابة بعد الفحص: ${answerText.slice(0, 1500)}\nنصوص موثقة من المصادر:\n- ${verifiedQuotes || 'لا يوجد'}\nأعد JSON فقط: {"issues":["حتى 4 إشكاليات أو فجوات في الصورة الحالية"],"angles":["حتى 4 زوايا صحفية قابلة للتنفيذ مع تحديد ما تحتاجه كل زاوية"]}`, env, f, 0.6);
+  const aj = await modelJson(`السؤال: ${q}\nالإجابة بعد الفحص: ${finalAnswer.slice(0, 1500)}\nنصوص موثقة من المصادر:\n- ${verifiedQuotes || 'لا يوجد'}\nأعد JSON فقط: {"issues":["حتى 4 إشكاليات أو فجوات في الصورة الحالية"],"angles":["حتى 4 زوايا صحفية قابلة للتنفيذ مع تحديد ما تحتاجه كل زاوية"]}`, env, f, 0.6);
   const issues = (Array.isArray(aj.json?.issues) ? aj.json.issues : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
   const angles = (Array.isArray(aj.json?.angles) ? aj.json.angles : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
   const tools = await recommend(q, candidates, env, f);
   const warnings = [];
   if (!opened.length) warnings.push('لم يُفتح أي مصدر: الإجابة من معرفة النموذج فقط');
+  if (qualified) warnings.push('حُذفت من الإجابة ادعاءات بلا سند نصي في المصادر المفتوحة أو طُوّقت صراحة بأنها غير موثقة');
+  else if (un > 0) warnings.push('توجد ادعاءات بلا سند نصي لم تُنقَّ؛ ظُلّلت في قائمة الادعاءات');
   if (d.json.time_sensitive === true) warnings.push('موضوع حساس زمنيًا؛ تحقق من أحدث تطور قبل النشر');
   warnings.push('مؤشر الثقة checklist آلي على معايير معلنة، وليس احتمالًا لصحة الإجابة');
+  warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   return {
-    answer: answerText, claims: claimRows, confidence: { score, band, criteria: crit },
-    sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), original: x.repaired ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified })),
+    answer: finalAnswer, answer_qualified: qualified, claims: claimRows, confidence: { score, band, criteria: crit },
+    sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), original: x.repaired ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
     issues, angles, tools: Array.isArray(tools) ? tools : [], factcheck: fcHits, time_sensitive: d.json.time_sensitive === true, warnings, generated: true
   };
 }

@@ -57,7 +57,7 @@ export function buildVerifyReport({ question, model, confidence, when }) {
 }
 
 const BAND_LBL = { high: 'ثقة مرتفعة نسبيًا', mid: 'ثقة متوسطة', low: 'ثقة منخفضة' };
-const TIER_LBL = { very_high: 'عالية جدًا', high: 'عالية', medium: 'متوسطة', unknown: 'غير مصنفة' };
+const TIER_LBL = { very_high: 'جهة رسمية (تصنيف نطاق)', high: 'جهة معروفة (تصنيف نطاق)', medium: 'هوية موثقة جزئيًا', unknown: 'غير مُقيَّمة' };
 
 export function buildAskReport({ question, result, catalog, when }) {
   const r = result || {};
@@ -69,8 +69,11 @@ export function buildAskReport({ question, result, catalog, when }) {
   out.push('', '## الإجابة بعد الفحص');
   out.push(r.answer || 'لا توجد إجابة.');
   if ((r.claims || []).length) {
-    out.push('', '## دعم الادعاءات');
-    r.claims.forEach(c => out.push(`- [${c.supported ? 'مدعوم' : 'غير مدعوم'}] ${line(c.text)}`));
+    out.push('', '## سند الادعاءات (تطابق نصي، لا إثبات استدلالي)');
+    r.claims.forEach(c => {
+      out.push(`- [${c.supported ? 'له سند نصي' : 'لا سند نصي'}] ${line(c.text)}`);
+      if (c.supported && c.evidence) out.push(`  السند: "${line(c.evidence)}" (المصدر [${c.source_ref}])`);
+    });
   }
   if ((conf.criteria || []).length) {
     out.push('', '## معايير مؤشر الثقة');
@@ -81,7 +84,7 @@ export function buildAskReport({ question, result, catalog, when }) {
     out.push('', '## المصادر');
     srcs.forEach((s, i) => {
       out.push(`### [${i + 1}] ${line(s.title || s.name || s.url || s.claimed)}`);
-      out.push(`الموثوقية: ${TIER_LBL[s.rel] || 'غير مصنفة'} · الحالة: ${s.exists ? 'فُتح وتحقق' : 'تعذر الفتح'} · الرابط: ${s.exists ? s.url : (s.claimed || '—')}`);
+      out.push(`الجهة: ${TIER_LBL[s.rel] || 'غير مُقيَّمة'} (تصنيف نطاق، لا تقييم دقة) · الحالة: ${s.exists ? 'فُتح وتحقق' : 'تعذر الفتح'} · الرابط: ${s.exists ? s.url : (s.claimed || '—')}`);
       if (s.repaired && s.original) out.push(`صُحّح الرابط من: ${s.original}`);
       if (s.exists && s.quote) out.push('> ' + line(s.quote));
       out.push('');

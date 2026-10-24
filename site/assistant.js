@@ -11,7 +11,17 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 const SERVER = Boolean(BACKEND_URL);
 const TEAL = '#0a827d', AMBER = '#b88932', RED = '#9b2218', NAVY = '#102735';
 const BAND = { high: { label: 'ثقة مرتفعة نسبيًا', color: TEAL }, mid: { label: 'ثقة متوسطة', color: AMBER }, low: { label: 'ثقة منخفضة', color: RED } };
-const REL = { very_high: ['عالية جدًا', 'tier-official'], high: ['عالية', 'tier-news'], medium: ['متوسطة', 'tier-academic'], unknown: ['غير مصنفة', 'tier-unknown'] };
+const REL = { very_high: ['جهة رسمية — تصنيف نطاق', 'tier-official'], high: ['جهة معروفة — تصنيف نطاق', 'tier-news'], medium: ['هوية موثقة جزئيًا', 'tier-academic'], unknown: ['غير مُقيَّمة', 'tier-unknown'] };
+const TIER_TXT = { official: 'نطاق رسمي', news: 'موقع إخباري', academic: 'موقع أكاديمي', unknown: 'نطاق غير مصنف' };
+function provenance(s) {
+  const parts = [TIER_TXT[s.tier] || TIER_TXT.unknown];
+  if (s.identity && s.identity.age_years != null) parts.push(`مسجل منذ ${s.identity.age_years} ${s.identity.age_years > 2 ? 'سنوات' : 'سنة'}`);
+  if (s.page && s.page.site_name) parts.push(s.page.site_name);
+  if (s.page && s.page.has_about) parts.push('له صفحة تعريف');
+  if (s.repaired) parts.push('صُحّح الرابط من نفس الموقع');
+  if (s.by_search) parts.push('وُجد ببحث مستقل');
+  return parts.join(' · ');
+}
 const CRIT_DOT = s => s >= 1 ? 'dot-1' : s >= 0.5 ? 'dot-half' : 'dot-0';
 
 async function post(payload) {
@@ -53,12 +63,12 @@ function gauge(conf) {
   return svg;
 }
 // [n] markers in the answer become safe link chips to the matching source card; everything else stays plain text.
-function appendMarked(p, text, count) {
-  const re = /\[(\d{1,2})\]/g; let last = 0, m;
+function appendMarked(p, text, sources) {
+  const re = /\[S?(\d{1,2})\]/g; let last = 0, m;
   while ((m = re.exec(text))) {
     p.append(document.createTextNode(text.slice(last, m.index)));
     const n = +m[1];
-    if (n >= 1 && n <= count) { const a = el('a', 'cite-chip', `[${n}]`); a.href = '#asksrc' + n; p.append(a); } else p.append(document.createTextNode(m[0]));
+    if (n >= 1 && n <= sources.length && sources[n - 1].exists) { const a = el('a', 'cite-chip', `[${n}]`); a.href = '#asksrc' + n; p.append(a); } else p.append(document.createTextNode(m[0]));
     last = m.index + m[0].length;
   }
   p.append(document.createTextNode(text.slice(last)));
@@ -66,11 +76,12 @@ function appendMarked(p, text, count) {
 
 function render(conf, question) {
   const box = $('askResult'); box.innerHTML = '';
-  const srcs = (conf.sources || []).filter(s => s.exists);
+  const allSrcs = conf.sources || [];
+  const srcs = allSrcs.filter(s => s.exists);
   const answerCard = el('div', 'src-card fade');
-  answerCard.append(el('span', 'badge true', 'الإجابة بعد الفحص'));
+  answerCard.append(el('span', 'badge true', conf.answer_qualified ? 'الإجابة بعد الفحص والتنقية' : 'الإجابة بعد الفحص'));
   const head = el('h3', null, question); head.style.margin = '12px 0 8px'; answerCard.append(head);
-  for (const para of String(conf.answer || '').split(/\n+/)) { const t = para.trim(); if (!t) continue; const p = document.createElement('p'); appendMarked(p, t, srcs.length); answerCard.append(p); }
+  for (const para of String(conf.answer || '').split(/\n+/)) { const t = para.trim(); if (!t) continue; const p = document.createElement('p'); appendMarked(p, t, allSrcs); answerCard.append(p); }
   box.append(answerCard);
 
   const confCard = el('div', 'src-card fade sec-block');
@@ -87,33 +98,44 @@ function render(conf, question) {
     crits.append(row);
   });
   wrap.append(crits); confCard.append(wrap);
-  confCard.append(el('p', 'note', 'مؤشر آلي على معايير معلنة في الدليل — وليس احتمالًا لصحة الإجابة ولا بديلًا عن مراجعة المصادر الأصلية.'));
+  confCard.append(el('p', 'note', 'مؤشر آلي على معايير معلنة: تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال — وليس احتمالًا لصحة الإجابة ولا بديلًا عن مراجعة المصادر الأصلية.'));
   const claims = (conf.claims || []).filter(c => c && c.text);
   if (claims.length) {
-    const h = el('h3', null, 'دعم الادعاءات الرئيسية'); h.style.marginTop = '14px'; confCard.append(h);
+    const h = el('h3', null, 'سند الادعاءات الرئيسية'); h.style.marginTop = '14px'; confCard.append(h);
+    confCard.append(el('p', 'note', 'السند هنا تطابق نصي مع جملة من مصدر مفتوح — وليس إثباتًا استدلاليًا لصحة الادعاء.'));
     claims.forEach(c => {
       const row = el('div', 'claim');
-      row.append(el('span', 'st ' + (c.supported ? 'st-ok' : 'st-no'), c.supported ? 'مدعوم' : 'غير مدعوم'));
-      row.append(el('span', null, c.text));
+      row.append(el('span', 'st ' + (c.supported ? 'st-ok' : 'st-no'), c.supported ? 'له سند نصي' : 'لا سند نصي'));
+      const body = el('div');
+      body.append(el('span', null, c.text));
+      if (c.supported && c.evidence) {
+        const ev = el('blockquote', null, c.evidence); ev.style.cssText = 'margin:4px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px;font-size:14px';
+        body.append(ev);
+        if (c.source_ref >= 1) { const chip = el('a', 'cite-chip', `[${c.source_ref}]`); chip.href = '#asksrc' + c.source_ref; body.append(chip); }
+      }
+      row.append(body);
       confCard.append(row);
     });
   }
   box.append(confCard);
 
-  if (srcs.length) {
+  if (allSrcs.length) {
     const srcCard = el('div', 'src-card fade sec-block');
-    srcCard.append(el('span', 'badge', `المصادر المفتوحة (${srcs.length})`));
-    srcs.forEach((s, i) => {
-      const item = el('div'); item.id = 'asksrc' + (i + 1);
+    srcCard.append(el('span', 'badge', srcs.length ? `المصادر المفتوحة (${srcs.length})` : 'المصادر'));
+    srcCard.append(el('p', 'note', 'المصادر التي يذكرها النموذج خيوط اكتشاف لا تحققًا: لا تظهر هنا إلا بعد فتحها فعلًا ومطابقة نصها.'));
+    allSrcs.forEach((s, gi) => {
+      if (!s.exists) return;
+      const n = gi + 1;
+      const item = el('div'); item.id = 'asksrc' + n;
       item.style.cssText = 'border-inline-start:4px solid ' + TEAL + ';padding:12px 14px;background:#f7faf9;border-radius:10px;margin:10px 0';
-      const a = document.createElement('a'); a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = `[${i + 1}] ${s.title || s.name || s.url}`;
+      const a = document.createElement('a'); a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = `[${n}] ${s.title || s.name || s.url}`;
       const rel = REL[s.rel] || REL.unknown;
       item.append(a, el('span', 'tier-pill ' + rel[1], rel[0]), document.createElement('br'));
-      item.append(el('small', 'note', (s.name && s.name !== s.title ? s.name + ' · ' : '') + (s.host || '') + (s.repaired ? ' · صُحّح الرابط من نفس الموقع' : '') + (s.by_search ? ' · وُجد ببحث مستقل' : '')));
+      item.append(el('small', 'note', (s.name && s.name !== s.title ? s.name + ' · ' : '') + provenance(s)));
       if (s.quote) { const q = el('blockquote', null, s.quote); q.style.cssText = 'margin:8px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px'; item.append(q); }
       srcCard.append(item);
     });
-    const failed = (conf.sources || []).filter(s => !s.exists && s.claimed);
+    const failed = allSrcs.filter(s => !s.exists && s.claimed);
     if (failed.length) srcCard.append(el('p', 'note', 'تعذر فتح ' + failed.length + ' من المصادر التي ذكرها النموذج فاستُبعدت من الإحالات.'));
     box.append(srcCard);
   }
