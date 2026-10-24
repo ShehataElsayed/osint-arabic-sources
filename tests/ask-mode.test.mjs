@@ -57,7 +57,7 @@ function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWR
 }
 const page = (body, title = 'صفحة') => ({ ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => `<html><head><title>${title}</title></head><body>${body}</body></html>` });
 const notFound = { ok: false, status: 404, headers: { get: () => 'text/html' }, text: async () => 'not found' };
-const CANDS = [{ id: 0, name: 'بيانات المناخ', description: 'قواعد بيانات مناخية مفتوحة للصحفيين' }];
+const CANDS = [{ id: 0, name: 'بيانات المناخ البحري', description: 'قواعد بيانات مفتوحة عن حرارة البحر وموجات الحر البحرية للصحفيين' }];
 
 test('ask: off without key, busy on 429 draft', async () => {
   assert.deepEqual(await askAssistant('سؤال', CANDS, {}, scripted()), { error: 'off' });
@@ -470,4 +470,14 @@ test('ask: draft without a claims field falls back to extracting claims from the
   const r = await askAssistant('ما أثر موجات الحر البحرية؟', CANDS, ENV, f2);
   assert.ok(r.claims.length >= 1, 'claims recovered from the answer text');
   assert.ok(r.claims[0].supported, 'recovered claim still checked against sources');
+});
+
+test('ask: unrelated tool pick is dropped (abstain over mislink)', async () => {
+  const unrelated = [{ id: 0, name: 'Thats Them', description: 'البحث عن الأشخاص بالاسم أو الهاتف أو البريد في السجلات العامة الأمريكية' }];
+  const f = scripted({ [OK_URL]: { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE } }, {});
+  const r = await askAssistant('ما أثر موجات الحر البحرية على الصيد؟', unrelated, ENV, f);
+  assert.equal(r.tools.length, 0, 'people-search tool for a marine question: abstain, no mislink');
+  const f2 = scripted({ [OK_URL]: { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE } }, {});
+  const r2 = await askAssistant('ما أثر موجات الحر البحرية على الصيد؟', CANDS, ENV, f2);
+  assert.equal(r2.tools.length, 1, 'lexically overlapping relevant tool kept');
 });

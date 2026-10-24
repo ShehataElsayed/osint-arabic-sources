@@ -564,8 +564,16 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   const verifiedQuotes = checked.filter(x => x.exists && x.quote).map(x => x.quote).slice(0, 4).join('\n- ');
   const toolCands = cleanCandidates(candidates);
   const aj = await modelJson(`السؤال: ${q}\nالإجابة بعد الفحص: ${finalAnswer.slice(0, 2500)}\nنصوص موثقة من المصادر:\n- ${verifiedQuotes || 'لا يوجد'}\n${toolCands.length ? `واختر حتى 4 أدوات من القائمة فقط تناسب السؤال (بمعرفاتها)، بلا روابط، ولكل أداة سبب قصير وخطوات استخدام من الوصف فقط:\n${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'لا تختر أدوات.'}\nأعد JSON فقط: {"issues":["حتى 4 إشكاليات أو فجوات في الصورة الحالية"],"angles":["حتى 4 زوايا صحفية قابلة للتنفيذ مع تحديد ما تحتاجه كل زاوية"],"picks":[{"id":رقم,"why":"...","how":"..."}]}`, env, f, 0.6);
-  const toolIds = new Set(toolCands.map(x => x.id)), seenTools = new Set(), badLink = /https?:|www\./i;
-  const tools = (Array.isArray(aj.json?.picks) ? aj.json.picks : []).filter(x => toolIds.has(Number(x?.id)) && !seenTools.has(Number(x.id)) && seenTools.add(Number(x.id)) && typeof x.why === 'string' && typeof x.how === 'string' && !badLink.test(x.why + x.how)).slice(0, 4).map(x => ({ id: Number(x.id), why: x.why.slice(0, 240), how: x.how.slice(0, 360) }));
+  const toolIds = new Map(toolCands.map(x => [x.id, x])), seenTools = new Set(), badLink = /https?:|www\./i;
+  const qToks = new Set(stok(q));
+  // Relevance guard: a picked tool must share stemmed tokens with the question (name or description),
+  // otherwise the card mislinks the guide (e.g. a people-search tool for a shipping question). No overlap → abstain.
+  const tools = (Array.isArray(aj.json?.picks) ? aj.json.picks : []).filter(x => {
+    const cand = toolIds.get(Number(x?.id));
+    if (!cand || seenTools.has(Number(x.id)) || !seenTools.add(Number(x.id))) return false;
+    if (typeof x.why !== 'string' || typeof x.how !== 'string' || badLink.test(x.why + x.how)) return false;
+    return stok(`${cand.name} ${cand.description}`).some(t => qToks.has(t));
+  }).slice(0, 4).map(x => ({ id: Number(x.id), why: x.why.slice(0, 240), how: x.how.slice(0, 360) }));
   const issues = (Array.isArray(aj.json?.issues) ? aj.json.issues : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
   const angles = (Array.isArray(aj.json?.angles) ? aj.json.angles : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
   const warnings = [];
