@@ -68,6 +68,16 @@ test('ragAsk: upstream failure returns evidence with error', async () => {
   assert.equal(busy.error, 'busy');
 });
 
+test('ragAsk: unsupported model (404) fails safe with evidence, embed falls back to lexical', async () => {
+  const notFound = await ragAsk('إطلاق عام للخدمة', SRC, {}, env, async () => ({ ok: false, status: 404 }));
+  assert.equal(notFound.error, 'upstream'); assert.ok(notFound.evidence.length > 0);
+  assert.notEqual(notFound.decision, 'answer');
+  const sources = cleanRagSources(SRC);
+  const chunks = sources.flatMap(s => chunkText(s.text).map(c => ({ source: s, ...c, tokens: ragTokens(c.text) })));
+  const retr = await ragRetrieve('إطلاق عام للخدمة', chunks, env, async () => ({ ok: false, status: 404 }));
+  assert.ok(retr.length > 0, 'lexical retrieval still returns chunks when embeddings 404');
+});
+
 test('ragAsk: semantic path uses embeddings when key present', async () => {
   let embedded = 0;
   const f = async (url, o) => { if (url.includes('batchEmbedContents')) { embedded++; const n = JSON.parse(o.body).requests.length; return { ok: true, json: async () => ({ embeddings: Array.from({ length: n }, () => ({ values: [1, 0] })) }) }; } return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'بدأ البرنامج [E1].' }] } }] }) }; };
