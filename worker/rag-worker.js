@@ -204,22 +204,26 @@ export function supportOf(claimText, sents, nums) {
   const negation_conflict = best ? (negCount(claimText) % 2) !== (negCount(best.x) % 2) : false;
   return { cands: scored.slice(0, 10).map(c => c.x.slice(0, 300)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
 }
-export async function checkSource(src, claimText, nums, f = fetch) {
-  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false };
+export async function checkSource(src, claimText, nums, f = fetch, env = {}) {
+  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' };
   if (!url) return out;
   out.host = new URL(url).hostname; out.tier = tierOf(out.host);
+  let rawText = '';
   try {
     const r = await f(url, { headers: { accept: 'text/html,text/plain', 'user-agent': 'Mozilla/5.0 (compatible; osint-guide-check)' }, redirect: 'follow', signal: AbortSignal.timeout(6000) });
     const ct = r.headers?.get?.('content-type') || 'text/html';
-    if (!r.ok || !/text\/(html|plain)/i.test(ct)) return out;
-    const raw = (await r.text()).slice(0, 400000); const text = raw.replace(/<(script|style|head|title|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|td|section|article|header|footer|blockquote)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
+    if (r.ok && /text\/(html|plain)/i.test(ct)) rawText = await r.text();
+  } catch { /* unreachable: try the search-proxy fallback */ }
+  if (!rawText) { const ext = await exaFetchText(url, env, f); if (ext) { rawText = ext; out.via = 'exa'; } }
+  if (rawText) {
+    const raw = rawText.slice(0, 400000); const text = raw.replace(/<(script|style|head|title|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|td|section|article|header|footer|blockquote)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
     out.exists = true; out.url = url;
     const tm = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i); out.title = cleanText((tm ? tm[1] : '').replace(/&nbsp;|&amp;/g, ' '), 160);
     const sents = text.split(/[.!؟?\n]+/).map(x => x.replace(/\s+/g, ' ').trim()).filter(x => x.length > 15 && x.split(' ').length >= 6);
     const sup = supportOf(claimText, sents, nums);
     out.page = pageIdentity(raw); out.cands = sup.cands; out.similarity = sup.similarity; out.quote = sup.quote;
     out.numbers_ok = sup.numbers_ok; out.negation_conflict = sup.negation_conflict; out.verified = sup.verified;
-  } catch { /* unreachable */ }
+  }
   return out;
 }
 // Link repair: when a model-cited page does not open, look for a real page on the SAME host through its own sitemap.
@@ -266,6 +270,19 @@ export async function exaWeb(query, env, f = fetch, n = 4) {
   searchCache.set(key, out);
   return out;
 }
+// Server-side page text via Exa contents: used ONLY as a fallback when our direct fetch failed (bot-block,
+// geo-block, transient). Exa fetches the page, not us; the returned text is external untrusted content and
+// flows through the same lexical checks as directly fetched text. Provenance stays the original URL, marked via='exa'.
+export async function exaFetchText(url, env, f = fetch) {
+  if (!env?.EXA_API_KEY) return null;
+  const u = safeSourceUrl(url); if (!u || denied(u)) return null;
+  try {
+    const r = await f('https://api.exa.ai/contents', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': env.EXA_API_KEY }, body: JSON.stringify({ urls: [u], text: { maxCharacters: 6000 } }), signal: AbortSignal.timeout(10000) });
+    if (!r.ok) return null;
+    const t = (await r.json()).results?.[0]?.text;
+    return t ? String(t).slice(0, 20000) : null;
+  } catch { return null; }
+}
 // Free discovery: GDELT DOC 2 API article list. No key required; its published documentation describes it
 // as a free service rate-limited to one request every 5 seconds — one low-volume call per question, errors
 // swallowed so discovery degrades silently. Articles are discovery leads only: they enter the same
@@ -304,8 +321,8 @@ export async function repairSource(src, claimText, nums, f = fetch, env = {}) {
     const h = host.replace(/^www\./, '');
     cands = locs.filter(x => { try { return safeSourceUrl(x) && new URL(x).hostname.replace(/^www\./, '') === h && new URL(x).pathname.replace(/\//g, '').length > 0; } catch { return false; } }).slice(0, 3);
   }
-  for (const c of cands) { const r = await checkSource({ ...src, url: c }, claimText, nums, f); if (r.exists) return { ...r, repaired: true, original: u, via: 'sitemap' }; }
-  for (const c of (await exaSameDomain(host, `${src?.name || ''} ${claimText}`, env, f)).filter(c => c !== u).slice(0, 2)) { const r = await checkSource({ ...src, url: c }, claimText, nums, f); if (r.exists) return { ...r, repaired: true, original: u, via: 'search' }; }
+  for (const c of cands) { const r = await checkSource({ ...src, url: c }, claimText, nums, f, env); if (r.exists) return { ...r, repaired: true, original: u, via: 'sitemap' }; }
+  for (const c of (await exaSameDomain(host, `${src?.name || ''} ${claimText}`, env, f)).filter(c => c !== u).slice(0, 2)) { const r = await checkSource({ ...src, url: c }, claimText, nums, f, env); if (r.exists) return { ...r, repaired: true, original: u, via: 'search' }; }
   return null;
 }
 export async function verifyModel(question, env, f = fetch) {
@@ -375,10 +392,10 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   const named = (Array.isArray(d.json.sources) ? d.json.sources : []).slice(0, 8);
   const claimText = [q, ...claims.slice(0, 3)].join(' ');
   // Model-named sources are discovery leads only: each must actually open and carry text to count.
-  const checked = await Promise.all(named.map(async s => { const r = await checkSource(s, claimText, numbers, f); if (r.exists) return r; const fix = await repairSource(s, claimText, numbers, f, env); return fix ? { ...fix, name: r.name } : r; }));
+  const checked = await Promise.all(named.map(async s => { const r = await checkSource(s, claimText, numbers, f, env); if (r.exists) return r; const fix = await repairSource(s, claimText, numbers, f, env); return fix ? { ...fix, name: r.name } : r; }));
   const have = new Set(checked.filter(x => x.exists).map(x => x.url));
   const extra = (await exaWeb(claimText, env, f, 3)).filter(x => !have.has(x.url));
-  const extraChecked = await Promise.all(extra.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f)), by_search: true })));
+  const extraChecked = await Promise.all(extra.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f, env)), by_search: true })));
   checked.push(...extraChecked.filter(x => x.exists));
   // Broad free discovery: widen the pool beyond model-named sources. Discovered articles are NOT decoration —
   // each opens through the same checkSource pipeline and feeds claims, citation markers and quotes. One article
@@ -389,14 +406,15 @@ export async function askAssistant(question, candidates, env, f = fetch) {
     const picks = [];
     const wikiQs = [...new Set([keywords(q), ...claims.slice(0, 1)])];
     const wiki = (await Promise.all(wikiQs.map(wq => wikipediaArticles(wq, f, 2)))).flat();
-    const pool = [...wiki, ...(await gdeltArticles(keywords(q), f, room + 4))];
+    const exaPool = env?.EXA_API_KEY ? [...(await exaWeb(keywords(q), env, f, room + 2)), ...(claims[0] ? await exaWeb(claims[0], env, f, 2) : [])] : [];
+    const pool = [...wiki, ...exaPool, ...(await gdeltArticles(keywords(q), f, room + 4))];
     for (const a of pool) {
       const dom = registrable(a.host);
       if (seen.has(dom) || have.has(a.url)) continue;
       seen.add(dom); picks.push(a);
       if (picks.length >= room) break;
     }
-    const dChecked = await Promise.all(picks.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f)), by_search: true, discovered: true })));
+    const dChecked = await Promise.all(picks.map(async x => ({ ...(await checkSource({ name: x.title || x.host, url: x.url }, claimText, numbers, f, env)), by_search: true, discovered: true })));
     checked.push(...dChecked.filter(x => x.exists));
   }
   // Shallow-page escalation: an opened homepage or portal whose text supports nothing is a lead, not
@@ -518,12 +536,13 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (typeof rewriteInjected !== 'undefined' && rewriteInjected) warnings.push('أدخلت الصياغة المقترحة ادعاءات جديدة بلا سند فاعتُمد المحتوى المقتطف');
   if (d.json.time_sensitive === true) warnings.push('موضوع حساس زمنيًا؛ تحقق من أحدث تطور قبل النشر');
   warnings.push('جمع المصادر عينة مفتوحة محدودة من الويب (مصادر سمّاها النموذج واكتشاف آلي مجاني بسقف يقارب عشر صفحات)، وليست مسحًا شاملًا لكل ما هو منشور');
+  if (checked.some(x => x.via === 'exa')) warnings.push('بعض الصفحات تعذّر فتحها مباشرة فجُلب نصها عبر وسيط بحث خارجي (Exa) مع إبقاء النسب لعنوان المصدر الأصلي');
   warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   if (semantic) warnings.push('المطابقة الدلالية إشارة استرجاع آلية: قد لا تكشف استبدال الكيانات أو تناقضًا دقيقًا رغم فحوص الأرقام والنفي — راجع نص المصدر الأصلي');
   return {
     decision, answer: finalAnswer, answer_qualified: qualified, claims: claimRows, confidence: { score, band, criteria: crit },
-    sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), discovered: Boolean(x.discovered), escalated: Boolean(x.escalated), original: (x.repaired || x.escalated) ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
+    sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), discovered: Boolean(x.discovered), escalated: Boolean(x.escalated), via: x.exists ? (x.via || '') : '', original: (x.repaired || x.escalated) ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
     issues, angles, tools: Array.isArray(tools) ? tools : [], factcheck: fcHits, time_sensitive: d.json.time_sensitive === true, warnings, generated: true
   };
 }

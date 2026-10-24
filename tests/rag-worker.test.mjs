@@ -148,3 +148,27 @@ test('supportOf: negating page and distant numbers are not support; inflected fo
   const ok = supportOf('أغلقت المدارس أبوابها بسبب الفيضانات', ['قررت الوزارة أن المدرسة أغلقت أبوابها بسبب الفيضان في المحافظات الشمالية'], []);
   assert.equal(ok.verified, true);
 });
+
+import { exaFetchText } from '../worker/rag-worker.js';
+{ // exaFetchText: off without key, returns server-fetched text with key
+  assert.equal(await exaFetchText('https://example.com/a', {}, async () => { throw new Error('no call'); }), null);
+  const f = async (u, o) => ({ ok: true, json: async () => ({ results: [{ text: 'نص الصفحة من وسيط البحث' }] }) });
+  assert.equal(await exaFetchText('https://example.com/a', { EXA_API_KEY: 'k' }, f), 'نص الصفحة من وسيط البحث');
+  assert.equal(await exaFetchText('https://example.com/a', { EXA_API_KEY: 'k' }, async () => ({ ok: false })), null);
+}
+{ // checkSource falls back to Exa contents when the direct fetch fails; provenance URL kept, via marked
+  const calls = [];
+  const f = async (u, o) => {
+    calls.push(u);
+    if (u.startsWith('https://api.exa.ai/')) return { ok: true, json: async () => ({ results: [{ text: 'أعلنت الوزارة أن سعر الخبز ارتفع بنسبة 30 في المئة الشهر الماضي في القاهرة بعد قرار مجلس الوزراء' }] }) };
+    return { ok: false, headers: { get: () => 'text/html' } };
+  };
+  const r = await checkSource({ name: 'x', url: 'https://example.com/blocked' }, 'ارتفع سعر الخبز بنسبة 30 في المئة الشهر الماضي', ['30'], f, { EXA_API_KEY: 'k' });
+  assert.equal(r.exists, true); assert.equal(r.via, 'exa'); assert.equal(r.url, 'https://example.com/blocked');
+  assert.ok(r.quote.includes('30')); assert.ok(calls.some(u => u.startsWith('https://api.exa.ai/')));
+  // no key: stays failed, no Exa call
+  const calls2 = [];
+  const f2 = async (u, o) => { calls2.push(u); return { ok: false, headers: { get: () => 'text/html' } }; };
+  const r2 = await checkSource({ name: 'x', url: 'https://example.com/blocked' }, 'سعر الخبز', [], f2, {});
+  assert.equal(r2.exists, false); assert.ok(!calls2.some(u => u.startsWith('https://api.exa.ai/')));
+}
