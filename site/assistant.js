@@ -1,227 +1,183 @@
-// مساعد NewsRAG: unified tool. RAG mode (your sources, Gemini-grounded answers with [E#] citations)
-// and viral-claim mode (Gemini verdict + automated source checks). Honest fallbacks, no invented states.
-import { retrieve } from './rag-core.js';
-import { BACKEND_URL, EXTERNAL_AI } from './rag-config.js';
-import { NOTICE } from './chat-ui.js';
-import { buildRagReport, buildVerifyReport } from './assistant-report.js';
+// مساعد NewsRAG: تجربة السؤال الواحد. المستخدم يكتب السؤال فقط؛ جيمناي يجهّز المسودة،
+// وفحوص NewsRAG تمر عليها قبل العرض (فتح المصادر، اقتباسات حرفية، دعم الادعاءات، معايير الثقة).
+// العرض: إجابة واحدة مفصلة، مؤشر ثقة بمعايير معلنة، مصادر بموثوقية جهة النشر،
+// إشكاليات، زوايا صحفية، وأدوات مناسبة من الدليل بسبب الاختيار وطريقة الاستخدام.
+import { BACKEND_URL } from './rag-config.js';
+import { buildIndex, search } from './tool-search.js';
+import { buildAskReport } from './assistant-report.js';
 
 const $ = id => document.getElementById(id);
-const el = (tag, txt, cls) => { const n = document.createElement(tag); if (txt != null) n.textContent = txt; if (cls) n.className = cls; return n; };
-const safeUrl = u => { try { return ['https:', 'http:'].includes(new URL(u).protocol) ? u : ''; } catch { return ''; } };
-const esc = s => String(s ?? '');
-const FORCE_LOCAL = new URLSearchParams(location.search).has('local');
-const SERVER = !FORCE_LOCAL && BACKEND_URL;
-const STORE_KEY = 'newsrag-sources-v1';
-const SESSION_KEY = 'newsrag-sources-session-v1';
-const OPT_KEY = 'newsrag-sources-keep-local';
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const SERVER = Boolean(BACKEND_URL);
+const TEAL = '#0a827d', AMBER = '#b88932', RED = '#9b2218', NAVY = '#102735';
+const BAND = { high: { label: 'ثقة مرتفعة نسبيًا', color: TEAL }, mid: { label: 'ثقة متوسطة', color: AMBER }, low: { label: 'ثقة منخفضة', color: RED } };
+const REL = { very_high: ['عالية جدًا', 'tier-official'], high: ['عالية', 'tier-news'], medium: ['متوسطة', 'tier-academic'], unknown: ['غير مصنفة', 'tier-unknown'] };
+const CRIT_DOT = s => s >= 1 ? 'dot-1' : s >= 0.5 ? 'dot-half' : 'dot-0';
 
-// ---------- sources store: session-scoped by default; on-device only with explicit opt-in ----------
-let keepLocal = false;
-try { keepLocal = localStorage.getItem(OPT_KEY) === '1'; } catch { /* blocked */ }
-let sources = [];
-try { sources = JSON.parse((keepLocal ? localStorage.getItem(STORE_KEY) : sessionStorage.getItem(SESSION_KEY)) || '[]'); } catch { sources = []; }
-const persist = () => {
-  try {
-    if (keepLocal) { localStorage.setItem(STORE_KEY, JSON.stringify(sources)); sessionStorage.removeItem(SESSION_KEY); }
-    else { sessionStorage.setItem(SESSION_KEY, JSON.stringify(sources)); localStorage.removeItem(STORE_KEY); }
-  } catch { /* full or blocked */ }
-};
-function renderSources() {
-  const b = $('srcList'); b.replaceChildren();
-  $('srcCount').textContent = sources.length ? `${sources.length} مصدر محفوظ ${keepLocal ? 'على هذا الجهاز' : 'لهذه الجلسة فقط'}` : 'لا توجد مصادر بعد.';
-  sources.forEach((s, i) => {
-    const c = el('article', null, 'card src-item');
-    const head = el('div', null, 'row'); head.style.justifyContent = 'space-between';
-    head.append(el('strong', `${i + 1}. ${s.title}`));
-    const del = el('button', 'حذف', 'secondary'); del.type = 'button'; del.setAttribute('aria-label', 'احذف ' + s.title);
-    del.onclick = () => { sources.splice(i, 1); persist(); renderSources(); };
-    head.append(del); c.append(head);
-    c.append(el('small', [s.publisher || 'ناشر غير محدد', s.published_at || 'تاريخ غير معروف', s.url ? 'له رابط' : 'بلا رابط', s.text.length + ' حرف'].join(' · '), 'muted'));
-    b.append(c);
+async function post(payload) {
+  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+  let data = null; try { data = await r.json(); } catch { /* ignore */ }
+  if (!r.ok || !data || data.error) {
+    const code = data && data.error;
+    const msg = code === 'off' || code === 'no_key' ? 'المساعد غير مفعّل بعد: يلزم ضبط مفتاح جيمناي على الخادم.'
+      : code === 'busy' || code === 'rate_limited' ? 'ضغط على الخدمة حاليًا — أعد المحاولة بعد دقيقة.'
+      : 'تعذر الوصول إلى الخادم — أعد المحاولة لاحقًا.';
+    throw new Error(msg);
+  }
+  return data;
+}
+async function busyWith(btn, fn) { const t = btn.textContent; btn.disabled = true; btn.textContent = 'جارٍ العمل…'; try { return await fn(); } finally { btn.disabled = false; btn.textContent = t; } }
+
+let catalog = null, tIndex = null;
+async function toolCandidates(q) {
+  catalog = catalog || await (await fetch('./search-tools.json')).json();
+  tIndex = tIndex || buildIndex(catalog);
+  const found = search(tIndex, q, { limit: 8 });
+  return (found.candidates || []).slice(0, 8).map(c => ({ id: c.id, name: c.t.name, description: c.t.description }));
+}
+const toolById = id => (tIndex ? tIndex.items[id] : null);
+
+function gauge(conf) {
+  const b = BAND[conf.band] || BAND.mid, v = Math.max(0, Math.min(100, Number(conf.score) || 0));
+  const r = 62, c = 2 * Math.PI * r, dash = c * v / 100;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 160 160'); svg.setAttribute('width', '140'); svg.setAttribute('height', '140'); svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', `مؤشر الثقة الآلي ${v} من 100 — ${b.label}`);
+  const mk = (tag, attrs) => { const n = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, val] of Object.entries(attrs)) n.setAttribute(k, val); return n; };
+  svg.append(
+    mk('circle', { cx: 80, cy: 80, r, fill: 'none', stroke: '#e6efed', 'stroke-width': 14 }),
+    mk('circle', { cx: 80, cy: 80, r, fill: 'none', stroke: b.color, 'stroke-width': 14, 'stroke-linecap': 'round', 'stroke-dasharray': `${dash} ${c - dash}`, transform: 'rotate(-90 80 80)' }),
+    mk('text', { x: 80, y: 88, 'text-anchor': 'middle', style: `font:800 34px Cairo,Tahoma,sans-serif;fill:${NAVY}` }),
+    mk('text', { x: 80, y: 108, 'text-anchor': 'middle', style: 'font:700 12px Cairo,Tahoma,sans-serif;fill:#52646d' }));
+  svg.childNodes[2].textContent = String(Math.round(v)); svg.childNodes[3].textContent = 'من 100';
+  return svg;
+}
+// [n] markers in the answer become safe link chips to the matching source card; everything else stays plain text.
+function appendMarked(p, text, count) {
+  const re = /\[(\d{1,2})\]/g; let last = 0, m;
+  while ((m = re.exec(text))) {
+    p.append(document.createTextNode(text.slice(last, m.index)));
+    const n = +m[1];
+    if (n >= 1 && n <= count) { const a = el('a', 'cite-chip', `[${n}]`); a.href = '#asksrc' + n; p.append(a); } else p.append(document.createTextNode(m[0]));
+    last = m.index + m[0].length;
+  }
+  p.append(document.createTextNode(text.slice(last)));
+}
+
+function render(conf, question) {
+  const box = $('askResult'); box.innerHTML = '';
+  const srcs = (conf.sources || []).filter(s => s.exists);
+  const answerCard = el('div', 'src-card fade');
+  answerCard.append(el('span', 'badge true', 'الإجابة بعد الفحص'));
+  const head = el('h3', null, question); head.style.margin = '12px 0 8px'; answerCard.append(head);
+  for (const para of String(conf.answer || '').split(/\n+/)) { const t = para.trim(); if (!t) continue; const p = document.createElement('p'); appendMarked(p, t, srcs.length); answerCard.append(p); }
+  box.append(answerCard);
+
+  const confCard = el('div', 'src-card fade sec-block');
+  confCard.append(el('span', 'badge', 'مؤشر الثقة — معايير معلنة'));
+  const wrap = el('div', 'conf-wrap');
+  const left = el('div'); left.append(gauge(conf.confidence || {}));
+  const band = (conf.confidence || {}).band || 'low';
+  left.append(el('div', 'conf-band band-' + band, BAND[band].label + ` — ${Math.round(conf.confidence.score)} من 100`));
+  wrap.append(left);
+  const crits = el('div');
+  ((conf.confidence || {}).criteria || []).forEach(c => {
+    const row = el('div', 'crit'); row.append(el('span', 'dot ' + CRIT_DOT(c.score)));
+    row.append(el('strong', null, c.label + ' ')); row.append(el('small', null, '— ' + c.detail));
+    crits.append(row);
   });
-}
-const normKey = s => String(s || '').replace(/\s+/g, ' ').trim();
-const dupIndex = (title, url, text) => sources.findIndex(s => (url && s.url === url) || (normKey(s.title) === normKey(title) && normKey(s.text) === normKey(text)));
-$('srcForm').onsubmit = e => {
-  e.preventDefault();
-  const url = $('sUrl').value.trim();
-  if (url && !safeUrl(url)) { $('srcStatus').textContent = 'رابط غير صالح.'; return; }
-  const t = $('sText').value.trim();
-  if (t.length < 40) { $('srcStatus').textContent = 'نص المصدر قصير جدًا (٤٠ حرفًا على الأقل).'; return; }
-  const title = $('sTitle').value.trim();
-  const dup = dupIndex(title, url, t);
-  const rec = { id: 'S' + Date.now().toString(36), title, publisher: $('sPub').value.trim(), url, published_at: $('sDate').value, source_type: $('sType').value, text: t };
-  if (dup >= 0) { rec.id = sources[dup].id; sources[dup] = rec; } else { sources.push(rec); }
-  persist(); renderSources();
-  $('srcStatus').textContent = dup >= 0 ? 'المصدر موجود بالفعل؛ حُدّث بدلًا من تكراره.' : 'أُضيف المصدر.';
-  $('srcForm').reset();
-};
-$('clearSources').onclick = () => { if (sources.length && confirm('حذف كل المصادر المحفوظة؟')) { sources = []; try { localStorage.removeItem(STORE_KEY); sessionStorage.removeItem(SESSION_KEY); } catch { /* blocked */ } persist(); renderSources(); } };
-$('ingestBtn').onclick = async () => {
-  const u = $('ingestUrl').value.trim();
-  if (!safeUrl(u)) { $('srcStatus').textContent = 'رابط غير صالح.'; return; }
-  if (!SERVER) { $('srcStatus').textContent = 'إحضار الروابط يحتاج تفعيل الخلفية (وضع محلي حاليًا).'; return; }
-  const btn = $('ingestBtn'); busyWith(btn, true);
-  try {
-    const res = await post({ mode: 'ingest', url: u });
-    if (res.error) { $('srcStatus').textContent = { url: 'تعذّر فتح الرابط (محجوب أو غير صالح).', denied: 'هذا النطاق غير مسموح بجلب نصه الكامل.', type: 'الصفحة ليست نصًا أو HTML.', empty: 'لم يُستخرج نص كافٍ من الصفحة.', fetch: 'تعذّر الوصول للصفحة.' }[res.error] || 'تعذّر إحضار الصفحة.'; return; }
-    $('sTitle').value = res.title || ''; $('sUrl').value = res.url || u; $('sText').value = res.text || '';
-    $('srcStatus').textContent = 'راجع النص المستخرج في النموذج ثم اضغط «أضف المصدر».';
-  } catch { $('srcStatus').textContent = 'تعذّر الوصول للخلفية.'; } finally { busyWith(btn, false); }
-};
-{ const box = $('persistLocal'); box.checked = keepLocal; box.onchange = () => { keepLocal = box.checked; try { localStorage.setItem(OPT_KEY, keepLocal ? '1' : '0'); } catch { /* blocked */ } persist(); renderSources(); }; }
-
-// ---------- shared helpers ----------
-const post = async body => {
-  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error('http_' + r.status);
-  return r.json();
-};
-const busyWith = (btn, on) => { btn.disabled = on; };
-function download(name, text) {
-  const a = el('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown;charset=utf-8' })); a.download = name;
-  document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 800);
-}
-function exportRow(build) {
-  const row = el('div', null, 'row export-row');
-  const dl = el('button', 'نزّل التقرير (Markdown)', 'secondary'); dl.type = 'button';
-  dl.onclick = () => download('newsrag-report.md', build());
-  const cp = el('button', 'انسخ التقرير', 'secondary'); cp.type = 'button';
-  cp.onclick = async () => { try { await navigator.clipboard.writeText(build()); cp.textContent = 'نُسخ'; setTimeout(() => cp.textContent = 'انسخ التقرير', 1500); } catch { cp.textContent = 'تعذّر النسخ'; } };
-  row.append(dl, cp);
-  return row;
-}
-const spinner = () => { const d = el('div', null, 'thinking'); d.append(el('i'), el('i'), el('i')); return d; };
-
-// ---------- RAG mode ----------
-function renderCitationAnswer(body, text) {
-  // Render model text with [E#] references as jump links to evidence cards. Model text stays clearly framed.
-  const parts = esc(text).split(/(\[E\d+\])/g);
-  const p = el('p', null, 'model-answer');
-  parts.forEach(part => {
-    const m = part.match(/^\[E(\d+)\]$/);
-    if (m) { const a = el('a', part, 'cite-chip'); a.href = '#ev-E' + m[1]; p.append(a); }
-    else p.append(document.createTextNode(part));
-  });
-  body.append(p);
-}
-function evidenceCard(e) {
-  const c = el('article', null, 'src-card fade'); c.id = 'ev-' + e.ref;
-  const head = el('div', null, 'srchead'); head.append(el('strong', `[${e.ref}] ${e.title}`)); c.append(head);
-  c.append(el('small', [e.publisher || 'ناشر غير محدد', 'النشر: ' + (e.published_at || 'غير معروف'), 'الدرجة: ' + (typeof e.score === 'number' ? e.score : '—'), `المواضع: ${e.start}–${e.end}`].join(' · ')));
-  const u = safeUrl(e.url); if (u) { const a = el('a', u, 'url'); a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; c.append(a); }
-  c.append(el('blockquote', e.excerpt, 'quote'));
-  return c;
-}
-async function askRag() {
-  const q = $('ragQuestion').value.trim();
-  if (!q) return;
-  const btn = $('askRag'); busyWith(btn, true);
-  const body = $('ragResult'); body.replaceChildren(spinner());
-  const options = { before: $('fromDate').value || undefined, after: $('toDate').value || undefined };
-  const when = new Date().toISOString();
-  try {
-    if (!sources.length) { body.replaceChildren(el('p', 'أضف مصدرًا واحدًا على الأقل من الأسفل ثم اسأل.', 'why')); return; }
-    if (SERVER) {
-      let res;
-      try { res = await post({ mode: 'rag', question: q, sources, options }); }
-      catch { res = { error: 'offline' }; }
-      if (res.error === 'offline' || res.error === 'upstream' || res.error === 'busy') {
-        body.replaceChildren(el('p', res.error === 'busy' ? 'خدمة جيمناي مشغولة الآن؛ جرّب بعد قليل.' : 'تعذّر الوصول للخلفية؛ عرض استرجاع محلي بدون توليد.', 'why'));
-        return renderLocalRag(q, body, true);
-      }
-      renderRagResult(q, res, when, body);
-    } else {
-      renderLocalRag(q, body, false);
-    }
-  } finally { busyWith(btn, false); }
-}
-function renderRagResult(q, res, when, body) {
-  body.replaceChildren();
-  if (res.error === 'no_sources') { body.append(el('p', 'أضف مصدرًا واحدًا على الأقل.', 'why')); return; }
-  const badge = el('span', res.decision === 'answer' ? 'إجابة مولدة بجيمناي' : res.decision === 'retrieve_only' ? 'استرجاع فقط (جيمناي غير مفعّل)' : 'امتناع: لا أدلة كافية', 'badge dec-' + res.decision);
-  body.append(el('h3', null, 'answer-title')).append(badge);
-  if (res.text && res.generated) renderCitationAnswer(body, res.text);
-  else if (res.text) body.append(el('p', res.text, 'meta-line'));
-  if (res.citation_refs_valid === false) body.append(el('p', 'تحذير: الإجابة تشير إلى معرّفات أدلة غير موجودة.', 'why'));
-  (res.warnings || []).forEach(w => body.append(el('small', w, 'crit-note')));
-  (res.evidence || []).forEach(e => body.append(evidenceCard(e)));
-  body.append(exportRow(() => buildRagReport({ question: q, result: res, when })));
-}
-function renderLocalRag(q, body, afterError) {
-  if (!afterError) body.replaceChildren();
-  const items = sources.map(s => ({ claim: s.title, title: s.title, text: s.text, publisher: s.publisher, rating: '' }));
-  const top = retrieve(q, items, 6).filter(x => x.similarity > 0.15);
-  if (!top.length) { body.append(el('p', 'لا تطابق كافٍ في مصادرك لهذا السؤال.', 'why')); return; }
-  body.append(el('p', 'وضع محلي: ترتيب بالكلمات فقط على جهازك، بدون توليد جيمناي.', 'meta-line'));
-  top.forEach((it, i) => body.append(evidenceCard({ ref: 'E' + (i + 1), title: it.title, publisher: it.publisher, published_at: '', score: Math.round(it.similarity * 100) / 100, start: 0, end: (it.text || '').length, excerpt: String(it.text || '').slice(0, 500), url: '' })));
-  body.append(el('small', 'الاسترجاع المحلي لا يولّد إجابة ولا يثبت صحة؛ فعّل الربط بجيمناي للإجابة الموثقة بالإحالات.', 'crit-note'));
-}
-$('askRag').onclick = askRag;
-$('ragQuestion').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); askRag(); } });
-
-// ---------- Viral-claim mode ----------
-const MARK = { pass: '✓', fail: '✗', warn: '!', na: '—' };
-const RELIABILITY = { very_high: 'عالية جدًا', high: 'عالية', medium: 'متوسطة', unknown: 'غير معروفة' };
-const CONF = { high: 'عالية', medium: 'متوسطة', low: 'منخفضة' };
-function criteriaBox(list) {
-  const box = el('div', null, 'criteria fade'); box.append(el('strong', 'نتائج المعايير'));
-  list.forEach(c => { const r = el('div', null, 'crit ' + c.status); r.append(el('span', MARK[c.status], 'mk'), el('span', c.label), el('small', c.detail)); box.append(r); });
-  box.append(el('small', 'بوابة قواعد تُطبق على إجابة النموذج وليست مراجعة مستقلة؛ لا تُعد الإجابة موثقة.', 'crit-note'));
-  return box;
-}
-function confidenceOf(crit, sources) {
-  const f = crit.filter(c => c.status === 'fail').length;
-  const strong = (sources || []).some(s => s.verified && (s.tier === 'official' || s.tier === 'news' || s.tier === 'academic'));
-  return f ? 'low' : strong ? 'high' : 'medium';
-}
-async function askVerify() {
-  const q = $('verifyQuestion').value.trim();
-  if (!q) return;
-  const btn = $('askVerify'); busyWith(btn, true);
-  const body = $('verifyResult'); body.replaceChildren(spinner());
-  const when = new Date().toISOString();
-  try {
-    if (!SERVER) { body.replaceChildren(el('p', 'وضع الادعاء المتداول يحتاج الخلفية مفعّلة.', 'why')); return; }
-    const model = await post({ mode: 'verify', question: q });
-    body.replaceChildren();
-    if (model.error) { body.append(el('p', model.error === 'busy' ? 'خدمة النموذج مشغولة الآن.' : model.error === 'off' ? 'الربط بجيمناي غير مفعّل بعد على الخادم.' : 'خدمة النموذج غير متاحة الآن.', 'why')); return; }
-    const crit = model.criteria || [];
-    const conf = confidenceOf(crit, model.sources);
-    const lead = el('h3', null, 'answer-title');
-    lead.append(el('span', model.decision === 'answer' ? 'إجابة من معرفة النموذج، وهي ليست دليلاً' : 'امتنع النموذج عن الإجابة', 'badge ' + (model.decision === 'answer' ? 'dec-answer' : 'dec-abstain')));
-    body.append(lead);
-    if (model.answer) body.append(el('p', model.answer, 'model-answer'));
-    const c = el('div', null, 'conf ' + conf);
-    c.append(el('strong', 'درجة الثقة: ' + CONF[conf]), el('small', conf === 'low' ? 'ثقة منخفضة: لا تعتمد على هذه الإجابة قبل الرجوع إلى مصدر.' : conf === 'medium' ? 'ثقة متوسطة: لم يتحقق مصدر معروف من الادعاء، فراجع مصدرًا قبل النشر.' : 'تقدير إرشادي من نتائج المعايير، وليس قياسًا ولا حكمًا نهائيًا.'));
-    body.append(c);
-    if (crit.length) body.append(criteriaBox(crit));
-    (model.sources || []).forEach(x => {
-      const r = el('article', null, 'srcrow ' + (x.verified ? 'pass' : x.exists ? 'warn' : 'fail'));
-      const head = el('div', null, 'srchead'); head.append(el('span', x.verified ? '✓' : x.exists ? '!' : '✗', 'mk'));
-      const u = safeUrl(x.url);
-      if (u) { const a = el('a', x.name || x.title || x.host); a.href = u; a.target = '_blank'; a.rel = 'noopener noreferrer'; head.append(a); } else head.append(el('strong', x.name || 'مصدر بلا عنوان'));
-      r.append(head);
-      if (x.exists) r.append(el('small', 'موثوقية الجهة (تقدير عام): ' + (RELIABILITY[x.rel] || RELIABILITY.unknown) + ' · دعم الادعاء: ' + (x.verified ? 'اجتاز الفحص' : 'لم يتحقق')));
-      else r.append(el('small', 'لم يتم فتح الرابط' + (x.claimed ? ' (المذكور: ' + x.claimed + ')' : '')));
-      if (x.quote) r.append(el('blockquote', '«' + x.quote + '»', 'quote'));
-      body.append(r);
+  wrap.append(crits); confCard.append(wrap);
+  confCard.append(el('p', 'note', 'مؤشر آلي على معايير معلنة في الدليل — وليس احتمالًا لصحة الإجابة ولا بديلًا عن مراجعة المصادر الأصلية.'));
+  const claims = (conf.claims || []).filter(c => c && c.text);
+  if (claims.length) {
+    const h = el('h3', null, 'دعم الادعاءات الرئيسية'); h.style.marginTop = '14px'; confCard.append(h);
+    claims.forEach(c => {
+      const row = el('div', 'claim');
+      row.append(el('span', 'st ' + (c.supported ? 'st-ok' : 'st-no'), c.supported ? 'مدعوم' : 'غير مدعوم'));
+      row.append(el('span', null, c.text));
+      confCard.append(row);
     });
-    body.append(exportRow(() => buildVerifyReport({ question: q, model, confidence: CONF[conf], when })));
-  } catch { body.replaceChildren(el('p', 'تعذّر إكمال الطلب.', 'why')); }
-  finally { busyWith(btn, false); }
-}
-$('askVerify').onclick = askVerify;
-$('verifyQuestion').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); askVerify(); } });
+  }
+  box.append(confCard);
 
-// ---------- tabs, chips, footer ----------
-$('tabRag').onclick = () => switchTab('rag');
-$('tabVerify').onclick = () => switchTab('verify');
-function switchTab(t) {
-  $('tabRag').setAttribute('aria-selected', t === 'rag'); $('tabVerify').setAttribute('aria-selected', t === 'verify');
-  $('panelRag').hidden = t !== 'rag'; $('panelVerify').hidden = t !== 'verify';
+  if (srcs.length) {
+    const srcCard = el('div', 'src-card fade sec-block');
+    srcCard.append(el('span', 'badge', `المصادر المفتوحة (${srcs.length})`));
+    srcs.forEach((s, i) => {
+      const item = el('div'); item.id = 'asksrc' + (i + 1);
+      item.style.cssText = 'border-inline-start:4px solid ' + TEAL + ';padding:12px 14px;background:#f7faf9;border-radius:10px;margin:10px 0';
+      const a = document.createElement('a'); a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = `[${i + 1}] ${s.title || s.name || s.url}`;
+      const rel = REL[s.rel] || REL.unknown;
+      item.append(a, el('span', 'tier-pill ' + rel[1], rel[0]), document.createElement('br'));
+      item.append(el('small', 'note', (s.name && s.name !== s.title ? s.name + ' · ' : '') + (s.host || '') + (s.repaired ? ' · صُحّح الرابط من نفس الموقع' : '') + (s.by_search ? ' · وُجد ببحث مستقل' : '')));
+      if (s.quote) { const q = el('blockquote', null, s.quote); q.style.cssText = 'margin:8px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px'; item.append(q); }
+      srcCard.append(item);
+    });
+    const failed = (conf.sources || []).filter(s => !s.exists && s.claimed);
+    if (failed.length) srcCard.append(el('p', 'note', 'تعذر فتح ' + failed.length + ' من المصادر التي ذكرها النموذج فاستُبعدت من الإحالات.'));
+    box.append(srcCard);
+  }
+
+  const fc = (conf.factcheck || []).filter(x => x && x.url);
+  if (fc.length) {
+    const c = el('div', 'src-card fade sec-block'); c.append(el('span', 'badge', 'من قاعدة مدققي الحقائق'));
+    fc.forEach(x => { const a = el('a', 'chip', (x.rating ? x.rating + ' — ' : '') + (x.title || x.publisher || x.url)); a.href = x.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.style.margin = '4px 4px 4px 0'; c.append(a); });
+    box.append(c);
+  }
+
+  if ((conf.issues || []).length) {
+    const c = el('div', 'src-card fade sec-block'); c.append(el('span', 'badge mislead', 'الإشكاليات'));
+    const ul = document.createElement('ul'); conf.issues.forEach(t => ul.append(el('li', null, t))); c.append(ul); box.append(c);
+  }
+  if ((conf.angles || []).length) {
+    const c = el('div', 'src-card fade sec-block'); c.append(el('span', 'badge', 'زوايا صحفية للعمل عليها'));
+    const ul = document.createElement('ul'); conf.angles.forEach(t => ul.append(el('li', null, t))); c.append(ul); box.append(c);
+  }
+
+  const picks = (conf.tools || []).filter(p => toolById(p.id));
+  if (picks.length) {
+    const c = el('div', 'src-card fade sec-block'); c.append(el('span', 'badge', 'أدوات مناسبة من الدليل'));
+    picks.forEach(p => {
+      const t = toolById(p.id);
+      const item = el('div'); item.style.cssText = 'margin:10px 0';
+      const a = el('a', 'chip', t.name); a.href = t.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; item.append(a);
+      if (p.why) item.append(el('p', 'note', 'لماذا تناسبك: ' + p.why));
+      if (p.how) item.append(el('p', 'note', 'كيف تستخدمها: ' + p.how));
+      c.append(item);
+    });
+    box.append(c);
+  }
+
+  const exportBtn = el('button', null, 'تنزيل التقرير (Markdown)'); exportBtn.type = 'button'; exportBtn.style.marginTop = '18px';
+  exportBtn.addEventListener('click', () => {
+    const md = buildAskReport({ question, result: conf, catalog: tIndex ? tIndex.items : [] });
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'newsrag-ask-report.md'; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  });
+  box.append(exportBtn);
 }
-document.querySelectorAll('.chip').forEach(c => c.onclick = () => { $('ragQuestion').value = c.textContent; askRag(); });
-$('notice').textContent = EXTERNAL_AI && SERVER ? NOTICE : '';
-$('mode').textContent = SERVER ? 'الوضع: خلفية مفعّلة. التوليد والتضمين الدلالي عبر جيمناي عند توفر المفتاح على الخادم.' : 'الوضع المحلي: الخلفية غير مفعّلة؛ استرجاع بالكلمات على جهازك فقط.';
-renderSources();
+
+async function run(q) {
+  const box = $('askResult'); box.innerHTML = '';
+  const spin = el('div', 'src-card fade'); spin.append(el('span', 'badge', 'يعمل الآن'));
+  spin.append(el('p', 'note', 'يجهّز جيمناي المسودة، ثم تفحص فحوص NewsRAG مصادرها قبل العرض — قد يستغرق الأمر حتى دقيقة.'));
+  box.append(spin);
+  const candidates = await toolCandidates(q).catch(() => []);
+  const conf = await post({ mode: 'ask', question: q, candidates });
+  spin.remove();
+  render(conf, q);
+}
+
+if (SERVER) {
+  $('mode').textContent = 'المساعد متصل بالخادم. يجري كل سؤال في مسار واحد: مسودة جيمناي ثم فحوص NewsRAG ثم عرض النتيجة.';
+  $('askBtn').addEventListener('click', () => busyWith($('askBtn'), async () => {
+    const q = $('askQ').value.trim();
+    if (q.length < 10) { $('askResult').innerHTML = ''; $('askResult').append(el('div', 'src-card fade', 'اكتب سؤالًا أوضح (عشرة أحرف على الأقل).')); return; }
+    try { await run(q); } catch (e) { $('askResult').innerHTML = ''; $('askResult').append(el('div', 'src-card fade', e.message)); }
+  }));
+  document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { $('askQ').value = b.textContent.trim(); $('askQ').focus(); }));
+} else {
+  $('mode').textContent = 'المساعد غير مفعّل في هذا النشر بعد: يلزم ضبط عنوان الخادم ومفتاح جيمناي عليه.';
+  $('askBtn').disabled = true;
+}

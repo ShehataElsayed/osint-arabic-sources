@@ -1,6 +1,21 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="أداة NewsRAG الجديدة: إجابات جيمناي من مصادرك بإحالات موثقة ومواضع دقيقة، وفحص آلي لمصادر الادعاءات المتداولة."><title>مساعد NewsRAG: اسأل مصادرك وتحقق من الادعاءات | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="description" content="مساعد NewsRAG: اسأل سؤالك الصحفي، يجهّز جيمناي المسودة، وتفحصها فحوص NewsRAG آليًا قبل العرض — إجابة واحدة مفصلة بالمصادر وموثوقيتها والإشكاليات وزوايا العمل، مع مؤشر ثقة آلي بمعايير معلنة."><title>مساعد NewsRAG: اسأل وجاوبك إجابة مفصلة مدعومة بالمصادر | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
 <link rel="stylesheet" href="./rag.css"><style>@media(max-width:850px){header.top{flex-direction:column;align-items:stretch}header.top .brand,header.top .topnav{width:100%}}</style><style>footer{padding-bottom:70px}</style><link rel="stylesheet" href="./shell.css"><style>
-.tabs{display:flex;gap:8px;margin-top:18px}.tab{padding:9px 18px;border-radius:10px;border:1px solid #a9cec5;background:#fff;color:#075951;font-weight:700;cursor:pointer}.tab[aria-selected="true"]{background:#0a827d;color:#fff;border-color:#0a827d}
+.chips{display:flex;flex-wrap:wrap;gap:10px;margin:6px 0 12px}.chip{background:#fff;color:#16354a;border:1px solid #dbe7e5;border-radius:16px;padding:10px 16px;font:700 14.5px Cairo,Tahoma,sans-serif;cursor:pointer;text-align:right;line-height:1.7}
+.conf-wrap{display:flex;gap:22px;align-items:center;flex-wrap:wrap;margin:14px 0}
+.conf-num{font-size:38px;font-weight:800;line-height:1}
+.conf-band{font-weight:800}
+.band-high{color:#0a827d}.band-mid{color:#b88932}.band-low{color:#9b2218}
+.crit{display:flex;gap:9px;align-items:baseline;margin:7px 0;font-size:15px}
+.crit .dot{width:12px;height:12px;border-radius:50%;flex:none;transform:translateY(1px)}
+.dot-1{background:#0a827d}.dot-half{background:#b88932}.dot-0{background:#9b2218}
+.crit small{color:#52646d}
+.claim{display:flex;gap:9px;align-items:baseline;margin:7px 0}
+.claim .st{font-weight:800;flex:none}
+.st-ok{color:#16643a}.st-no{color:#9b2218}
+.sec-block{margin-top:22px}
+.sec-block h3{margin:0 0 10px;font-size:19px}
+.tier-pill{display:inline-block;border-radius:14px;padding:1px 12px;font-size:13px;margin-inline-start:8px}
+.tier-official{background:#e1f5e8;color:#16643a}.tier-news{background:#e9f0fa;color:#1d4e89}.tier-academic{background:#efe9fa;color:#5b3d99}.tier-unknown{background:#eef2f1;color:#52646d}
 .cite-chip{display:inline-block;background:#e9f7f1;border:1px solid #a9cec5;border-radius:6px;padding:0 6px;margin:0 2px;font-size:.85em;text-decoration:none}
 .src-item{margin-top:10px}.src-item .row{margin:0}.export-row{margin:14px 0}
 .badge.dec-answer{background:#0a827d}.badge.dec-abstain{background:#b88932}.badge.dec-retrieve_only{background:#52646d}
@@ -11,62 +26,21 @@
 <section class="hero">
 <span class="badge">مدعوم بجيمناي · الإصدار الجديد</span>
 <h1>مساعد NewsRAG</h1>
-<p>اسأل مصادرك الخاصة فتجيب جيمناي من نصوصها فقط مع إحالات [E#] ومواضع دقيقة لكل مقطع، وامتناع صريح عند ضعف الدليل. أو الصق ادعاءً متداولًا ليُفحص حكم النموذج ومصادره آليًا. الإجابات مساعدة للتحقق وليست دليل نشر.</p>
-</section>
-<div class="tabs" role="tablist" aria-label="أوضاع المساعد">
-<button class="tab" id="tabRag" role="tab" aria-selected="true">اسأل مصادرك</button>
-<button class="tab" id="tabVerify" role="tab" aria-selected="false">ادعاء متداول</button>
-</div>
-<section class="box" id="panelRag" role="tabpanel">
-<span class="eyebrow">إجابة موثقة من مصادرك</span>
-<h2>١. اسأل</h2>
-<div class="chips" role="group" aria-label="أسئلة مقترحة">
-<button type="button" class="chip">لخّص أهم ما ورد في المصادر</button>
-<button type="button" class="chip">ما الذي تقوله المصادر عن الإعلان؟</button>
-<button type="button" class="chip">ما النقاط التي اختلفت فيها المصادر؟</button>
-</div>
-<label>سؤالك<textarea id="ragQuestion" rows="2" maxlength="400" placeholder="اكتب سؤالًا محددًا عن مصادرك..."></textarea></label>
-<div class="row filters">
-<label>نُشر بعد<input id="toDate" type="date"></label>
-<label>نُشر قبل<input id="fromDate" type="date"></label>
-<button id="askRag" type="button">اسأل بجيمناي</button>
-</div>
-<p id="mode" class="note"></p>
-<div id="ragResult" class="results"></div>
-</section>
-<section class="box" id="panelVerify" role="tabpanel" hidden>
-<span class="eyebrow">فحص ادعاء متداول</span>
-<h2>ادعاء متداول</h2>
-<p>يجيب النموذج من معرفته أولًا، ثم تُفتح المصادر التي يذكرها وتُفحص آليًا (وجود الرابط، دعم النص، الأرقام، هوية النطاق)، وتُطبق معايير المكتبة قبل العرض. معرفة النموذج ليست دليلًا.</p>
-<label>الادعاء أو السؤال<textarea id="verifyQuestion" rows="2" maxlength="300" placeholder="مثال: هل أعلنت الجهة الفلانية عن...؟"></textarea></label>
-<button id="askVerify" type="button">تحقق الآن</button>
-<div id="verifyResult" class="results"></div>
+<p>اسأل سؤالًا واحدًا: يجهّز جيمناي مسودة الإجابة، ثم تمر على فحوص NewsRAG للمصادر قبل العرض — رد واحد مفصل بالمصادر وتقييم موثوقيتها، الإشكاليات، وزوايا صحفية قابلة للتنفيذ، وأدوات الدليل المناسبة، مع مؤشر ثقة آلي مبني على معايير معلنة.</p>
 </section>
 <section class="box">
-<span class="eyebrow">مصادرك تبقى ملكك</span>
-<h2>٢. أضف مصادرك</h2>
-<p>الصق مقتطفات مرخّصًا لك استخدامها. تبقى في متصفحك لهذه الجلسة فقط ما لم تختر حفظها على الجهاز بالخيار أسفل النموذج، ولا تُرسل إلا عند الضغط على «اسأل بجيمناي»، حيث تُرسل حينها إلى خدمة جيمناي من جوجل لتوليد الإجابة. في الخطة المجانية قد تستخدم جوجل ما يُرسل لتحسين منتجاتها، فلا تلصق معلومات سرية أو شخصية أو مصادر غير منشورة.</p>
-<form id="srcForm">
-<div class="row fields">
-<label>عنوان المصدر<input id="sTitle" required maxlength="160"></label>
-<label>الناشر<input id="sPub" maxlength="120"></label>
-<label>رابط الأصل<input id="sUrl" type="url" placeholder="https://..."></label>
-<label>تاريخ النشر<input id="sDate" type="date"></label>
-<label>نوع المصدر<select id="sType"><option value="document">مستند</option><option value="official">رسمي</option><option value="news">إخباري</option><option value="statement">تصريح</option><option value="dataset">بيانات</option></select></label>
+<span class="eyebrow">سؤال واحد يكفي</span>
+<h2>اسأل المساعد</h2>
+<p>يُرسل سؤالك إلى خدمة جيمناي من جوجل لتجهيز المسودة، وقد تستخدمه جوجل لتحسين منتجاتها في الخطة المجانية — لا تكتب معلومات سرية أو شخصية أو مصادر غير منشورة. الإجابة مسودة بحثية تُفحص مصادرها آليًا قبل العرض؛ القرار النهائي للصحفي، ومؤشر الثقة ليس احتمالًا لصحة الإجابة.</p>
+<div class="chips">
+<button class="chip" type="button">ما أحدث تطورات سياسة المناخ في مصر؟</button>
+<button class="chip" type="button">هل أعلنت الجهة الفلانية عن الإطلاق العام؟</button>
+<button class="chip" type="button">ما الذي يقوله العلم عن موجات الحر البحرية؟</button>
 </div>
-<label>نص المصدر<textarea id="sText" required maxlength="20000" placeholder="انسخ النص الأصلي، لا الاستنتاج..." style="min-height:145px"></textarea></label>
-<button type="submit">أضف المصدر</button>
-<button type="button" id="clearSources" class="secondary">احذف الكل</button>
-<div class="row" style="margin-top:14px">
-<label style="flex:1">أو أحضر صفحة من رابط<input id="ingestUrl" type="url" dir="ltr" placeholder="https://example.com/article" style="width:100%"></label>
-<button type="button" id="ingestBtn" class="secondary">أحضر الصفحة</button>
-</div>
-<p class="muted" style="margin:4px 0 0">يُحضر النص عبر الخلفية ويملأ النموذج لمراجعتك قبل الإضافة؛ الصفحات المعتمدة على جافاسكربت أو المحجوبة قد لا تُستخرج.</p>
-<label class="checkline" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="persistLocal"> احفظ المصادر على هذا الجهاز بعد إغلاق المتصفح</label>
-</form>
-<p id="srcStatus" class="status" role="status"></p>
-<p id="srcCount" class="muted"></p>
-<div id="srcList" class="cards"></div>
+<label>سؤالك<textarea id="askQ" rows="3" maxlength="400" placeholder="اكتب سؤالك الصحفي هنا…"></textarea></label>
+<button id="askBtn" type="button">اسأل الآن</button>
+<p id="mode" class="note"></p>
+<div id="askResult" class="results"></div>
 </section>
 <p class="limits"><span id="license">المصدر: دليل المصادر المفتوحة للصحفيين العرب (NewsRAG)</span> · <a href="./methodology.html">المنهجية وحدودها</a><br>درجة التشابه والإحالات لا تثبت صحة الخبر بذاتها؛ تحقق من المصادر الأصلية قبل النشر. <span id="notice"></span></p>
 </main><footer><strong>صممت بواسطة مهندس شحاته السيد</strong><a class="fb" href="https://www.facebook.com/share/19PTDvQ789/" target="_blank" rel="noopener noreferrer">فيسبوك ↗</a></footer></div><script type="module" src="./assistant.js"></script><script src="./analytics.js" defer></script><script src="./shell.js" defer></script></body></html>

@@ -28,39 +28,51 @@ const fs=require('fs');
   await page.locator('.tf-btn').first().click();
   const stored=JSON.parse(await page.evaluate(()=>localStorage.getItem('osint-verification-v2')));
   assert.ok(stored.cases[0].evidence.length>=1,'tool saved into case evidence');
-  await page.goto('http://127.0.0.1:8765/assistant.html?local=1');
+  // assistant page: question-only flow against a fixture backend (fixtures live in tests only, never shipped).
+  const fixture={generated:true,
+   answer:'خلاصة مباشرة: ارتفعت درجات حرارة البحر بشكل قياسي [1]. تفصيل ثانٍ: يؤثر ذلك على الصيد والنظم البيئية [1].',
+   claims:[{text:'ارتفعت درجات حرارة البحر خلال العقد الأخير',supported:true,similarity:0.62},{text:'ادعاء غير مدعوم للاختبار',supported:false,similarity:0.05}],
+   confidence:{score:80,band:'high',criteria:[
+    {id:'sources_opened',label:'فتح المصادر المذكورة',score:1,detail:'فُتح 1 من 1'},
+    {id:'claim_support',label:'دعم المصادر للادعاءات الجوهرية',score:0.5,detail:'1 من 2 ادعاء مدعوم بنص مفتوح'},
+    {id:'independence',label:'استقلال المصادر',score:0.5,detail:'1 نطاق مستقل'},
+    {id:'source_quality',label:'موثوقية جهات النشر',score:1,detail:'مصدر رسمي بينها'},
+    {id:'self_critic',label:'نقد ذاتي للتناقض',score:1,detail:'0.10'}]},
+   sources:[{name:'تقرير المنظمة العالمية للأرصاد',url:'https://www.who.int/ar/news/item/x',claimed:'',host:'www.who.int',exists:true,title:'تقرير المنظمة العالمية للأرصاد',quote:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',picked:true,repaired:false,by_search:false,original:'',rel:'very_high',tier:'official',similarity:0.62,verified:true}],
+   issues:['فجوة في البيانات الإقليمية المحدثة'],
+   angles:['زاوية: أثر موجات الحر على صيادي الساحل وما تحتاجه من مقابلات وبيانات'],
+   tools:[],factcheck:[],time_sensitive:false,
+   warnings:['مؤشر الثقة checklist آلي على معايير معلنة، وليس احتمالًا لصحة الإجابة']};
+  await page.route('https://osint-rag.egkrkr.workers.dev/**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixture)}));
+  await page.goto('http://127.0.0.1:8765/assistant.html');
   assert.equal(await page.getByAltText('شعار OS').count(),1);
   await page.screenshot({path:'test-output/assistant-desktop.png'});
-  await page.getByLabel('عنوان المصدر',{exact:true}).fill('مثال اصطناعي');
-  const text='ارتفعت درجات الحرارة في تقرير المناخ. هذا مثال اصطناعي للاختبار فقط.';
-  await page.getByLabel('نص المصدر',{exact:true}).fill(text);
-  await page.getByRole('button',{name:'أضف المصدر',exact:true}).click();
-  await page.getByLabel('سؤالك',{exact:true}).fill('المناخ');
-  await page.getByRole('button',{name:'اسأل بجيمناي',exact:true}).click();
-  await page.locator('#ragResult .src-card').first().waitFor();
+  assert.equal(await page.locator('#askQ').count(),1,'single question box');
+  assert.equal(await page.locator('#askBtn').count(),1);
+  await page.getByLabel('سؤالك',{exact:true}).fill('ما أثر موجات الحر البحرية على الصيد؟');
+  await page.getByRole('button',{name:'اسأل الآن',exact:true}).click();
+  await page.locator('#askResult svg[role="img"]').waitFor();
   await page.waitForTimeout(700); // let the fade-in finish before pixel checks
-  assert.ok((await page.locator('#ragResult').innerText()).includes(text));
-  assert.ok((await page.locator('#ragResult').innerText()).includes('وضع محلي'));
-  // evidence card readable: dark text on light card, animation settled
-  const contrast = await page.evaluate(() => { const c = document.querySelector('#ragResult .src-card'); const st = getComputedStyle(c); const strong = getComputedStyle(c.querySelector('strong')); const bq = getComputedStyle(c.querySelector('blockquote')); return { op: +st.opacity, strong: strong.color, bq: bq.color, bqBg: bq.backgroundColor }; });
-  assert.equal(contrast.op, 1, 'evidence card fully opaque');
-  assert.equal(contrast.strong, 'rgb(20, 43, 49)');
-  assert.equal(contrast.bq, 'rgb(27, 58, 69)');
-  assert.equal(contrast.bqBg, 'rgb(242, 248, 247)');
-  // sources are session-scoped by default; on-device only via explicit checkbox
-  assert.equal(await page.locator('#persistLocal').isChecked(), false, 'no on-device persistence by default');
-  assert.ok(JSON.parse(await page.evaluate(() => sessionStorage.getItem('newsrag-sources-session-v1') || '[]')).length === 1, 'source kept in session storage');
-  assert.equal(await page.evaluate(() => localStorage.getItem('newsrag-sources-v1')), null, 'nothing written to localStorage');
-  // dedup: re-adding the same source updates instead of duplicating
-  await page.getByLabel('عنوان المصدر',{exact:true}).fill('مثال اصطناعي');
-  await page.getByLabel('نص المصدر',{exact:true}).fill(text);
-  await page.getByRole('button',{name:'أضف المصدر',exact:true}).click();
-  assert.ok((await page.locator('#srcStatus').innerText()).includes('موجود بالفعل'), 'duplicate add is flagged');
-  assert.ok((await page.locator('#srcCount').innerText()).startsWith('1 مصدر'), 'still one source after duplicate add');
-  // legacy lab metrics must not appear on the assistant page
-  assert.ok(!(await page.content()).includes('84.1'), 'no historical lab metrics on assistant page');
-  await page.locator('#tabVerify').click();
-  assert.ok((await page.locator('#panelVerify').isVisible()));
+  const rt=await page.locator('#askResult').innerText();
+  assert.ok(rt.includes('خلاصة مباشرة'),'answer rendered');
+  assert.ok(rt.includes('مؤشر الثقة — معايير معلنة'),'confidence card');
+  assert.ok(rt.includes('وليس احتمالًا لصحة الإجابة'),'honest confidence caveat');
+  assert.ok(rt.includes('غير مدعوم'),'unsupported claim flagged');
+  assert.ok(rt.includes('فتح المصادر المذكورة'),'criteria checklist rendered');
+  assert.ok(rt.includes('المصادر المفتوحة (1)'),'source card count');
+  assert.ok(rt.includes('عالية جدًا'),'reliability pill');
+  assert.ok(rt.includes('الإشكاليات')&&rt.includes('زوايا صحفية'),'issues and angles');
+  assert.ok(await page.locator('#askResult a[href^="https://www.who.int"]').count()===1,'source link present');
+  assert.ok(await page.locator('#askResult .cite-chip').count()>=1,'citation chips in answer');
+  assert.ok(!(await page.content()).includes('84.1'),'no historical lab metrics on assistant page');
+  const gaugeAria=await page.locator('#askResult svg[role="img"]').getAttribute('aria-label');
+  assert.ok(gaugeAria.includes('80')&&gaugeAria.includes('ثقة مرتفعة نسبيًا'),'gauge accessible label');
+  const confCard=await page.evaluate(()=>{const c=document.querySelectorAll('#askResult .src-card')[1];return {op:+getComputedStyle(c).opacity,band:getComputedStyle(c.querySelector('.conf-band')).color};});
+  assert.equal(confCard.op,1,'confidence card fully opaque');
+  assert.equal(confCard.band,'rgb(10, 130, 125)','guide teal for high band');
+  assert.equal(await page.evaluate(()=>sessionStorage.getItem('newsrag-sources-session-v1')),null,'no session source storage in question-only flow');
+  assert.equal(await page.evaluate(()=>localStorage.getItem('newsrag-sources-v1')),null,'nothing written to localStorage');
+  await page.unroute('https://osint-rag.egkrkr.workers.dev/**');
   await page.goto('http://127.0.0.1:8765/verification.html');
   await page.locator('#title').fill('اختبار حفظ محلي');
   await page.reload();assert.equal(await page.locator('#title').inputValue(),'اختبار حفظ محلي');
@@ -78,6 +90,6 @@ const fs=require('fs');
   await page.goto('http://127.0.0.1:8765/assistant.html?local=1');
   const clampDisp = await page.evaluate(() => getComputedStyle(document.querySelector('.hero p')).display);
   assert.notEqual(clampDisp, '-webkit-box', 'assistant hero paragraph not clamped on mobile');
-  console.log('PASS: Arabic Pagefind, NewsRAG assistant local retrieval, verification persistence/export, Yemen hidden, nav/logo and 3 mobile widths. No live Gemini tested.');
+  console.log('PASS: Arabic Pagefind, NewsRAG question-only assistant against fixture backend, verification persistence/export, Yemen hidden, nav/logo and 3 mobile widths. No live Gemini tested.');
  }finally{if(browser)await browser.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1});

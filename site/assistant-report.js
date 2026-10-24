@@ -55,3 +55,47 @@ export function buildVerifyReport({ question, model, confidence, when }) {
   out.push('', '---', DISCLOSURE, 'معرفة النموذج ليست دليلًا، وموثوقية الجهة تقدير عام لا يثبت صحة هذا الادعاء.');
   return out.join('\n');
 }
+
+const BAND_LBL = { high: 'ثقة مرتفعة نسبيًا', mid: 'ثقة متوسطة', low: 'ثقة منخفضة' };
+const TIER_LBL = { very_high: 'عالية جدًا', high: 'عالية', medium: 'متوسطة', unknown: 'غير مصنفة' };
+
+export function buildAskReport({ question, result, catalog, when }) {
+  const r = result || {};
+  const conf = r.confidence || { score: 0, band: 'low', criteria: [] };
+  const out = ['# تقرير مساعد NewsRAG — سؤال وجواب', ''];
+  out.push(`التاريخ: ${line(when) || new Date().toISOString()}`);
+  out.push(`السؤال: ${line(question)}`);
+  out.push(`مؤشر الثقة الآلي: ${Math.round(conf.score)} من 100 — ${BAND_LBL[conf.band] || conf.band} (معايير معلنة، وليس احتمالًا لصحة الإجابة)`);
+  out.push('', '## الإجابة بعد الفحص');
+  out.push(r.answer || 'لا توجد إجابة.');
+  if ((r.claims || []).length) {
+    out.push('', '## دعم الادعاءات');
+    r.claims.forEach(c => out.push(`- [${c.supported ? 'مدعوم' : 'غير مدعوم'}] ${line(c.text)}`));
+  }
+  if ((conf.criteria || []).length) {
+    out.push('', '## معايير مؤشر الثقة');
+    conf.criteria.forEach(c => out.push(`- (${c.score}/1) ${c.label}: ${line(c.detail)}`));
+  }
+  const srcs = r.sources || [];
+  if (srcs.length) {
+    out.push('', '## المصادر');
+    srcs.forEach((s, i) => {
+      out.push(`### [${i + 1}] ${line(s.title || s.name || s.url || s.claimed)}`);
+      out.push(`الموثوقية: ${TIER_LBL[s.rel] || 'غير مصنفة'} · الحالة: ${s.exists ? 'فُتح وتحقق' : 'تعذر الفتح'} · الرابط: ${s.exists ? s.url : (s.claimed || '—')}`);
+      if (s.repaired && s.original) out.push(`صُحّح الرابط من: ${s.original}`);
+      if (s.exists && s.quote) out.push('> ' + line(s.quote));
+      out.push('');
+    });
+  }
+  if ((r.factcheck || []).length) { out.push('', '## قاعدة مدققي الحقائق'); r.factcheck.forEach(x => out.push(`- ${line(x.rating ? x.rating + ' — ' : '')}${line(x.title)} (${x.url})`)); }
+  if ((r.issues || []).length) { out.push('', '## الإشكاليات'); r.issues.forEach(t => out.push(`- ${line(t)}`)); }
+  if ((r.angles || []).length) { out.push('', '## زوايا صحفية'); r.angles.forEach(t => out.push(`- ${line(t)}`)); }
+  const cat = Array.isArray(catalog) ? catalog : [];
+  if ((r.tools || []).length) {
+    out.push('', '## أدوات من الدليل');
+    r.tools.forEach(p => { const t = cat[p.id]; out.push(`- ${line(t ? t.name : 'أداة')} — ${t ? t.url : ''}${p.why ? ' | ' + line(p.why) : ''}`); });
+  }
+  if ((r.warnings || []).length) { out.push('', '## التحذيرات'); r.warnings.forEach(w => out.push(`- ${line(w)}`)); }
+  out.push('', '---', DISCLOSURE);
+  return out.join('\n');
+}
