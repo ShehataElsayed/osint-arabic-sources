@@ -18,7 +18,7 @@ const DRAFT = JSON.stringify({
 const REWRITE = JSON.stringify({ answer: 'خلاصة منقحة: ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي. لم نعثر على سند موثق لادعاء انخفاض الصيد في خليج السويس فحُذف من الإجابة.' });
 
 // Scripted fetch: dispatches Gemini calls by prompt content and serves page fixtures.
-function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWRITE } = {}) {
+function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWRITE, gdelt = null } = {}) {
   return async (url, o = {}) => {
     const u = String(url);
     if (u.includes('generativelanguage.googleapis.com')) {
@@ -33,6 +33,7 @@ function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWR
       return wrap('{}');
     }
     if (u.includes('rdap.org')) return { ok: false, status: 404, json: async () => ({}) };
+    if (u.includes('api.gdeltproject.org')) return gdelt ? gdelt(u) : { ok: false, status: 429, json: async () => ({}) };
     for (const [prefix, handler] of Object.entries(pages)) if (u.startsWith(prefix)) return typeof handler === 'function' ? handler(u) : handler;
     throw new Error('unexpected fetch: ' + u);
   };
@@ -206,4 +207,54 @@ test('ask: rewrite that injects a new unsupported claim degrades to extractive',
   assert.equal(r.decision, 'extractive', 'injected unsupported claim rejects the rewrite');
   assert.ok(!r.answer.includes('أزمة غذاء'), 'injected claim never shown');
   assert.ok(r.warnings.some(w => w.includes('أدخلت الصياغة')));
+});
+
+const PAGE_C2 = `<html><head><title>تغطية إخبارية إضافية</title></head><body>
+<p>تؤثر موجات الحر البحرية على الصيادين في الساحل وسبل عيشهم اليومية بشكل مباشر</p>
+<p>جملة أخرى طويلة محايدة عن موضوع مختلف تماما لا صلة لها بالمناخ أو البحار</p>
+</body></html>`;
+const DRAFT_G = JSON.stringify({
+  answer: 'خلاصة [S1]. تفصيل عن الصيادين [S2].',
+  claims: ['ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير', 'تؤثر موجات الحر البحرية على الصيادين في الساحل'],
+  numbers: [], time_sensitive: false,
+  sources: [{ name: 'تقرير المنظمة العالمية للأرصاد', url: OK_URL }],
+});
+const pageC2 = { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE_C2 };
+const pageNeutral = { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => '<html><head><title>محايد</title></head><body><p>نص محايد طويل بما يكفي ليكون مرشحا للاقتباس دون صلة حقيقية بالسؤال المطروح</p></body></html>' };
+
+test('ask: free discovery widens sources, dedups by domain, feeds claim evidence', async () => {
+  const gdelt = () => ({ ok: true, status: 200, json: async () => ({ articles: [
+    { url: 'https://extra-news.net/a1', title: 'تغطية إضافية' },
+    { url: 'https://extra-news.net/a2', title: 'نسخة مكررة من نفس النطاق' },
+    { url: 'https://other-site.org/x', title: 'مصدر محايد آخر' },
+  ] }) });
+  const f = scripted({ [OK_URL]: { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE }, 'https://extra-news.net/a1': pageC2, 'https://other-site.org/x': pageNeutral }, { draft: DRAFT_G, gdelt });
+  const r = await askAssistant('كيف تؤثر موجات الحر البحرية على الصيادين؟', CANDS, ENV, f);
+  assert.equal(r.generated, true);
+  const urls = r.sources.map(x => x.url).filter(Boolean);
+  assert.ok(urls.includes('https://extra-news.net/a1'), 'discovered article opened');
+  assert.ok(urls.includes('https://other-site.org/x'), 'second discovered domain opened');
+  assert.ok(!urls.some(u => u.includes('/a2')), 'same-domain duplicate dropped');
+  const disc = r.sources.find(x => x.url === 'https://extra-news.net/a1');
+  assert.equal(disc.discovered, true, 'marked as discovered');
+  const c2 = r.claims.find(c => c.text.includes('الصيادين'));
+  assert.ok(c2 && c2.supported, 'claim supported by a DISCOVERED page, not only model-named ones');
+  assert.equal(c2.source_ref, r.sources.indexOf(disc) + 1, 'claim points at the discovered source');
+  assert.ok(r.confidence.criteria.find(c => c.id === 'independence').detail.includes('3'), 'three independent domains counted');
+});
+
+test('ask: discovery capped at ten opened pages total', async () => {
+  const arts = Array.from({ length: 15 }, (_, i) => ({ url: `https://d${i + 1}.org/art`, title: `مصدر ${i + 1}` }));
+  const gdelt = () => ({ ok: true, status: 200, json: async () => ({ articles: arts }) });
+  const f = scripted({ [OK_URL]: { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE }, 'https://d': pageNeutral }, { draft: DRAFT_G, gdelt });
+  const r = await askAssistant('موجات الحر البحرية وتأثيرها', CANDS, ENV, f);
+  assert.ok(r.sources.length <= 10, `opened pages capped, got ${r.sources.length}`);
+});
+
+test('ask: discovery failure degrades silently (429 from GDELT)', async () => {
+  const f = scripted({ [OK_URL]: { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE } }, { draft: DRAFT_G });
+  const r = await askAssistant('موجات الحر البحرية وتأثيرها', CANDS, ENV, f);
+  assert.equal(r.generated, true);
+  assert.equal(r.sources.filter(x => x.exists).length, 1, 'named source only when discovery unavailable');
+  assert.ok(r.warnings.some(w => w.includes('عينة مفتوحة محدودة')), 'limits disclosed');
 });
