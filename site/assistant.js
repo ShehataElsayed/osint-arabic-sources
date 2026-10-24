@@ -40,17 +40,35 @@ function renderSources() {
     b.append(c);
   });
 }
+const normKey = s => String(s || '').replace(/\s+/g, ' ').trim();
+const dupIndex = (title, url, text) => sources.findIndex(s => (url && s.url === url) || (normKey(s.title) === normKey(title) && normKey(s.text) === normKey(text)));
 $('srcForm').onsubmit = e => {
   e.preventDefault();
   const url = $('sUrl').value.trim();
   if (url && !safeUrl(url)) { $('srcStatus').textContent = 'رابط غير صالح.'; return; }
   const t = $('sText').value.trim();
   if (t.length < 40) { $('srcStatus').textContent = 'نص المصدر قصير جدًا (٤٠ حرفًا على الأقل).'; return; }
-  sources.push({ id: 'S' + Date.now().toString(36), title: $('sTitle').value.trim(), publisher: $('sPub').value.trim(), url, published_at: $('sDate').value, source_type: $('sType').value, text: t });
-  persist(); renderSources(); $('srcForm').reset();
-  $('srcStatus').textContent = 'أُضيف المصدر.';
+  const title = $('sTitle').value.trim();
+  const dup = dupIndex(title, url, t);
+  const rec = { id: 'S' + Date.now().toString(36), title, publisher: $('sPub').value.trim(), url, published_at: $('sDate').value, source_type: $('sType').value, text: t };
+  if (dup >= 0) { rec.id = sources[dup].id; sources[dup] = rec; } else { sources.push(rec); }
+  persist(); renderSources();
+  $('srcStatus').textContent = dup >= 0 ? 'المصدر موجود بالفعل؛ حُدّث بدلًا من تكراره.' : 'أُضيف المصدر.';
+  $('srcForm').reset();
 };
 $('clearSources').onclick = () => { if (sources.length && confirm('حذف كل المصادر المحفوظة؟')) { sources = []; try { localStorage.removeItem(STORE_KEY); sessionStorage.removeItem(SESSION_KEY); } catch { /* blocked */ } persist(); renderSources(); } };
+$('ingestBtn').onclick = async () => {
+  const u = $('ingestUrl').value.trim();
+  if (!safeUrl(u)) { $('srcStatus').textContent = 'رابط غير صالح.'; return; }
+  if (!SERVER) { $('srcStatus').textContent = 'إحضار الروابط يحتاج تفعيل الخلفية (وضع محلي حاليًا).'; return; }
+  const btn = $('ingestBtn'); busyWith(btn, true);
+  try {
+    const res = await post({ mode: 'ingest', url: u });
+    if (res.error) { $('srcStatus').textContent = { url: 'تعذّر فتح الرابط (محجوب أو غير صالح).', denied: 'هذا النطاق غير مسموح بجلب نصه الكامل.', type: 'الصفحة ليست نصًا أو HTML.', empty: 'لم يُستخرج نص كافٍ من الصفحة.', fetch: 'تعذّر الوصول للصفحة.' }[res.error] || 'تعذّر إحضار الصفحة.'; return; }
+    $('sTitle').value = res.title || ''; $('sUrl').value = res.url || u; $('sText').value = res.text || '';
+    $('srcStatus').textContent = 'راجع النص المستخرج في النموذج ثم اضغط «أضف المصدر».';
+  } catch { $('srcStatus').textContent = 'تعذّر الوصول للخلفية.'; } finally { busyWith(btn, false); }
+};
 { const box = $('persistLocal'); box.checked = keepLocal; box.onchange = () => { keepLocal = box.checked; try { localStorage.setItem(OPT_KEY, keepLocal ? '1' : '0'); } catch { /* blocked */ } persist(); renderSources(); }; }
 
 // ---------- shared helpers ----------

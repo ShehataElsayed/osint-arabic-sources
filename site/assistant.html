@@ -57,6 +57,11 @@
 <label>نص المصدر<textarea id="sText" required maxlength="20000" placeholder="انسخ النص الأصلي، لا الاستنتاج..." style="min-height:145px"></textarea></label>
 <button type="submit">أضف المصدر</button>
 <button type="button" id="clearSources" class="secondary">احذف الكل</button>
+<div class="row" style="margin-top:14px">
+<label style="flex:1">أو أحضر صفحة من رابط<input id="ingestUrl" type="url" dir="ltr" placeholder="https://example.com/article" style="width:100%"></label>
+<button type="button" id="ingestBtn" class="secondary">أحضر الصفحة</button>
+</div>
+<p class="muted" style="margin:4px 0 0">يُحضر النص عبر الخلفية ويملأ النموذج لمراجعتك قبل الإضافة؛ الصفحات المعتمدة على جافاسكربت أو المحجوبة قد لا تُستخرج.</p>
 <label class="checkline" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="persistLocal"> احفظ المصادر على هذا الجهاز بعد إغلاق المتصفح</label>
 </form>
 <p id="srcStatus" class="status" role="status"></p>

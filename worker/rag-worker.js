@@ -394,6 +394,39 @@ export async function ragAsk(question, rawSources, opts, env, f = fetch) {
   return { type, decision: 'answer', text, evidence, cited, warnings, citation_refs_valid: !unknown.length, generated: true };
 }
 
+// Guarded single-URL ingestion: fetches one public page, extracts title + plain text for user review.
+// SSRF guards: http(s) only, no loopback/private hostnames, manual redirect re-validation (max 3 hops).
+const PRIVATE_HOST = /^(localhost|127\.|0\.|10\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1)/i;
+const cleanIngestUrl = u => { try { const x = new URL(String(u || '')); if (!/^https?:$/.test(x.protocol) || PRIVATE_HOST.test(x.hostname)) return null; return x.href; } catch { return null; } };
+const decodeEnt = t => String(t).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
+export async function ingestUrl(url, f = fetch) {
+  let cur = cleanIngestUrl(url);
+  if (!cur) return { error: 'url' };
+  if (denied(cur)) return { error: 'denied' };
+  try {
+    for (let hop = 0; hop <= 3; hop++) {
+      const r = await f(cur, { redirect: 'manual', headers: { 'user-agent': 'Mozilla/5.0 (compatible; NewsRAG/0.5; +open-sources-guide)' } });
+      if (r.status >= 300 && r.status < 400) {
+        const loc = cleanIngestUrl(new URL(r.headers.get('location') || '', cur).href);
+        if (!loc || denied(loc)) return { error: 'url' };
+        cur = loc; continue;
+      }
+      if (!r.ok) return { error: 'fetch' };
+      const type = r.headers.get('content-type') || '';
+      if (!/text\/(html|plain)/.test(type)) return { error: 'type' };
+      const raw = (await r.text()).slice(0, 400000);
+      if (type.includes('plain')) return { title: '', url: cur, text: raw.replace(/\s+/g, ' ').trim().slice(0, 20000) };
+      const mt = raw.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i) || raw.match(/<title[^>]*>([^<]*)<\/title>/i);
+      const title = decodeEnt((mt && mt[1] || '').trim()).slice(0, 160);
+      const body = raw.replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<noscript[\s\S]*?<\/noscript>/gi, ' ');
+      const text = decodeEnt(body.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim().slice(0, 20000);
+      if (text.length < 40) return { error: 'empty' };
+      return { title, url: cur, text };
+    }
+    return { error: 'url' };
+  } catch { return { error: 'fetch' }; }
+}
+
 export default {
   async fetch(req, env) {
     const o = req.headers.get('origin') || '';
@@ -404,6 +437,7 @@ export default {
     if (b?.mode === 'compose') { try { return json({ text: await compose(String(b.question || ''), b.labels, b.decision, env) }, 200, o); } catch { return json({ text: null }, 200, o); } }
     if (b?.mode === 'recommend') { try { const [rec, web] = await Promise.all([recommend(String(b.query || ''), b.candidates, env), exaWeb(String(b.query || ''), env, fetch, 3)]); return json(Array.isArray(rec) ? { picks: rec, web } : { picks: null, web, reason: rec?.error || 'off' }, 200, o); } catch { return json({ picks: null }, 200, o); } }
     if (b?.mode === 'verify') { try { return json(await verifyModel(String(b.question || ''), env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
+    if (b?.mode === 'ingest') { try { return json(await ingestUrl(String(b.url || '')), 200, o); } catch { return json({ error: 'fetch' }, 200, o); } }
     if (b?.mode === 'rag') { try { return json(await ragAsk(b.question, b.sources, b.options || {}, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     const q = String(b?.question || '').trim().slice(0, 300); if (!q) return json({ error: 'empty' }, 400, o);

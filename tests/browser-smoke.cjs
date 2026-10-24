@@ -51,6 +51,12 @@ const fs=require('fs');
   assert.equal(await page.locator('#persistLocal').isChecked(), false, 'no on-device persistence by default');
   assert.ok(JSON.parse(await page.evaluate(() => sessionStorage.getItem('newsrag-sources-session-v1') || '[]')).length === 1, 'source kept in session storage');
   assert.equal(await page.evaluate(() => localStorage.getItem('newsrag-sources-v1')), null, 'nothing written to localStorage');
+  // dedup: re-adding the same source updates instead of duplicating
+  await page.getByLabel('عنوان المصدر',{exact:true}).fill('مثال اصطناعي');
+  await page.getByLabel('نص المصدر',{exact:true}).fill(text);
+  await page.getByRole('button',{name:'أضف المصدر',exact:true}).click();
+  assert.ok((await page.locator('#srcStatus').innerText()).includes('موجود بالفعل'), 'duplicate add is flagged');
+  assert.ok((await page.locator('#srcCount').innerText()).startsWith('1 مصدر'), 'still one source after duplicate add');
   // legacy lab metrics must not appear on the assistant page
   assert.ok(!(await page.content()).includes('84.1'), 'no historical lab metrics on assistant page');
   await page.locator('#tabVerify').click();
