@@ -33,7 +33,7 @@ function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWR
       if (prompt.includes('أعد كتابة الإجابة')) return wrap(rewrite);
       if (prompt.includes('اختر رقم الجملة')) return wrap('{"index":1}');
       if (prompt.includes('أنت مدقق ناقد')) return wrap('{"contradiction":0.1}');
-      if (prompt.includes('زوايا صحفية')) return wrap('{"issues":["فجوة"],"angles":["زاوية"]}');
+      if (prompt.includes('زوايا صحفية')) return wrap('{"issues":["فجوة"],"angles":["زاوية"],"picks":[{"id":0,"why":"سبب","how":"كيف"}]}');
       if (prompt.includes('اختر حتى 4 أدوات')) return wrap('{"picks":[{"id":0,"why":"سبب","how":"كيف"}]}');
       return wrap('{}');
     }
@@ -44,7 +44,7 @@ function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWR
       if (prompt.includes('أعد كتابة الإجابة')) return wrap(rewrite);
       if (prompt.includes('اختر رقم الجملة')) return wrap('{"index":1}');
       if (prompt.includes('أنت مدقق ناقد')) return wrap('{"contradiction":0.1}');
-      if (prompt.includes('زوايا صحفية')) return wrap('{"issues":["فجوة في البيانات الإقليمية المحدثة"],"angles":["زاوية: أثر موجات الحر على صيادي الساحل"]}');
+      if (prompt.includes('زوايا صحفية')) return wrap('{"issues":["فجوة في البيانات الإقليمية المحدثة"],"angles":["زاوية: أثر موجات الحر على صيادي الساحل"],"picks":[{"id":0,"why":"تناسب البحث عن بيانات","how":"افتح الأداة وابحث بالكلمات المفتاحية"}]}');
       if (prompt.includes('اختر حتى 4 أدوات')) return wrap('{"picks":[{"id":0,"why":"تناسب البحث عن بيانات","how":"افتح الأداة وابحث بالكلمات المفتاحية"}]}');
       return wrap('{}');
     }
