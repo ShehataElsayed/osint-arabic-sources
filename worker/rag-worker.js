@@ -154,7 +154,14 @@ export function stemAr(w) {
   for (const q of ['ات', 'ان', 'ون', 'ين', 'يه', 'ها', 'هم', 'ه', 'ي']) if (x.endsWith(q) && x.length - q.length >= 3) { x = x.slice(0, -q.length); break; }
   return x;
 }
-const stok = s => nrm(s).split(' ').filter(t => t.length > 2).map(stemAr);
+// Light English stemmer for cross-language matching: strips the common inflectional suffixes so
+// ships/shipping, decreased/declining-style pairs overlap. Conservative: only suffix-strips, length-guarded.
+const stemEn = w => {
+  if (w.length <= 4) return w;
+  for (const sfx of ['ingly', 'edly', 'ing', 'ied', 'ies', 'ed', 'ly', 'es', 's']) if (w.endsWith(sfx) && w.length - sfx.length >= 3) return w.slice(0, w.length - sfx.length);
+  return w;
+};
+const stok = s => nrm(s).split(' ').filter(t => t.length > 2).map(w => /[\u0600-\u06ff]/.test(w) ? stemAr(w) : stemEn(w));
 export const ragTokens = stok;
 const NEG = new Set(['لا', 'لم', 'لن', 'ليس', 'ليست', 'ليسوا', 'غير', 'بدون', 'عدم', 'نفي', 'نفت', 'نفى', 'تنفي', 'ينفي', 'تنفى', 'ينفى', 'لايوجد', 'ما', 'not', 'no', 'never', 'without', 'hardly', 'denies', 'denied', 'deny']);
 const negCount = s => nrm(s).split(' ').filter(t => NEG.has(t) && t !== 'ما').length;
@@ -334,8 +341,8 @@ export async function repairSource(src, claimText, nums, f = fetch, env = {}) {
     const h = host.replace(/^www\./, '');
     cands = locs.filter(x => { try { return safeSourceUrl(x) && new URL(x).hostname.replace(/^www\./, '') === h && new URL(x).pathname.replace(/\//g, '').length > 0; } catch { return false; } }).slice(0, 3);
   }
-  for (const c of cands) { const r = await checkSource({ ...src, url: c }, claimText, nums, f, env); if (r.exists) return { ...r, repaired: true, original: u, via: 'sitemap' }; }
-  for (const c of (await exaSameDomain(host, `${src?.name || ''} ${claimText}`, env, f)).filter(c => c !== u).slice(0, 2)) { const r = await checkSource({ ...src, url: c }, claimText, nums, f, env); if (r.exists) return { ...r, repaired: true, original: u, via: 'search' }; }
+  for (const c of cands) { const r = await checkSource({ ...src, url: c }, claimText, nums, f, env); if (r.exists) return { ...r, repaired: true, original: u, via: r.via === 'exa' ? 'exa' : 'sitemap' }; }
+  for (const c of (await exaSameDomain(host, `${src?.name || ''} ${claimText}`, env, f)).filter(c => c !== u).slice(0, 2)) { const r = await checkSource({ ...src, url: c }, claimText, nums, f, env); if (r.exists) return { ...r, repaired: true, original: u, via: r.via === 'exa' ? 'exa' : 'search' }; }
   return null;
 }
 export async function verifyModel(question, env, f = fetch) {
