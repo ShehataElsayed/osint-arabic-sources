@@ -1,7 +1,7 @@
 // مساعد NewsRAG: unified tool. RAG mode (your sources, Gemini-grounded answers with [E#] citations)
 // and viral-claim mode (Gemini verdict + automated source checks). Honest fallbacks, no invented states.
 import { retrieve } from './rag-core.js';
-import { BACKEND_URL, MEASURED, EXTERNAL_AI } from './rag-config.js';
+import { BACKEND_URL, EXTERNAL_AI } from './rag-config.js';
 import { NOTICE } from './chat-ui.js';
 import { buildRagReport, buildVerifyReport } from './assistant-report.js';
 
@@ -12,14 +12,23 @@ const esc = s => String(s ?? '');
 const FORCE_LOCAL = new URLSearchParams(location.search).has('local');
 const SERVER = !FORCE_LOCAL && BACKEND_URL;
 const STORE_KEY = 'newsrag-sources-v1';
+const SESSION_KEY = 'newsrag-sources-session-v1';
+const OPT_KEY = 'newsrag-sources-keep-local';
 
-// ---------- sources store ----------
+// ---------- sources store: session-scoped by default; on-device only with explicit opt-in ----------
+let keepLocal = false;
+try { keepLocal = localStorage.getItem(OPT_KEY) === '1'; } catch { /* blocked */ }
 let sources = [];
-try { sources = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch { sources = []; }
-const persist = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(sources)); } catch { /* full or blocked */ } };
+try { sources = JSON.parse((keepLocal ? localStorage.getItem(STORE_KEY) : sessionStorage.getItem(SESSION_KEY)) || '[]'); } catch { sources = []; }
+const persist = () => {
+  try {
+    if (keepLocal) { localStorage.setItem(STORE_KEY, JSON.stringify(sources)); sessionStorage.removeItem(SESSION_KEY); }
+    else { sessionStorage.setItem(SESSION_KEY, JSON.stringify(sources)); localStorage.removeItem(STORE_KEY); }
+  } catch { /* full or blocked */ }
+};
 function renderSources() {
   const b = $('srcList'); b.replaceChildren();
-  $('srcCount').textContent = sources.length ? `${sources.length} مصدر محفوظ على هذا الجهاز` : 'لا توجد مصادر بعد.';
+  $('srcCount').textContent = sources.length ? `${sources.length} مصدر محفوظ ${keepLocal ? 'على هذا الجهاز' : 'لهذه الجلسة فقط'}` : 'لا توجد مصادر بعد.';
   sources.forEach((s, i) => {
     const c = el('article', null, 'card src-item');
     const head = el('div', null, 'row'); head.style.justifyContent = 'space-between';
@@ -41,7 +50,8 @@ $('srcForm').onsubmit = e => {
   persist(); renderSources(); $('srcForm').reset();
   $('srcStatus').textContent = 'أُضيف المصدر.';
 };
-$('clearSources').onclick = () => { if (sources.length && confirm('حذف كل المصادر المحفوظة على هذا الجهاز؟')) { sources = []; persist(); renderSources(); } };
+$('clearSources').onclick = () => { if (sources.length && confirm('حذف كل المصادر المحفوظة؟')) { sources = []; try { localStorage.removeItem(STORE_KEY); sessionStorage.removeItem(SESSION_KEY); } catch { /* blocked */ } persist(); renderSources(); } };
+{ const box = $('persistLocal'); box.checked = keepLocal; box.onchange = () => { keepLocal = box.checked; try { localStorage.setItem(OPT_KEY, keepLocal ? '1' : '0'); } catch { /* blocked */ } persist(); renderSources(); }; }
 
 // ---------- shared helpers ----------
 const post = async body => {
@@ -195,6 +205,5 @@ function switchTab(t) {
 }
 document.querySelectorAll('.chip').forEach(c => c.onclick = () => { $('ragQuestion').value = c.textContent; askRag(); });
 $('notice').textContent = EXTERNAL_AI && SERVER ? NOTICE : '';
-$('measured').textContent = MEASURED || '';
 $('mode').textContent = SERVER ? 'الوضع: خلفية مفعّلة. التوليد والتضمين الدلالي عبر جيمناي عند توفر المفتاح على الخادم.' : 'الوضع المحلي: الخلفية غير مفعّلة؛ استرجاع بالكلمات على جهازك فقط.';
 renderSources();
