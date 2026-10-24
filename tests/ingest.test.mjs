@@ -15,12 +15,25 @@ test('ingestUrl: og:title preferred over <title>', async () => {
   assert.equal(r.title, 'عنوان أو جي');
 });
 
-test('ingestUrl: blocks loopback/private and non-http schemes without fetching', async () => {
+test('ingestUrl: blocks loopback/private, encoded IPs, IPv6, and non-http schemes without fetching', async () => {
   let called = 0; const f = async () => { called++; return { ok: true, status: 200, headers: new Headers({ 'content-type': 'text/html' }), text: async () => HTML }; };
-  for (const u of ['http://127.0.0.1/x', 'http://localhost/x', 'http://192.168.1.1/x', 'http://10.0.0.5/x', 'http://169.254.169.254/latest', 'ftp://example.org/x', 'not-a-url']) {
-    assert.equal((await ingestUrl(u, f)).error, u.startsWith('ftp') || u === 'not-a-url' ? 'url' : 'url', u);
-  }
+  const blocked = ['http://127.0.0.1/x', 'http://localhost/x', 'http://192.168.1.1/x', 'http://10.0.0.5/x', 'http://169.254.169.254/latest',
+    'http://2130706433/x',           // decimal 127.0.0.1
+    'http://0x7f.0x0.0x0.0x1/x',     // hex octets
+    'http://0177.0.0.1/x',           // octal
+    'http://[::1]/x', 'http://[fd00::1]/x', 'http://[fe80::1]/x',
+    'http://printer.local/x', 'http://nas.internal/x',
+    'ftp://example.org/x', 'not-a-url'];
+  for (const u of blocked) assert.equal((await ingestUrl(u, f)).error, 'url', u);
   assert.equal(called, 0);
+});
+
+test('ingestUrl: rejects oversized declared bodies and caps actual reads', async () => {
+  const big = await ingestUrl('https://example.org/big', async () => ({ ok: true, status: 200, headers: new Headers({ 'content-type': 'text/html', 'content-length': '9000000' }), text: async () => HTML }));
+  assert.equal(big.error, 'type');
+  const longBody = '<p>' + 'كلمة '.repeat(200000) + '</p>';
+  const r = await ingestUrl('https://example.org/long', async () => ({ ok: true, status: 200, headers: new Headers({ 'content-type': 'text/html' }), text: async () => longBody }));
+  assert.ok(!r.error && r.text.length <= 20000, 'extracted text capped');
 });
 
 test('ingestUrl: follows validated redirects, re-checks each hop', async () => {

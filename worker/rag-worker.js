@@ -395,9 +395,32 @@ export async function ragAsk(question, rawSources, opts, env, f = fetch) {
 }
 
 // Guarded single-URL ingestion: fetches one public page, extracts title + plain text for user review.
-// SSRF guards: http(s) only, no loopback/private hostnames, manual redirect re-validation (max 3 hops).
-const PRIVATE_HOST = /^(localhost|127\.|0\.|10\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1)/i;
-const cleanIngestUrl = u => { try { const x = new URL(String(u || '')); if (!/^https?:$/.test(x.protocol) || PRIVATE_HOST.test(x.hostname)) return null; return x.href; } catch { return null; } };
+// SSRF posture (defense in depth): code fails closed on anything but a public domain name (all IP
+// literals and private-style hostnames rejected, every redirect hop re-validated, max 3 hops), AND the
+// Workers runtime itself restricts global fetch() to the public internet at connect() time
+// (workerd restrictPeers, incl. DNS-rebind targets). No inbound request headers/cookies are forwarded;
+// the only header sent is a descriptive UA. Bodies: 12s timeout, >2MB declared length rejected, 400KB read cap.
+// Fail closed: domain names only. The WHATWG URL parser normalizes every IPv4 notation (dotted,
+// decimal, hex, octal) to dotted-quad, so /^[\d.]+$/ catches all of them; ':' catches IPv6 literals.
+const PRIVATE_NAME = /(^|\.)(localhost|local|internal|lan|home|corp)$/i;
+const cleanIngestUrl = u => {
+  try {
+    const x = new URL(String(u || ''));
+    if (!/^https?:$/.test(x.protocol)) return null;
+    const h = x.hostname;
+    if (!h || h.includes(':') || /^[\d.]+$/.test(h) || PRIVATE_NAME.test(h)) return null;
+    return x.href;
+  } catch { return null; }
+};
+// Capped body read: never buffers more than `cap` bytes of an upstream response.
+async function readCapped(r, cap) {
+  if (r.body && r.body.getReader) {
+    const rd = r.body.getReader(); const parts = []; let n = 0;
+    for (;;) { const { done, value } = await rd.read(); if (done) break; n += value.byteLength; parts.push(value); if (n >= cap) { try { await rd.cancel(); } catch { /* closed */ } break; } }
+    return new TextDecoder().decode(parts.length === 1 ? parts[0] : await new Blob(parts).arrayBuffer());
+  }
+  return String(await r.text()).slice(0, cap);
+}
 const decodeEnt = t => String(t).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
 export async function ingestUrl(url, f = fetch) {
   let cur = cleanIngestUrl(url);
@@ -405,7 +428,7 @@ export async function ingestUrl(url, f = fetch) {
   if (denied(cur)) return { error: 'denied' };
   try {
     for (let hop = 0; hop <= 3; hop++) {
-      const r = await f(cur, { redirect: 'manual', headers: { 'user-agent': 'Mozilla/5.0 (compatible; NewsRAG/0.5; +open-sources-guide)' } });
+      const r = await f(cur, { redirect: 'manual', signal: AbortSignal.timeout(12000), headers: { 'user-agent': 'Mozilla/5.0 (compatible; NewsRAG/0.5; +open-sources-guide)' } });
       if (r.status >= 300 && r.status < 400) {
         const loc = cleanIngestUrl(new URL(r.headers.get('location') || '', cur).href);
         if (!loc || denied(loc)) return { error: 'url' };
@@ -414,7 +437,9 @@ export async function ingestUrl(url, f = fetch) {
       if (!r.ok) return { error: 'fetch' };
       const type = r.headers.get('content-type') || '';
       if (!/text\/(html|plain)/.test(type)) return { error: 'type' };
-      const raw = (await r.text()).slice(0, 400000);
+      const len = Number(r.headers.get('content-length') || 0);
+      if (len > 2000000) return { error: 'type' };
+      const raw = await readCapped(r, 400000);
       if (type.includes('plain')) return { title: '', url: cur, text: raw.replace(/\s+/g, ' ').trim().slice(0, 20000) };
       const mt = raw.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i) || raw.match(/<title[^>]*>([^<]*)<\/title>/i);
       const title = decodeEnt((mt && mt[1] || '').trim()).slice(0, 160);
