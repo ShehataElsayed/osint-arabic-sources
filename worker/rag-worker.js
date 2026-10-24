@@ -401,6 +401,11 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (!d.json || typeof d.json.answer !== 'string' || !d.json.answer.trim()) return { error: 'upstream' };
   const answerText = cleanText(d.json.answer, 8000);
   const claims = (Array.isArray(d.json.claims) ? d.json.claims : []).slice(0, 8).map(c => cleanText(c, 220)).filter(Boolean);
+  // Fallback: a draft that omits the claims field still gets atomic checking — extract claims from its answer.
+  if (!claims.length && answerText) {
+    const rc = await modelJson(`استخرج من النص التالي حتى 8 ادعاءات جوهرية قابلة للفحص. أعد JSON فقط: {"claims":["..."]}\nالنص: ${answerText.slice(0, 3000)}`, env, f, 0);
+    (Array.isArray(rc.json?.claims) ? rc.json.claims : []).slice(0, 8).forEach(c => { const cc = cleanText(c, 220); if (cc) claims.push(cc); });
+  }
   const numbers = (Array.isArray(d.json.numbers) ? d.json.numbers : []).slice(0, 6).map(n => cleanText(n, 30)).filter(Boolean);
   const named = (Array.isArray(d.json.sources) ? d.json.sources : []).slice(0, 8);
   const claimText = [q, ...claims.slice(0, 3)].join(' ');

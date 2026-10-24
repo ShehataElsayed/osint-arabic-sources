@@ -447,3 +447,27 @@ test('ask: cross-language bridge supports Arabic claims from an English source, 
   assert.ok(r.warnings.some(w => w.includes('ترجمة آلية')), 'translation assistance disclosed');
   assert.notEqual(r.decision, 'insufficient', 'pipeline no longer starves on language mismatch');
 });
+
+test('ask: draft without a claims field falls back to extracting claims from the answer', async () => {
+  const noClaimsDraft = JSON.stringify({
+    answer: 'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي [S1].',
+    numbers: [], time_sensitive: false,
+    sources: [{ name: 'تقرير المنظمة العالمية للأرصاد', url: OK_URL }],
+  });
+  const f = scripted({ [OK_URL]: { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE } }, { draft: noClaimsDraft });
+  const inner = f;
+  const f2 = async (url, o = {}) => {
+    const u = String(url);
+    if (u.includes('generativelanguage.googleapis.com')) {
+      const prompt = JSON.parse(o.body).contents[0].parts[0].text;
+      if (prompt.includes('استخرج من النص التالي')) {
+        const wrap = t => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: t }] } }] }) });
+        return wrap(JSON.stringify({ claims: ['ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير'] }));
+      }
+    }
+    return inner(url, o);
+  };
+  const r = await askAssistant('ما أثر موجات الحر البحرية؟', CANDS, ENV, f2);
+  assert.ok(r.claims.length >= 1, 'claims recovered from the answer text');
+  assert.ok(r.claims[0].supported, 'recovered claim still checked against sources');
+});
