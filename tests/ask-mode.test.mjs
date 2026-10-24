@@ -18,9 +18,25 @@ const DRAFT = JSON.stringify({
 const REWRITE = JSON.stringify({ answer: 'خلاصة منقحة: ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي. لم نعثر على سند موثق لادعاء انخفاض الصيد في خليج السويس فحُذف من الإجابة.' });
 
 // Scripted fetch: dispatches Gemini calls by prompt content and serves page fixtures.
-function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWRITE, gdelt = null } = {}) {
+function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWRITE, gdelt = null, embed = null } = {}) {
   return async (url, o = {}) => {
     const u = String(url);
+    if (u.includes('batchEmbedContents')) {
+      if (!embed) return { ok: false, status: 429, json: async () => ({}) };
+      const vecs = embed(JSON.parse(o.body).requests.map(r => r.content.parts[0].text));
+      return { ok: true, status: 200, json: async () => ({ embeddings: vecs.map(v => ({ values: v })) }) };
+    }
+    if (u.includes('openrouter.ai')) {
+      const prompt = JSON.parse(o.body).messages[0].content;
+      const wrap = text => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: text } }] }) });
+      if (prompt.includes('أجب عن السؤال التالي')) return wrap(draft);
+      if (prompt.includes('أعد كتابة الإجابة')) return wrap(rewrite);
+      if (prompt.includes('اختر رقم الجملة')) return wrap('{"index":1}');
+      if (prompt.includes('أنت مدقق ناقد')) return wrap('{"contradiction":0.1}');
+      if (prompt.includes('زوايا صحفية')) return wrap('{"issues":["فجوة"],"angles":["زاوية"]}');
+      if (prompt.includes('اختر حتى 4 أدوات')) return wrap('{"picks":[{"id":0,"why":"سبب","how":"كيف"}]}');
+      return wrap('{}');
+    }
     if (u.includes('generativelanguage.googleapis.com')) {
       const prompt = JSON.parse(o.body).contents[0].parts[0].text;
       const wrap = text => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }) });
@@ -278,4 +294,104 @@ test('ask: shallow homepage escalates to deeper sitemap page that supports the c
   assert.equal(src.escalated, true);
   assert.equal(src.original, 'https://shallow.gov/', 'original homepage kept on record');
   assert.ok(r.claims[0].supported, 'claim supported after escalation');
+});
+
+// Semantic retrieval + grounded guards: embeddings pick the candidate passage; numbers/negation guards decide.
+const embByTopic = texts => texts.map(t => {
+  const v = [0.01, 0.01, 0.01, 0.01, 0.01, 0.01];
+  if (/مرجان|coral/i.test(t)) v[0] = 1;
+  if (/حر|heat|محيط|ocean/i.test(t)) v[1] = 1;
+  if (/العمق/.test(t)) v[2] = 1;
+  if (/الأحمر|الأسود/.test(t)) v[3] = 1;
+  if (/50/.test(t)) v[4] = 0.6;
+  if (/سمك|fish|صياد/i.test(t)) v[5] = 0.4;
+  return v;
+});
+const PAGE_EN = `<html><head><title>Ocean heat report</title></head><body>
+<p>Coral bleaching driven by ocean heat waves reduces fish breeding grounds across the region</p>
+<p>The report notes fisheries moved north as waters warmed over the last decade</p>
+</body></html>`;
+const PAGE_ADV = `<html><head><title>تقرير متخصص</title></head><body>
+<p>ارتفعت حرارة المحيط بنسبة 50 في المئة خلال العقد الأخير حسب القياسات</p>
+<p>لم ترتفع درجات حرارة طبقات العمق في المنطقة خلال فترة الدراسة</p>
+<p>سجلت سنة 2023 أعلى متوسط حرارة للمحيطات في السجلات الحديثة</p>
+<p>ارتفعت حرارة البحر الأسود بمعدل غير مسبوق خلال العقد الأخير</p>
+</body></html>`;
+const DRAFT_ADV = JSON.stringify({
+  answer: 'خلاصة [S1].',
+  claims: [
+    'تبييض الشعاب المرجانية بسبب موجات الحر يقلل موائل تكاثر الأسماك',
+    'ارتفعت حرارة المحيط بنسبة 30 في المئة خلال العقد الأخير',
+    'ارتفعت درجات حرارة طبقات العمق في المنطقة',
+    'سجلت سنة 2024 أعلى متوسط حرارة للمحيطات',
+    'ارتفعت حرارة البحر الأحمر بمعدل غير مسبوق خلال العقد الأخير',
+  ],
+  numbers: [], time_sensitive: false,
+  sources: [{ name: 'Ocean heat report', url: 'https://ocean.example.org/report' }, { name: 'تقرير متخصص', url: 'https://adv.example.net/report' }],
+});
+const embPages = { 'https://ocean.example.org/report': { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE_EN }, 'https://adv.example.net/report': { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE_ADV } };
+
+test('ask semantic: cross-language valid support passes', async () => {
+  const f = scripted(embPages, { draft: DRAFT_ADV, embed: embByTopic });
+  const r = await askAssistant('موجات الحر والشعاب', CANDS, ENV, f);
+  const cross = r.claims[0];
+  assert.ok(cross.supported, 'Arabic claim supported by English passage via semantic retrieval');
+  assert.ok(cross.evidence.includes('Coral bleaching'), 'evidence is the actual English passage');
+  assert.ok(cross.source_ref >= 1);
+});
+
+test('ask semantic guards: conflicting numbers rejected', async () => {
+  const f = scripted(embPages, { draft: DRAFT_ADV, embed: embByTopic });
+  const r = await askAssistant('موجات الحر والشعاب', CANDS, ENV, f);
+  assert.equal(r.claims[1].supported, false, '30% claim rejected: passage says 50%');
+});
+
+test('ask semantic guards: negation mismatch rejected', async () => {
+  const f = scripted(embPages, { draft: DRAFT_ADV, embed: embByTopic });
+  const r = await askAssistant('موجات الحر والشعاب', CANDS, ENV, f);
+  assert.equal(r.claims[2].supported, false, 'passage negates the depth-warming claim');
+});
+
+test('ask semantic guards: conflicting year rejected', async () => {
+  const f = scripted(embPages, { draft: DRAFT_ADV, embed: embByTopic });
+  const r = await askAssistant('موجات الحر والشعاب', CANDS, ENV, f);
+  assert.equal(r.claims[3].supported, false, '2024 claim rejected: passage says 2023');
+});
+
+test('ask semantic guard: entity substitution blocked, limit still disclosed for cross-language', async () => {
+  const f = scripted(embPages, { draft: DRAFT_ADV, embed: embByTopic });
+  const r = await askAssistant('موجات الحر والشعاب', CANDS, ENV, f);
+  // البحر الأحمر vs البحر الأسود: same-script distinctive-token guard blocks the entity swap that pure
+  // vector cosine cannot separate. Cross-language pairs still rely on semantic signal + digits/negation,
+  // and that residual limit stays disclosed on the page.
+  assert.equal(r.claims[4].supported, false, 'entity substitution blocked by distinctive-token guard');
+  assert.ok(r.warnings.some(w => w.includes('استبدال الكيانات')), 'residual cross-language limit disclosed');
+  assert.ok(r.confidence.score <= 69, 'mixed support keeps score capped');
+});
+
+test('ask semantic guard: compound claim with one negated half is rejected atomically', async () => {
+  const draft = JSON.stringify({
+    answer: 'خلاصة.',
+    claims: ['ارتفعت حرارة المحيط بنسبة 50 في المئة وانخفضت درجات حرارة طبقات العمق'],
+    numbers: [], time_sensitive: false,
+    sources: [{ name: 'تقرير متخصص', url: 'https://adv.example.net/report' }],
+  });
+  const f = scripted(embPages, { draft, embed: embByTopic });
+  const r = await askAssistant('حرارة المحيط', CANDS, ENV, f);
+  // First half matches a real passage; second half exists only in NEGATED form. The whole claim is
+  // rejected — support is evaluated atomically, not per convenient fragment.
+  assert.equal(r.claims[0].supported, false, 'compound claim rejected: العمق half negated in the passage');
+  assert.equal(r.decision, 'insufficient', 'zero supported claims stays fail-closed');
+});
+
+test('ask: provider-neutral — same pipeline over OpenRouter env', async () => {
+  const ENV_OR = { OPENROUTER_API_KEY: 'ork', OPENROUTER_MODEL: 'some-model:free' };
+  const f = scripted({ [OK_URL]: { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => PAGE }, [DEAD_URL]: notFound });
+  const r = await askAssistant('كيف تؤثر موجات الحر البحرية؟', CANDS, ENV_OR, f);
+  assert.equal(r.generated, true);
+  assert.equal(r.decision, 'answer');
+  assert.ok(r.answer.includes('منقحة'), 'qualification rewrite ran over OpenRouter');
+  assert.equal(r.tools.length, 1, 'guide-tool recommendation works over OpenRouter');
+  const off = await askAssistant('سؤال', CANDS, {}, scripted());
+  assert.deepEqual(off, { error: 'off' });
 });
