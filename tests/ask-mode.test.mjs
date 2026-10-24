@@ -178,3 +178,32 @@ test('ask: citation markers are reconciled to the passage that actually supports
   assert.ok(iM1 > iHeat && iM1 < iFish, 'heat sentence keeps source 1');
   assert.equal(r.claims[1].source_ref, 2, 'claim support row agrees with the reconciled marker');
 });
+
+test('ask: rewrite that injects a new unsupported claim degrades to extractive', async () => {
+  const injectRewrite = JSON.stringify({ answer: 'خلاصة منقحة: ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي. وأضيف ادعاء جديد تماما عن أزمة غذاء عالمية وشيكة بلا أي سند.' });
+  const f = async (url, o = {}) => {
+    const u = String(url);
+    if (u.includes('generativelanguage.googleapis.com')) {
+      const prompt = JSON.parse(o.body).contents[0].parts[0].text;
+      const wrap = t => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: t }] } }] }) });
+      if (prompt.includes('أجب عن السؤال التالي')) return wrap(DRAFT);
+      if (prompt.includes('أعد كتابة الإجابة')) return wrap(injectRewrite);
+      if (prompt.includes('استخرج من النص التالي')) return wrap(JSON.stringify({ claims: ['أزمة غذاء عالمية وشيكة'] }));
+      if (prompt.includes('اختر رقم الجملة')) return wrap('{"index":1}');
+      if (prompt.includes('أنت مدقق ناقد')) return wrap('{"contradiction":0.1}');
+      if (prompt.includes('زوايا صحفية')) return wrap('{"issues":[],"angles":[]}');
+      if (prompt.includes('اختر حتى 4 أدوات')) return wrap('{"picks":[]}');
+      return wrap('{}');
+    }
+    if (u.includes('rdap.org')) return { ok: false, status: 404, json: async () => ({}) };
+    if (u.startsWith(OK_URL)) return page('<p>ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي للمنظمة</p><p>تؤثر موجات الحر البحرية على الثروة السمكية والنظم البيئية البحرية في العالم</p><p>هذه جملة ثالثة طويلة بما يكفي لتصبح مرشحة للاقتباس الحرفي في الفحص الآلي للمصادر</p>', 'تقرير');
+    if (u.startsWith('https://dead.example.com/gone')) return notFound;
+    if (u.startsWith('https://dead.example.com/sitemap.xml')) return { ok: true, status: 200, headers: { get: () => 'application/xml' }, text: async () => '<?xml version="1.0"?><urlset></urlset>' };
+    if (u.startsWith('https://dead.example.com/robots.txt')) return { ok: false, status: 404, headers: { get: () => 'text/plain' }, text: async () => '' };
+    throw new Error('unexpected fetch: ' + u);
+  };
+  const r = await askAssistant('ما أثر موجات الحر البحرية؟', CANDS, ENV, f);
+  assert.equal(r.decision, 'extractive', 'injected unsupported claim rejects the rewrite');
+  assert.ok(!r.answer.includes('أزمة غذاء'), 'injected claim never shown');
+  assert.ok(r.warnings.some(w => w.includes('أدخلت الصياغة')));
+});

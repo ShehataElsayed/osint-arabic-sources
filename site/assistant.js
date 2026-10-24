@@ -52,7 +52,7 @@ function gauge(conf) {
   const r = 62, c = 2 * Math.PI * r, dash = c * v / 100;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 160 160'); svg.setAttribute('width', '140'); svg.setAttribute('height', '140'); svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', `مؤشر تغطية الفحوص الآلية: ${v} من 100 معيار مستوفى — ${b.label} — يقيس اكتمال فحوص معلنة ولا يقيس احتمال صحة الإجابة ولا موثوقيتها`);
+  svg.setAttribute('aria-label', `مؤشر تغطية الفحوص الآلية: ${v} من 100 نقطة — ${b.label} — متوسط معايير معلنة كل منها يسجل 0 أو 0.5 أو 1؛ يقيس اكتمال الفحوص ولا يقيس احتمال صحة الإجابة ولا موثوقيتها`);
   const mk = (tag, attrs) => { const n = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, val] of Object.entries(attrs)) n.setAttribute(k, val); return n; };
   svg.append(
     mk('circle', { cx: 80, cy: 80, r, fill: 'none', stroke: '#e6efed', 'stroke-width': 14 }),
@@ -97,7 +97,7 @@ function render(conf, question) {
   const wrap = el('div', 'conf-wrap');
   const left = el('div'); left.append(gauge(conf.confidence || {}));
   const band = (conf.confidence || {}).band || 'low';
-  left.append(el('div', 'conf-band band-' + band, BAND[band].label + ` — ${Math.round(conf.confidence.score)} من 100 معيار مستوفى`));
+  left.append(el('div', 'conf-band band-' + band, BAND[band].label + ` — ${Math.round(conf.confidence.score)}/100 نقطة في المؤشر`));
   wrap.append(left);
   const crits = el('div');
   ((conf.confidence || {}).criteria || []).forEach(c => {
@@ -106,7 +106,7 @@ function render(conf, question) {
     crits.append(row);
   });
   wrap.append(crits); confCard.append(wrap);
-  confCard.append(el('p', 'note', 'الرقم هو نسبة معايير الفحص المستوفاة من قائمة معلنة (فتح مصادر، سند نصي، استقلال نطاقات، شفافية جهات، نقد ذاتي) — يقيس تغطية الفحوص، لا احتمال صحة الإجابة ولا موثوقيتها، ولا يغني عن مراجعة المصادر الأصلية.'));
+  confCard.append(el('p', 'note', 'طريقة الحساب: كل معيار معلن أعلاه يسجل 0 أو 0.5 أو 1، والمؤشر هو متوسطها على 100 نقطة — يقيس تغطية الفحوص الآلية، لا احتمال صحة الإجابة ولا موثوقيتها، ولا يغني عن مراجعة المصادر الأصلية.'));
   const claims = (conf.claims || []).filter(c => c && c.text);
   if (claims.length) {
     const h = el('h3', null, 'سند الادعاءات الرئيسية'); h.style.marginTop = '14px'; confCard.append(h);

@@ -344,7 +344,19 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   else if (unsupported.length) {
     const rw = await modelJson(`أعد كتابة الإجابة التالية بالعربية مع الالتزام: احذف الادعاءات التالية أو أطّرها صراحة بأنها غير موثقة في المصادر (مثل: «لم نعثر على سند موثق لذلك»)، وحافظ على باقي الإجابة، ولا تضف معلومات ولا روابط جديدة. أعد JSON فقط: {"answer":"..."}\nادعاءات بلا سند نصي في المصادر المفتوحة: ${unsupported.map((t, i) => `${i + 1}) ${t}`).join(' ')}\nالإجابة: ${answerText.slice(0, 2500)}`, env, f, 0.2, 4096);
     const t = rw.json && typeof rw.json.answer === 'string' ? cleanText(rw.json.answer, 4000) : '';
-    if (t.length > 40 && !/https?:/i.test(t) && t.length <= answerText.length * 1.8) { finalAnswer = groundMarkers(t); qualified = true; }
+    let accepted = Boolean(t.length > 40 && !/https?:/i.test(t) && t.length <= answerText.length * 1.8);
+    // Re-verification: an unseen rewrite may introduce NEW unsupported claims. Extract the rewrite's own
+    // claims and require the same passage support; explicit non-support framing is not a claim.
+    if (accepted) {
+      const rc = await modelJson(`استخرج من النص التالي حتى 5 ادعاءات جوهرية قابلة للفحص، وتجاهل الجمل التي تقول صراحة إن أمرًا ما غير موثق أو بلا سند. أعد JSON فقط: {"claims":["..."]}\nالنص: ${t.slice(0, 2000)}`, env, f, 0);
+      const newClaims = (Array.isArray(rc.json?.claims) ? rc.json.claims : []).slice(0, 5).map(c => cleanText(c, 220)).filter(c => c && !/لم نعثر|غير موثق|لا سند|بلا سند/.test(c));
+      const injected = newClaims.filter(c => {
+        const best = allCands.map(x => ({ x, s: cos(c, x.text) })).sort((a, b) => b.s - a.s)[0];
+        return !(best && best.s >= 0.4 && (negCount(c) % 2) === (negCount(best.x.text) % 2));
+      });
+      if (injected.length) { accepted = false; var rewriteInjected = true; }
+    }
+    if (accepted) { finalAnswer = groundMarkers(t); qualified = true; }
     else if (supportedRows.length) {
       decision = 'extractive'; qualified = true;
       finalAnswer = supportedRows.map(c => `${c.text}.\nيقول المصدر: «${c.evidence}» [S${c.source_ref}]`).join('\n');
@@ -384,6 +396,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (!opened.length) warnings.push('لم يُفتح أي مصدر من خيوط النموذج');
   if (decision === 'answer' && qualified) warnings.push('حُذفت من الإجابة ادعاءات بلا سند نصي في المصادر المفتوحة أو طُوّقت صراحة بأنها غير موثقة');
   if (decision === 'extractive') warnings.push('تعذرت صياغة إجابة موثقة كاملة؛ المعروض مقتطفات من النصوص المفتوحة فقط');
+  if (typeof rewriteInjected !== 'undefined' && rewriteInjected) warnings.push('أدخلت الصياغة المقترحة ادعاءات جديدة بلا سند فاعتُمد المحتوى المقتطف');
   if (d.json.time_sensitive === true) warnings.push('موضوع حساس زمنيًا؛ تحقق من أحدث تطور قبل النشر');
   warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');

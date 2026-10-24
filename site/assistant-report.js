@@ -67,7 +67,7 @@ export function buildAskReport({ question, result, catalog, when }) {
   out.push(`التاريخ: ${line(when) || new Date().toISOString()}`);
   out.push(`السؤال: ${line(question)}`);
   out.push(`نوع النتيجة: ${DECISION_LBL[r.decision] || 'إجابة بعد الفحص'}`);
-  out.push(`مؤشر تغطية الفحوص الآلي: ${Math.round(conf.score)} من 100 معيار مستوفى — ${BAND_LBL[conf.band] || conf.band} (نسبة معايير فحص معلنة مستوفاة، وليس احتمال صحة ولا موثوقية)`);
+  out.push(`مؤشر تغطية الفحوص الآلي: ${Math.round(conf.score)}/100 نقطة — ${BAND_LBL[conf.band] || conf.band} (متوسط ${(conf.criteria || []).length} معايير معلنة، كل معيار 0/0.5/1؛ يقيس تغطية الفحوص لا احتمال الصحة ولا الموثوقية)`);
   out.push('', r.decision === 'insufficient' ? '## لم تُعرض إجابة: الأدلة المفتوحة غير كافية' : '## الإجابة بعد الفحص');
   out.push(r.answer || '—');
   if ((r.claims || []).length) {
