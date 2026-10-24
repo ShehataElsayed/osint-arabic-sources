@@ -56,7 +56,8 @@ export function buildVerifyReport({ question, model, confidence, when }) {
   return out.join('\n');
 }
 
-const BAND_LBL = { high: 'ثقة مرتفعة نسبيًا', mid: 'ثقة متوسطة', low: 'ثقة منخفضة' };
+const BAND_LBL = { high: 'تغطية فحوص مرتفعة', mid: 'تغطية فحوص متوسطة', low: 'تغطية فحوص منخفضة' };
+const DECISION_LBL = { answer: 'إجابة بعد الفحص', extractive: 'مقتطفات موثقة فقط', insufficient: 'أدلة غير كافية' };
 const TIER_LBL = { very_high: 'جهة رسمية (تصنيف نطاق)', high: 'جهة معروفة (تصنيف نطاق)', medium: 'هوية موثقة جزئيًا', unknown: 'غير مُقيَّمة' };
 
 export function buildAskReport({ question, result, catalog, when }) {
@@ -65,9 +66,10 @@ export function buildAskReport({ question, result, catalog, when }) {
   const out = ['# تقرير مساعد NewsRAG — سؤال وجواب', ''];
   out.push(`التاريخ: ${line(when) || new Date().toISOString()}`);
   out.push(`السؤال: ${line(question)}`);
-  out.push(`مؤشر الثقة الآلي: ${Math.round(conf.score)} من 100 — ${BAND_LBL[conf.band] || conf.band} (معايير معلنة، وليس احتمالًا لصحة الإجابة)`);
-  out.push('', '## الإجابة بعد الفحص');
-  out.push(r.answer || 'لا توجد إجابة.');
+  out.push(`نوع النتيجة: ${DECISION_LBL[r.decision] || 'إجابة بعد الفحص'}`);
+  out.push(`مؤشر تغطية الفحوص الآلي: ${Math.round(conf.score)} من 100 معيار مستوفى — ${BAND_LBL[conf.band] || conf.band} (نسبة معايير فحص معلنة مستوفاة، وليس احتمال صحة ولا موثوقية)`);
+  out.push('', r.decision === 'insufficient' ? '## لم تُعرض إجابة: الأدلة المفتوحة غير كافية' : '## الإجابة بعد الفحص');
+  out.push(r.answer || '—');
   if ((r.claims || []).length) {
     out.push('', '## سند الادعاءات (تطابق نصي، لا إثبات استدلالي)');
     r.claims.forEach(c => {

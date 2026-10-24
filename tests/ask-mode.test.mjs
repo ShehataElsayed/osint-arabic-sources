@@ -15,7 +15,7 @@ const DRAFT = JSON.stringify({
   numbers: [], time_sensitive: false,
   sources: [{ name: 'تقرير المنظمة العالمية للأرصاد', url: OK_URL }, { name: 'صفحة ميتة', url: DEAD_URL }],
 });
-const REWRITE = JSON.stringify({ answer: 'خلاصة منقحة عن موجات الحر البحرية [S1] مع إطار صريح لما لم يُوثق [S2] وتم حذف الرقم المختلق.' });
+const REWRITE = JSON.stringify({ answer: 'خلاصة منقحة: ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي. لم نعثر على سند موثق لادعاء انخفاض الصيد في خليج السويس فحُذف من الإجابة.' });
 
 // Scripted fetch: dispatches Gemini calls by prompt content and serves page fixtures.
 function scripted(pages = {}, { draftStatus = 200, draft = DRAFT, rewrite = REWRITE } = {}) {
@@ -56,9 +56,10 @@ test('ask: full pipeline qualifies unsupported claims, strips dead citation mark
   const r = await askAssistant('ما أثر موجات الحر البحرية؟', CANDS, ENV, f);
   assert.equal(r.generated, true);
   assert.equal(r.answer_qualified, true, 'rewrite path ran for the unsupported claim');
+  assert.equal(r.decision, 'answer');
   assert.ok(r.answer.includes('منقحة'));
-  assert.ok(r.answer.includes('[S1]'), 'marker for opened source kept');
-  assert.ok(!r.answer.includes('[S2]'), 'marker for dead source stripped');
+  assert.ok(r.answer.includes('[S1]'), 'marker re-derived to the source whose passage supports the sentence');
+  assert.ok(!r.answer.includes('[S2]'), 'no marker for the dead or unsupported source');
   assert.ok(r.warnings.some(w => w.includes('حُذفت')));
   const dead = r.sources.find(s => !s.exists);
   assert.equal(dead.claimed, DEAD_URL); assert.equal(dead.url, '');
@@ -81,7 +82,7 @@ test('ask: full pipeline qualifies unsupported claims, strips dead citation mark
   assert.ok(!critIds.includes('factcheck_db'));
   assert.deepEqual(r.issues, ['فجوة في البيانات الإقليمية المحدثة']);
   assert.equal(r.tools.length, 1);
-  assert.ok(r.warnings.some(w => w.includes('ليس احتمالًا')) && r.warnings.some(w => w.includes('لا يعني إثبات الاستدلال')));
+  assert.ok(r.warnings.some(w => w.includes('لا احتمال صحة')) && r.warnings.some(w => w.includes('لا يعني إثبات الاستدلال')));
 });
 
 test('ask: credible but irrelevant page yields no support and low confidence', async () => {
@@ -98,7 +99,9 @@ test('ask: credible but irrelevant page yields no support and low confidence', a
   assert.equal(r.claims[0].supported, false, 'lexical check rejects irrelevant credible page');
   assert.ok(r.confidence.score <= 39, 'all claims unsupported → low band');
   assert.equal(r.confidence.band, 'low');
-  assert.equal(r.answer_qualified, true, 'qualification pass ran');
+  assert.equal(r.decision, 'insufficient', 'fail closed: no supported claim → no model text shown');
+  assert.equal(r.answer, '', 'model answer withheld');
+  assert.ok(r.warnings.some(w => w.includes('غير كافية')));
 });
 
 test('ask: fabricated domain is dropped, not counted', async () => {
@@ -111,7 +114,7 @@ test('ask: fabricated domain is dropped, not counted', async () => {
   assert.equal(r.sources.length, 1);
   assert.equal(r.sources[0].exists, false);
   assert.equal(r.sources[0].claimed, 'https://fabricated-news-xyz.example/a');
-  assert.ok(r.warnings.some(w => w.includes('معرفة النموذج فقط')));
+  assert.ok(r.warnings.some(w => w.includes('خيوط النموذج')));
   assert.ok(!r.answer.includes('[S1]'), 'fabricated citation marker stripped');
 });
 
@@ -148,7 +151,30 @@ test('ask: rewrite fallback keeps original answer when model rewrite is unusable
     [OK_URL]: page('<p>ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي للمنظمة</p><p>تؤثر موجات الحر البحرية على الثروة السمكية والنظم البيئية البحرية في العالم</p>', 'تقرير'),
   }, { rewrite: JSON.stringify({ answer: 'قصيرة' }) }); // too short → rejected
   const r = await askAssistant('ما أثر موجات الحر البحرية؟', CANDS, ENV, f);
-  assert.equal(r.answer_qualified, false);
-  assert.ok(r.answer.includes('خليج السويس'), 'original answer kept as fallback');
-  assert.ok(r.warnings.some(w => w.includes('لم تُنقَّ')), 'unqualified unsupported claims stay flagged');
+  assert.equal(r.decision, 'extractive', 'fail closed: unusable rewrite degrades to supported extracts');
+  assert.ok(r.answer.includes('يقول المصدر'), 'extractive output is passage-grounded');
+  assert.ok(r.answer.includes('[S1]'), 'extractive markers point at the supporting source');
+  assert.ok(!r.answer.includes('خليج السويس'), 'unsupported assertion never shown');
+  assert.ok(r.warnings.some(w => w.includes('مقتطفات')));
+});
+
+test('ask: citation markers are reconciled to the passage that actually supports each sentence', async () => {
+  const FISH_URL = 'https://www.aljazeera.net/news/2026/1/1/fish';
+  const draft = JSON.stringify({
+    answer: 'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي [S1]. تؤثر موجات الحر البحرية على الثروة السمكية والنظم البيئية البحرية في العالم [S1].',
+    claims: ['ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير', 'تؤثر موجات الحر البحرية على الثروة السمكية'],
+    numbers: [], time_sensitive: false,
+    sources: [{ name: 'تقرير المنظمة', url: OK_URL }, { name: 'تغطية إخبارية', url: FISH_URL }],
+  });
+  const f = scripted({
+    [OK_URL]: page('<p>ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي للمنظمة</p><p>هذه جملة ثانية طويلة بما يكفي لتصبح مرشحة للاقتباس الحرفي في الفحص الآلي للمصادر</p>', 'تقرير المنظمة'),
+    [FISH_URL]: page('<p>تؤثر موجات الحر البحرية على الثروة السمكية والنظم البيئية البحرية في العالم بشكل مباشر</p><p>هذه جملة ثانية طويلة بما يكفي لتصبح مرشحة للاقتباس الحرفي في الفحص الآلي للمصادر</p>', 'تغطية'),
+  }, { draft });
+  const r = await askAssistant('ما أثر موجات الحر البحرية؟', CANDS, ENV, f);
+  assert.equal(r.decision, 'answer');
+  const iFish = r.answer.indexOf('السمكية'), iHeat = r.answer.indexOf('العقد الأخير');
+  const iM1 = r.answer.indexOf('[S1]'), iM2 = r.answer.indexOf('[S2]');
+  assert.ok(iM2 > iFish && (iM1 === -1 || iM1 < iFish), `fish sentence re-cited to source 2, got: ${r.answer}`);
+  assert.ok(iM1 > iHeat && iM1 < iFish, 'heat sentence keeps source 1');
+  assert.equal(r.claims[1].source_ref, 2, 'claim support row agrees with the reconciled marker');
 });

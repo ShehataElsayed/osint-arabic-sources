@@ -29,7 +29,7 @@ const fs=require('fs');
   const stored=JSON.parse(await page.evaluate(()=>localStorage.getItem('osint-verification-v2')));
   assert.ok(stored.cases[0].evidence.length>=1,'tool saved into case evidence');
   // assistant page: question-only flow against a fixture backend (fixtures live in tests only, never shipped).
-  const fixture={generated:true,answer_qualified:true,
+  const fixture={generated:true,decision:'answer',answer_qualified:true,
    answer:'خلاصة مباشرة: ارتفعت درجات حرارة البحر بشكل قياسي [S1]. لم نعثر على سند موثق لادعاء انخفاض الصيد في خليج السويس، فحُذف من الإجابة.',
    claims:[{text:'ارتفعت درجات حرارة البحر خلال العقد الأخير',supported:true,similarity:0.62,evidence:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',source_ref:1},{text:'انخفض الصيد في خليج السويس بنسبة محددة',supported:false,similarity:0.05,evidence:'',source_ref:0}],
    confidence:{score:69,band:'mid',criteria:[
@@ -56,9 +56,9 @@ const fs=require('fs');
   await page.waitForTimeout(700); // let the fade-in finish before pixel checks
   const rt=await page.locator('#askResult').innerText();
   assert.ok(rt.includes('خلاصة مباشرة'),'answer rendered');
-  assert.ok(rt.includes('مؤشر الثقة — معايير معلنة'),'confidence card');
-  assert.ok(rt.includes('وليس احتمالًا لصحة الإجابة'),'honest confidence caveat');
-  assert.ok(rt.includes('لا يعني إثبات الاستدلال'),'lexical-not-entailment caveat');
+  assert.ok(rt.includes('مؤشر تغطية الفحوص — معايير معلنة'),'coverage card');
+  assert.ok(rt.includes('لا احتمال صحة الإجابة'),'honest coverage caveat');
+  assert.ok(rt.includes('لا يغني عن مراجعة المصادر الأصلية'),'lexical-not-entailment caveat');
   assert.ok(rt.includes('المصادر المفتوحة (1)'),'only opened source counted');
   assert.ok(rt.includes('لا سند نصي'),'unsupported claim flagged');
   assert.ok(rt.includes('الإجابة بعد الفحص والتنقية'),'qualification badge shown');
@@ -74,10 +74,11 @@ const fs=require('fs');
   assert.ok(await page.locator('#askResult .cite-chip').count()>=1,'citation chips in answer');
   assert.ok(!(await page.content()).includes('84.1'),'no historical lab metrics on assistant page');
   const gaugeAria=await page.locator('#askResult svg[role="img"]').getAttribute('aria-label');
-  assert.ok(gaugeAria.includes('69')&&gaugeAria.includes('ثقة متوسطة'),'gauge accessible label');
+  assert.ok(gaugeAria.includes('69')&&gaugeAria.includes('تغطية الفحوص')&&gaugeAria.includes('لا يقيس احتمال صحة'),'gauge accessible label means coverage, not likelihood');
   const confCard=await page.evaluate(()=>{const c=document.querySelectorAll('#askResult .src-card')[1];return {op:+getComputedStyle(c).opacity,band:getComputedStyle(c.querySelector('.conf-band')).color};});
   assert.equal(confCard.op,1,'confidence card fully opaque');
   assert.equal(confCard.band,'rgb(184, 137, 50)','guide amber for mid band with unsupported claim');
+  assert.ok(rt.includes('معيار مستوفى'),'score reads as satisfied criteria');
   assert.equal(await page.evaluate(()=>sessionStorage.getItem('newsrag-sources-session-v1')),null,'no session source storage in question-only flow');
   assert.equal(await page.evaluate(()=>localStorage.getItem('newsrag-sources-v1')),null,'nothing written to localStorage');
   await page.unroute('https://osint-rag.egkrkr.workers.dev/**');

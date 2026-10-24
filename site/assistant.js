@@ -10,7 +10,7 @@ const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const SERVER = Boolean(BACKEND_URL);
 const TEAL = '#0a827d', AMBER = '#b88932', RED = '#9b2218', NAVY = '#102735';
-const BAND = { high: { label: 'ثقة مرتفعة نسبيًا', color: TEAL }, mid: { label: 'ثقة متوسطة', color: AMBER }, low: { label: 'ثقة منخفضة', color: RED } };
+const BAND = { high: { label: 'تغطية فحوص مرتفعة', color: TEAL }, mid: { label: 'تغطية فحوص متوسطة', color: AMBER }, low: { label: 'تغطية فحوص منخفضة', color: RED } };
 const REL = { very_high: ['جهة رسمية — تصنيف نطاق', 'tier-official'], high: ['جهة معروفة — تصنيف نطاق', 'tier-news'], medium: ['هوية موثقة جزئيًا', 'tier-academic'], unknown: ['غير مُقيَّمة', 'tier-unknown'] };
 const TIER_TXT = { official: 'نطاق رسمي', news: 'موقع إخباري', academic: 'موقع أكاديمي', unknown: 'نطاق غير مصنف' };
 function provenance(s) {
@@ -52,7 +52,7 @@ function gauge(conf) {
   const r = 62, c = 2 * Math.PI * r, dash = c * v / 100;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 160 160'); svg.setAttribute('width', '140'); svg.setAttribute('height', '140'); svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', `مؤشر الثقة الآلي ${v} من 100 — ${b.label}`);
+  svg.setAttribute('aria-label', `مؤشر تغطية الفحوص الآلية: ${v} من 100 معيار مستوفى — ${b.label} — يقيس اكتمال فحوص معلنة ولا يقيس احتمال صحة الإجابة ولا موثوقيتها`);
   const mk = (tag, attrs) => { const n = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, val] of Object.entries(attrs)) n.setAttribute(k, val); return n; };
   svg.append(
     mk('circle', { cx: 80, cy: 80, r, fill: 'none', stroke: '#e6efed', 'stroke-width': 14 }),
@@ -78,18 +78,26 @@ function render(conf, question) {
   const box = $('askResult'); box.innerHTML = '';
   const allSrcs = conf.sources || [];
   const srcs = allSrcs.filter(s => s.exists);
+  const decision = conf.decision || 'answer';
   const answerCard = el('div', 'src-card fade');
-  answerCard.append(el('span', 'badge true', conf.answer_qualified ? 'الإجابة بعد الفحص والتنقية' : 'الإجابة بعد الفحص'));
-  const head = el('h3', null, question); head.style.margin = '12px 0 8px'; answerCard.append(head);
-  for (const para of String(conf.answer || '').split(/\n+/)) { const t = para.trim(); if (!t) continue; const p = document.createElement('p'); appendMarked(p, t, allSrcs); answerCard.append(p); }
+  if (decision === 'insufficient') {
+    answerCard.append(el('span', 'badge mislead', 'أدلة غير كافية'));
+    const head = el('h3', null, question); head.style.margin = '12px 0 8px'; answerCard.append(head);
+    answerCard.append(el('p', null, 'لم تُفتح مصادر تدعم ادعاءات المسودة بنصوصها، لذلك لم يُعرض نص النموذج. النتيجة أدناه خيوط بحث لا إجابة.'));
+  } else {
+    answerCard.append(el('span', 'badge true', decision === 'extractive' ? 'مقتطفات موثقة من المصادر المفتوحة' : conf.answer_qualified ? 'الإجابة بعد الفحص والتنقية' : 'الإجابة بعد الفحص'));
+    if (decision === 'extractive') answerCard.append(el('p', 'note', 'تعذرت صياغة إجابة موثقة كاملة؛ المعروض فقط ما تدعمه النصوص المفتوحة، باقتباساتها الحرفية.'));
+    const head = el('h3', null, question); head.style.margin = '12px 0 8px'; answerCard.append(head);
+    for (const para of String(conf.answer || '').split(/\n+/)) { const t = para.trim(); if (!t) continue; const p = document.createElement('p'); appendMarked(p, t, allSrcs); answerCard.append(p); }
+  }
   box.append(answerCard);
 
   const confCard = el('div', 'src-card fade sec-block');
-  confCard.append(el('span', 'badge', 'مؤشر الثقة — معايير معلنة'));
+  confCard.append(el('span', 'badge', 'مؤشر تغطية الفحوص — معايير معلنة'));
   const wrap = el('div', 'conf-wrap');
   const left = el('div'); left.append(gauge(conf.confidence || {}));
   const band = (conf.confidence || {}).band || 'low';
-  left.append(el('div', 'conf-band band-' + band, BAND[band].label + ` — ${Math.round(conf.confidence.score)} من 100`));
+  left.append(el('div', 'conf-band band-' + band, BAND[band].label + ` — ${Math.round(conf.confidence.score)} من 100 معيار مستوفى`));
   wrap.append(left);
   const crits = el('div');
   ((conf.confidence || {}).criteria || []).forEach(c => {
@@ -98,7 +106,7 @@ function render(conf, question) {
     crits.append(row);
   });
   wrap.append(crits); confCard.append(wrap);
-  confCard.append(el('p', 'note', 'مؤشر آلي على معايير معلنة: تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال — وليس احتمالًا لصحة الإجابة ولا بديلًا عن مراجعة المصادر الأصلية.'));
+  confCard.append(el('p', 'note', 'الرقم هو نسبة معايير الفحص المستوفاة من قائمة معلنة (فتح مصادر، سند نصي، استقلال نطاقات، شفافية جهات، نقد ذاتي) — يقيس تغطية الفحوص، لا احتمال صحة الإجابة ولا موثوقيتها، ولا يغني عن مراجعة المصادر الأصلية.'));
   const claims = (conf.claims || []).filter(c => c && c.text);
   if (claims.length) {
     const h = el('h3', null, 'سند الادعاءات الرئيسية'); h.style.marginTop = '14px'; confCard.append(h);

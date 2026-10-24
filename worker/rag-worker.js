@@ -315,16 +315,41 @@ export async function askAssistant(question, candidates, env, f = fetch) {
     const supported = Boolean(best && best.s >= 0.4 && (negCount(c) % 2) === (negCount(best.x.text) % 2));
     return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0, evidence: supported ? cleanText(best.x.text, 300) : '', source_ref: supported ? best.x.ref : 0 };
   });
+  // Citation reconciliation: every marker in the shown answer is RE-DERIVED from the fetched passages.
+  // A sentence earns [S#] only when an opened source holds a passage that lexically supports it
+  // (same threshold and negation parity as claims) — never merely because the model wrote it.
+  const groundMarkers = text => text.split('\n').map(para => para.split(/(?<=[.!؟])\s+/).map(sent => {
+    const clean = sent.replace(/\s*\[S?\d{1,2}\]/g, '').trim();
+    if (!clean) return '';
+    let bestRef = 0, bestS = 0;
+    checked.forEach((x, gi) => {
+      if (!x.exists) return;
+      for (const cand of x.cands) {
+        const sc = cos(clean, cand);
+        if (sc > bestS && (negCount(clean) % 2) === (negCount(cand) % 2)) { bestS = sc; bestRef = gi + 1; }
+      }
+    });
+    if (!(bestRef && bestS >= 0.4)) return clean;
+    const m = clean.match(/^(.*?)([.!؟])$/) ;
+    return m ? `${m[1]} [S${bestRef}]${m[2]}` : `${clean} [S${bestRef}]`;
+  }).filter(Boolean).join(' ')).filter(Boolean).join('\n');
   // Qualification pass: unsupported claims are removed or explicitly framed as unverified before output.
-  let finalAnswer = answerText, qualified = false;
+  // Fail closed: an unusable rewrite never falls back to showing the unsupported assertions — the output
+  // degrades to extractive content (only what opened passages support) or to an honest insufficient-evidence result.
   const unsupported = claimRows.filter(r => !r.supported).map(r => r.text);
-  if (unsupported.length) {
-    const rw = await modelJson(`أعد كتابة الإجابة التالية بالعربية مع الالتزام: احذف الادعاءات التالية أو أطّرها صراحة بأنها غير موثقة في المصادر (مثل: «لم نعثر على سند موثق لذلك»)، وحافظ على باقي الإجابة وعلى إشارات المصادر [S#] كما هي، ولا تضف معلومات ولا روابط جديدة. أعد JSON فقط: {"answer":"..."}\nادعاءات بلا سند نصي في المصادر المفتوحة: ${unsupported.map((t, i) => `${i + 1}) ${t}`).join(' ')}\nالإجابة: ${answerText.slice(0, 2500)}`, env, f, 0.2, 4096);
+  const supportedRows = claimRows.filter(r => r.supported);
+  let decision = 'answer', finalAnswer = groundMarkers(answerText), qualified = false;
+  if (!claims.length) { decision = 'insufficient'; finalAnswer = ''; qualified = true; }
+  else if (unsupported.length && !supportedRows.length) { decision = 'insufficient'; finalAnswer = ''; qualified = true; }
+  else if (unsupported.length) {
+    const rw = await modelJson(`أعد كتابة الإجابة التالية بالعربية مع الالتزام: احذف الادعاءات التالية أو أطّرها صراحة بأنها غير موثقة في المصادر (مثل: «لم نعثر على سند موثق لذلك»)، وحافظ على باقي الإجابة، ولا تضف معلومات ولا روابط جديدة. أعد JSON فقط: {"answer":"..."}\nادعاءات بلا سند نصي في المصادر المفتوحة: ${unsupported.map((t, i) => `${i + 1}) ${t}`).join(' ')}\nالإجابة: ${answerText.slice(0, 2500)}`, env, f, 0.2, 4096);
     const t = rw.json && typeof rw.json.answer === 'string' ? cleanText(rw.json.answer, 4000) : '';
-    if (t.length > 40 && !/https?:/i.test(t) && t.length <= answerText.length * 1.8) { finalAnswer = t; qualified = true; }
+    if (t.length > 40 && !/https?:/i.test(t) && t.length <= answerText.length * 1.8) { finalAnswer = groundMarkers(t); qualified = true; }
+    else if (supportedRows.length) {
+      decision = 'extractive'; qualified = true;
+      finalAnswer = supportedRows.map(c => `${c.text}.\nيقول المصدر: «${c.evidence}» [S${c.source_ref}]`).join('\n');
+    } else { decision = 'insufficient'; finalAnswer = ''; qualified = true; }
   }
-  // Citation markers only count when the named source actually opened; strip the rest.
-  finalAnswer = finalAnswer.replace(/\[S(\d{1,2})\]/g, (m, n) => (checked[+n - 1] && checked[+n - 1].exists) ? `[S${n}]` : '');
   const opened = checked.filter(x => x.exists);
   const hosts = new Set(opened.map(x => registrable(x.host)));
   const critic = await modelJson(`أنت مدقق ناقد. السؤال: ${q}\nإجابة مقترحة: ${answerText.slice(0, 1200)}\nقيّم من 0 إلى 1 مدى احتمال أن الإجابة تناقض وقائع معروفة أو غير مدعومة. أعد JSON فقط: {"contradiction":0.0}`, env, f, 0);
@@ -355,14 +380,15 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   const angles = (Array.isArray(aj.json?.angles) ? aj.json.angles : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
   const tools = await recommend(q, candidates, env, f);
   const warnings = [];
-  if (!opened.length) warnings.push('لم يُفتح أي مصدر: الإجابة من معرفة النموذج فقط');
-  if (qualified) warnings.push('حُذفت من الإجابة ادعاءات بلا سند نصي في المصادر المفتوحة أو طُوّقت صراحة بأنها غير موثقة');
-  else if (un > 0) warnings.push('توجد ادعاءات بلا سند نصي لم تُنقَّ؛ ظُلّلت في قائمة الادعاءات');
+  if (decision === 'insufficient') warnings.push('الأدلة المفتوحة غير كافية لإجابة موثقة: لم يُعرض نص النموذج');
+  if (!opened.length) warnings.push('لم يُفتح أي مصدر من خيوط النموذج');
+  if (decision === 'answer' && qualified) warnings.push('حُذفت من الإجابة ادعاءات بلا سند نصي في المصادر المفتوحة أو طُوّقت صراحة بأنها غير موثقة');
+  if (decision === 'extractive') warnings.push('تعذرت صياغة إجابة موثقة كاملة؛ المعروض مقتطفات من النصوص المفتوحة فقط');
   if (d.json.time_sensitive === true) warnings.push('موضوع حساس زمنيًا؛ تحقق من أحدث تطور قبل النشر');
-  warnings.push('مؤشر الثقة checklist آلي على معايير معلنة، وليس احتمالًا لصحة الإجابة');
+  warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   return {
-    answer: finalAnswer, answer_qualified: qualified, claims: claimRows, confidence: { score, band, criteria: crit },
+    decision, answer: finalAnswer, answer_qualified: qualified, claims: claimRows, confidence: { score, band, criteria: crit },
     sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), original: x.repaired ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
     issues, angles, tools: Array.isArray(tools) ? tools : [], factcheck: fcHits, time_sensitive: d.json.time_sensitive === true, warnings, generated: true
   };
