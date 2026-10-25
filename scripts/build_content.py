@@ -57,7 +57,7 @@ for i,top in enumerate(data['children']):
 # Search data for the beta tool is regenerated with content edits.
 arr=[]
 def collect(n):
- if n.get('url') and not n.get('unverifiedLink') and n.get('arDescription'):arr.append({'name':n['name'],'description':n['arDescription'][:300],'url':n['url']})
+ if n.get('url') and not n.get('unverifiedLink') and not n.get('linkUnsafe') and n.get('arDescription'):arr.append({'name':n['name'],'description':n['arDescription'][:300],'url':n['url']})
  for ch in n.get('children',[]):collect(ch)
 collect(data)
 (site/'search-tools.json').write_text(json.dumps(arr,ensure_ascii=False,separators=(',',':')))

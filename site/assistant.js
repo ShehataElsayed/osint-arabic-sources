@@ -1,4 +1,4 @@
-// مساعد NewsRAG: تجربة السؤال الواحد. المستخدم يكتب السؤال فقط؛ جيمناي يجهّز المسودة،
+// مساعد NewsRAG: تجربة السؤال الواحد. المستخدم يكتب السؤال فقط؛ نموذج ذكاء اصطناعي يجهّز المسودة،
 // وفحوص NewsRAG تمر عليها قبل العرض (فتح المصادر، اقتباسات حرفية، دعم الادعاءات، معايير الثقة).
 // العرض: إجابة واحدة مفصلة، اكتمال إجابة صريح + نتائج فحوص بمعايير معلنة (بلا رقم إجمالي)، مصادر بموثوقية جهة النشر،
 // إشكاليات، زوايا صحفية، وأدوات مناسبة من الدليل بسبب الاختيار وطريقة الاستخدام.
@@ -9,7 +9,7 @@ import { buildAskReport } from './assistant-report.js';
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const SERVER = Boolean(BACKEND_URL);
-const TEAL = '#0a827d', AMBER = '#b88932', RED = '#9b2218', NAVY = '#102735';
+const TEAL = '#1b7a4a', AMBER = '#b88932', RED = '#9b2218', NAVY = '#102735';
 const BAND = { high: { label: 'تغطية فحوص مرتفعة', color: TEAL }, mid: { label: 'تغطية فحوص متوسطة', color: AMBER }, low: { label: 'تغطية فحوص منخفضة', color: RED } }; // وصف تغطية الفحوص، لا حكم على صحة الإجابة
 const REL = { very_high: ['جهة رسمية — تصنيف نطاق', 'tier-official'], high: ['جهة معروفة — تصنيف نطاق', 'tier-news'], medium: ['هوية موثقة جزئيًا', 'tier-academic'], unknown: ['غير مُقيَّمة', 'tier-unknown'] };
 const TIER_TXT = { official: 'نطاق رسمي', news: 'موقع إخباري', academic: 'موقع أكاديمي', unknown: 'نطاق غير مصنف' };
@@ -29,7 +29,7 @@ async function post(payload) {
   let data = null; try { data = await r.json(); } catch { /* ignore */ }
   if (!r.ok || !data || data.error) {
     const code = data && data.error;
-    const msg = code === 'off' || code === 'no_key' ? 'المساعد غير مفعّل بعد: يلزم ضبط مفتاح جيمناي على الخادم.'
+    const msg = code === 'off' || code === 'no_key' ? 'المساعد غير مفعّل بعد: يلزم ضبط مفتاح خدمة الذكاء الاصطناعي على الخادم.'
       : code === 'busy' || code === 'rate_limited' ? 'ضغط على الخدمة حاليًا — أعد المحاولة بعد دقيقة.'
       : 'تعذر الوصول إلى الخادم — أعد المحاولة لاحقًا.';
     throw new Error(msg);
@@ -66,9 +66,19 @@ function render(conf, question) {
   const decision = conf.decision || 'answer';
   const answerCard = el('div', 'src-card fade');
   if (decision === 'insufficient') {
-    answerCard.append(el('span', 'badge mislead', 'أدلة غير كافية'));
+    // Abstention has distinct causes; never teach that an empty result means the information does not exist.
+    const reason = conf.insufficient_reason || '';
+    const badge = (reason === 'generation_failed' || reason === 'no_checkable_claims') ? 'تعذّرت المعالجة' : 'أدلة غير كافية';
+    const text = reason === 'generation_failed'
+      ? 'تعذّر على الخدمة الخارجية توليد مسودة هذه المرة (انتهت مهلة أو تعذّرت الصياغة)، فلم تُفحص إجابة. هذا لا يعني غياب المعلومة — أعد المحاولة بعد قليل أو أكمل البحث بأدوات الدليل.'
+      : reason === 'no_checkable_claims'
+        ? 'تعذّر استخراج ادعاءات قابلة للفحص من مسودة النموذج، فلم تُفحص إجابة. هذا سبب معالجة لا يعني غياب المعلومة — أعد المحاولة أو ضيّق السؤال، أو أكمل البحث بأدوات الدليل.'
+      : reason === 'unsupported_claims'
+        ? 'فُتحت مصادر لكن مقاطعها لم تدعم ادعاءات المسودة، فلم يُعرض نص النموذج. قد توجد المعلومة في مصادر لم تُفحص — النتيجة أدناه خيوط بحث لا إجابة.'
+        : 'لم تسفر المصادر المفتوحة التي فُحصت عن مقاطع ذات صلة كافية بالسؤال، فلم تُصغ إجابة. النتيجة أدناه خيوط بحث لا إجابة، وهي لا تنفي وجود المعلومة.';
+    answerCard.append(el('span', 'badge mislead', badge));
     const head = el('h3', null, question); head.style.margin = '12px 0 8px'; answerCard.append(head);
-    answerCard.append(el('p', null, 'لم تُفتح مصادر تدعم ادعاءات المسودة بنصوصها، لذلك لم يُعرض نص النموذج. النتيجة أدناه خيوط بحث لا إجابة.'));
+    answerCard.append(el('p', null, text));
   } else {
     answerCard.append(el('span', 'badge true', decision === 'extractive' ? 'مقتطفات موثقة من المصادر المفتوحة' : conf.answer_qualified ? 'الإجابة بعد الفحص والتنقية' : 'الإجابة بعد الفحص'));
     if (decision === 'extractive') answerCard.append(el('p', 'note', 'تعذرت صياغة إجابة موثقة كاملة؛ المعروض فقط ما تدعمه النصوص المفتوحة، باقتباساتها الحرفية.'));
@@ -184,7 +194,7 @@ function render(conf, question) {
 async function run(q) {
   const box = $('askResult'); box.innerHTML = '';
   const spin = el('div', 'src-card fade'); spin.append(el('span', 'badge', 'يعمل الآن'));
-  spin.append(el('p', 'note', 'يجهّز جيمناي المسودة، ثم تفحص فحوص NewsRAG مصادرها قبل العرض — قد يستغرق الأمر حتى دقيقة.'));
+  spin.append(el('p', 'note', 'يجهّز نموذج الذكاء الاصطناعي المسودة، ثم تفحص فحوص NewsRAG مصادرها قبل العرض — قد يستغرق الأمر حتى دقيقة.'));
   box.append(spin);
   const candidates = await toolCandidates(q).catch(() => []);
   const conf = await post({ mode: 'ask', question: q, candidates });
@@ -193,7 +203,7 @@ async function run(q) {
 }
 
 if (SERVER) {
-  $('mode').textContent = 'المساعد متصل بالخادم. يجري كل سؤال في مسار واحد: مسودة جيمناي ثم فحوص NewsRAG ثم عرض النتيجة.';
+  $('mode').textContent = 'المساعد متصل بالخادم. يجري كل سؤال في مسار واحد: مسودة بالذكاء الاصطناعي ثم فحوص NewsRAG ثم عرض النتيجة.';
   $('askBtn').addEventListener('click', () => busyWith($('askBtn'), async () => {
     const q = $('askQ').value.trim();
     if (q.length < 10) { $('askResult').innerHTML = ''; $('askResult').append(el('div', 'src-card fade', 'اكتب سؤالًا أوضح (عشرة أحرف على الأقل).')); return; }
@@ -201,6 +211,6 @@ if (SERVER) {
   }));
   document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { $('askQ').value = b.textContent.trim(); $('askQ').focus(); }));
 } else {
-  $('mode').textContent = 'المساعد غير مفعّل في هذا النشر بعد: يلزم ضبط عنوان الخادم ومفتاح جيمناي عليه.';
+  $('mode').textContent = 'المساعد غير مفعّل في هذا النشر بعد: يلزم ضبط عنوان الخادم ومفتاح خدمة الذكاء الاصطناعي عليه.';
   $('askBtn').disabled = true;
 }

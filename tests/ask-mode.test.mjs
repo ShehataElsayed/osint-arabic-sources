@@ -119,7 +119,24 @@ test('ask: credible but irrelevant page yields no support and low confidence', a
   assert.equal(r.confidence.band, 'low');
   assert.equal(r.decision, 'insufficient', 'fail closed: no supported claim → no model text shown');
   assert.equal(r.answer, '', 'model answer withheld');
+  assert.equal(r.insufficient_reason, 'unsupported_claims');
   assert.ok(r.warnings.some(w => w.includes('غير كافية')));
+  assert.ok(r.warnings.some(w => w.includes('الامتناع عن الإجابة لا يعني غياب المعلومة')), 'anti-absence warning');
+});
+
+test('ask: no checkable claims is a processing limitation, never an evidence gap', async () => {
+  const draft = JSON.stringify({
+    answer: 'خلاصة عامة بلا ادعاءات قابلة للفحص.', claims: [], numbers: [], time_sensitive: false,
+    sources: [{ name: 'تقرير المنظمة العالمية للأرصاد', url: OK_URL }],
+  });
+  // claims_fallback returns '{}' via the default scripted branch -> still no claims
+  const f = scripted({ [OK_URL]: PAGE }, { draft });
+  const r = await askAssistant('سؤال عام كافٍ للفحص', CANDS, ENV, f);
+  assert.equal(r.decision, 'insufficient');
+  assert.equal(r.insufficient_reason, 'no_checkable_claims');
+  assert.ok(r.completeness.includes('تعذّر استخراج ادعاءات'), 'completeness names the processing cause');
+  assert.ok(!r.warnings.some(w => w.includes('الأدلة المفتوحة غير كافية لإجابة موثقة')), 'no evidence-gap phrasing on a processing failure');
+  assert.ok(r.warnings.some(w => w.includes('الامتناع عن الإجابة لا يعني غياب المعلومة')));
 });
 
 test('ask: fabricated domain is dropped, not counted', async () => {

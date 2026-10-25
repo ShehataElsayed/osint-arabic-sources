@@ -13,6 +13,7 @@ export function startTurn(thread, q) {
 }
 export function wireComposer({ form, input, send, chips, onAsk }) {
   const autosize = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 140) + 'px'; };
+  autosize(); // fit wrapped placeholder at init so no line is clipped
   let busy = false;
   const go = async text => { text = text.trim(); if (!text || busy) return; busy = true; send.disabled = true; input.value = ''; autosize(); try { await onAsk(text); } finally { busy = false; send.disabled = false; } };
   input.addEventListener('input', autosize);

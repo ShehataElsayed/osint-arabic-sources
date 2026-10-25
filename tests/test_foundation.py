@@ -16,7 +16,7 @@ class Foundation(unittest.TestCase):
             for c in n.get('children',[]):walk(c)
         walk(tree)
         self.assertEqual(len(tree['children']),33)
-        self.assertEqual(len(leaves),1168)
+        self.assertEqual(len(leaves),1171)  # 2026-10-25: +Perma.cc, +archive.today, +Google Fact Check Explorer (verified live; CourtListener dup reverted)
         self.assertTrue(all(n.get('arDescription') for n in leaves))
     def test_no_invented_review_dates(self):
         reviews=json.loads((ROOT/'3-review-queue.json').read_text())
