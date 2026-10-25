@@ -88,3 +88,25 @@ test('xl path: moderate floor + 2/3 coverage separates grounded positives from n
   // vector-semantic path keeps its calibrated 0.78 floor
   assert.equal(groundedWhy(pos[0][0], pos[0][1], 0.6, true, false), 'score_floor');
 });
+
+test('scale guard blocks magnitude swaps, passes consistent units (both languages)', async () => {
+  const { groundedWhy } = await import('../worker/rag-worker.js');
+  assert.equal(groundedWhy('The reservoir holds 5 billion cubic meters of water', 'The reservoir holds 5 million cubic meters of water after filling', 0.7, false, true), 'units');
+  assert.equal(groundedWhy('The program supported 50 thousand farmers in 2024', 'The program supported 50 million farmers in 2024 across governorates', 0.65, false, true), 'units');
+  assert.equal(groundedWhy('بلغت الصادرات 5 مليار دولار في 2024', 'بلغت الصادرات 5 مليون دولار في 2024 حسب بيان الوزارة', 0.6, false, true), 'units');
+  assert.equal(groundedWhy('Trade volume reached 5 billion dollars in 2024', 'Trade volume reached 5 billion dollars in 2024, up from 4.2 billion the year before', 0.7, false, true), '');
+});
+
+test('causal guard blocks unsupported causation, passes stated causation, spares non-causal claims', async () => {
+  const { groundedWhy } = await import('../worker/rag-worker.js');
+  assert.equal(groundedWhy('The currency float caused inflation to rise to 38 percent', 'Inflation rose to 38 percent while the currency float remained under review', 0.5, false, true), 'causal');
+  assert.equal(groundedWhy('The dam collapse caused the displacement of 30000 people in 2023', 'The dam collapse caused the displacement of 30000 people in 2023, the United Nations said', 0.8, false, true), '');
+  // non-causal Arabic wording (منتج/ناتج/أسهم) must not trigger the guard
+  const why = groundedWhy('بلغ الناتج المحلي نموا قدره 2.4 في المئة في 2024', 'نما الناتج المحلي بنسبة 2.4 في المئة في 2024 حسب بيانات رسمية', 0.6, false, true);
+  assert.notEqual(why, 'causal');
+});
+
+test('direction lexicon recognizes expansion as a rise cue', async () => {
+  const { directionOf } = await import('../worker/rag-worker.js');
+  assert.equal(directionOf('The economy expanded by 2.4 percent'), 'up');
+});

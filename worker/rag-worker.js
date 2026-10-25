@@ -168,6 +168,17 @@ export const groundedWhy = (claim, passage, score, semantic, xl = false) => {
   if ((negCount(claim) % 2) !== (negCount(passage) % 2)) return 'negation_parity';
   const pd = digits(passage), want = numTokens(claim);
   if (!want.every(n => pd.includes(n))) return 'numbers';
+  // Scale guard (fail closed): an explicit magnitude word in the claim must appear in the passage —
+  // 5 million is not evidence for 5 billion. Scale words are language-bound, so this binds only when
+  // claim and passage share a script (the xl path translates the claim first, so it still runs there);
+  // a cross-script semantic pair cannot be scale-checked here and that gap stays documented.
+  if (sameScript(claim, passage)) {
+    const cs = scalesOf(claim);
+    if (cs.size) { const ps = scalesOf(passage); if (![...cs].every(x => ps.has(x))) return 'units'; }
+    // Causality guard (fail closed): a claim asserting causation needs a causal cue in the passage;
+    // two juxtaposed facts are not evidence that one caused the other.
+    if (hasCausal(claim) && !hasCausal(passage)) return 'causal';
+  }
   // Direction parity: claim asserting a rise/fall needs the same cue in the passage (fail closed).
   const cd = directionOf(claim); if (cd && cd !== 'mixed' && directionOf(passage) !== cd) return 'direction';
   // Entity guard binds on the vector-semantic path, where vector cosine alone cannot catch an entity swap.
@@ -201,8 +212,16 @@ const NEG = new Set(['لا', 'لم', 'لن', 'ليس', 'ليست', 'ليسوا',
 const negCount = s => nrm(s).split(' ').filter(t => NEG.has(t) && t !== 'ما').length;
 // Comparison-direction cues (ported from newsrag lab.py comparison_signals, fail-closed): a claim
 // asserting a rise/fall needs the same cue in its passage; opposite or absent cue -> unsupported.
-const DIR_UP = new Set(['ارتفع', 'ارتفعت', 'ارتفاع', 'زاد', 'زادت', 'زياد', 'تزايد', 'صعد', 'صعدت', 'صعود', 'نما', 'نمت', 'نمو', 'تضاعف', 'تضاعفت', 'قفز', 'قفزت', 'increase', 'increas', 'rose', 'rise', 'grew', 'growth', 'grow', 'surg', 'jump', 'higher', 'gain']);
+const DIR_UP = new Set(['ارتفع', 'ارتفعت', 'ارتفاع', 'زاد', 'زادت', 'زياد', 'تزايد', 'صعد', 'صعدت', 'صعود', 'نما', 'نمت', 'نمو', 'تضاعف', 'تضاعفت', 'قفز', 'قفزت', 'increase', 'increas', 'rose', 'rise', 'grew', 'growth', 'grow', 'surg', 'jump', 'higher', 'gain', 'expand', 'expanded', 'expansion', 'توسع', 'توسعت']);
 const DIR_DOWN = new Set(['انخفض', 'انخفضت', 'انخفاض', 'تراجع', 'تراجعت', 'هبط', 'هبطت', 'هبوط', 'نقص', 'نقصت', 'تناقص', 'تناقصت', 'خفض', 'خفضت', 'قلل', 'انكمش', 'انكمشت', 'decrease', 'decreas', 'decline', 'declin', 'fell', 'fall', 'drop', 'dropp', 'down', 'lower', 'slump', 'shrank', 'shrink', 'loss']);
+// Magnitude-scale lexicon, compared on stemmed tokens so مليون/ملايين and million/millions agree.
+const SCALE = new Set(['الف', 'ملي', 'مليار', 'بلي', 'تريلي', 'thousand', 'million', 'billion', 'trillion']);
+const scalesOf = s => new Set(stok(s).filter(t => SCALE.has(t)));
+// Causal-cue lexicon (both languages); conservative — a miss blocks, never invents support. Arabic is
+// token-based so منتج/ناتج/أسهم (product/output/shares) don't masquerade as causation; English adds phrases.
+const CAUSAL_TOK = new Set(['cause', 'caused', 'causing', 'because', 'attributed', 'blamed', 'blames', 'بسبب', 'تسبب', 'تسببت', 'ادى', 'ادت', 'يؤدي', 'تؤدي', 'نتج', 'نتجت', 'ناجم']);
+const CAUSAL_PHRASE = ['due to', 'because of', 'led to', 'leads to', 'leading to', 'result in', 'resulted in', 'results in', 'attributed to', 'blamed for'];
+const hasCausal = s => { const n = nrm(s); return CAUSAL_PHRASE.some(x => (' ' + n + ' ').includes(x)) || n.split(' ').some(w => CAUSAL_TOK.has(w)); };
 export const directionOf = s => {
   const t = stok(s), up = t.some(x => DIR_UP.has(x)), down = t.some(x => DIR_DOWN.has(x));
   return up && down ? 'mixed' : up ? 'up' : down ? 'down' : '';

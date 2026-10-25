@@ -1,4 +1,4 @@
-// Offline cross-language verification study. Grounded pairs hand-authored from real run material
+// Offline cross-language DEVELOPMENT study (fixtures, not calibration — holdout lives in xl-holdout.eval.mjs). Grounded pairs hand-authored from real run material
 // (ef1/ef2) — no API calls. Positive = true support; negative = entity swap / direction flip /
 // number change / unrelated overlap. Compares verification paths on translated-claim vs EN passage.
 import { ragTokens } from '../worker/rag-worker.js';
@@ -9,7 +9,7 @@ const distinctive = s => [...new Set(ragTokens(s))].filter(t => t.length >= 3 &&
 const digits = s => String(s).replace(/[,.\s]/g, '').match(/\d+/g) || [];
 const NEG = new Set(['not', 'no', 'never', 'without', 'denies', 'denied', 'deny']);
 const negParity = s => ragTokens(s).filter(t => NEG.has(t)).length % 2;
-const DIR_UP = new Set(['increase', 'increas', 'rose', 'rise', 'grew', 'growth', 'reached', 'surge', 'jump', 'higher', 'gain']);
+const DIR_UP = new Set(['increase', 'increas', 'rose', 'rise', 'grew', 'growth', 'reached', 'surge', 'jump', 'higher', 'gain', 'expand', 'expanded', 'expansion']);
 const DIR_DOWN = new Set(['decrease', 'decreas', 'decline', 'declin', 'fell', 'fall', 'drop', 'dropp', 'down', 'lower', 'slump']);
 const dir = s => { const t = ragTokens(s), u = t.some(x => DIR_UP.has(x)), d = t.some(x => DIR_DOWN.has(x)); return u && d ? 'mixed' : u ? 'up' : d ? 'down' : ''; };
 
@@ -23,10 +23,17 @@ const pairs = [
   { kind: 'neg', id: 'N4-canal', claim: 'The Suez Canal Authority announced that it is closely following developments', passage: 'The Panama Canal Authority announced new transit fees for 2024 as vessel traffic recovered through the waterway.' },
 ];
 
+const SCALE = new Set(['الف', 'ملي', 'مليار', 'بلي', 'تريلي', 'thousand', 'million', 'billion', 'trillion']);
+const scalesOf = s => new Set(ragTokens(s).filter(t => SCALE.has(t)));
+const CAUSAL_TOK = new Set(['cause', 'caused', 'causing', 'because', 'attributed', 'blamed', 'blames']);
+const CAUSAL_PHRASE = ['due to', 'because of', 'led to', 'leads to', 'leading to', 'result in', 'resulted in', 'results in', 'attributed to', 'blamed for'];
+const hasCausal = s => { const n = s.toLowerCase(); return CAUSAL_PHRASE.some(x => (' ' + n + ' ').includes(x)) || n.split(/\s+/).some(w => CAUSAL_TOK.has(w)); };
 const guards = (claim, passage) => {
   const pd = digits(passage).join(','), want = digits(claim);
   if (!want.every(n => pd.split(',').some(x => x.includes(n)))) return 'numbers';
   if (negParity(claim) !== negParity(passage)) return 'negation';
+  const cs = scalesOf(claim); if (cs.size) { const ps = scalesOf(passage); if (![...cs].every(x => ps.has(x))) return 'units'; }
+  if (hasCausal(claim) && !hasCausal(passage)) return 'causal';
   const cd = dir(claim); if (cd && cd !== 'mixed' && dir(passage) !== cd) return 'direction';
   return '';
 };
