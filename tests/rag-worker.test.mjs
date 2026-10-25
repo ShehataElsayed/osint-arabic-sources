@@ -148,3 +148,45 @@ test('supportOf: negating page and distant numbers are not support; inflected fo
   const ok = supportOf('أغلقت المدارس أبوابها بسبب الفيضانات', ['قررت الوزارة أن المدرسة أغلقت أبوابها بسبب الفيضان في المحافظات الشمالية'], []);
   assert.equal(ok.verified, true);
 });
+
+import { exaFetchText } from '../worker/rag-worker.js';
+{ // exaFetchText: off without key, returns server-fetched text with key
+  assert.equal(await exaFetchText('https://example.com/a', {}, async () => { throw new Error('no call'); }), null);
+  const f = async (u, o) => ({ ok: true, json: async () => ({ results: [{ text: 'نص الصفحة من وسيط البحث' }] }) });
+  assert.equal(await exaFetchText('https://example.com/a', { EXA_API_KEY: 'k' }, f), 'نص الصفحة من وسيط البحث');
+  assert.equal(await exaFetchText('https://example.com/a', { EXA_API_KEY: 'k' }, async () => ({ ok: false })), null);
+}
+{ // checkSource falls back to Exa contents when the direct fetch fails; provenance URL kept, via marked
+  const calls = [];
+  const f = async (u, o) => {
+    calls.push(u);
+    if (u.startsWith('https://api.exa.ai/')) return { ok: true, json: async () => ({ results: [{ text: 'أعلنت الوزارة أن سعر الخبز ارتفع بنسبة 30 في المئة الشهر الماضي في القاهرة بعد قرار مجلس الوزراء' }] }) };
+    return { ok: false, headers: { get: () => 'text/html' } };
+  };
+  const r = await checkSource({ name: 'x', url: 'https://example.com/blocked' }, 'ارتفع سعر الخبز بنسبة 30 في المئة الشهر الماضي', ['30'], f, { EXA_API_KEY: 'k' });
+  assert.equal(r.exists, true); assert.equal(r.via, 'exa'); assert.equal(r.url, 'https://example.com/blocked');
+  assert.ok(r.quote.includes('30')); assert.ok(calls.some(u => u.startsWith('https://api.exa.ai/')));
+  // no key: stays failed, no Exa call
+  const calls2 = [];
+  const f2 = async (u, o) => { calls2.push(u); return { ok: false, headers: { get: () => 'text/html' } }; };
+  const r2 = await checkSource({ name: 'x', url: 'https://example.com/blocked' }, 'سعر الخبز', [], f2, {});
+  assert.equal(r2.exists, false); assert.ok(!calls2.some(u => u.startsWith('https://api.exa.ai/')));
+}
+
+{ // English negation parity: "did not" counts; mismatch with a positive claim is a conflict
+  const sent = 'Suez Canal transits did not decline in the first quarter of 2024 according to the official report';
+  const pos = supportOf('Suez Canal transits declined in the first quarter of 2024', [sent], ['2024']);
+  assert.equal(pos.negation_conflict, true, 'positive claim vs negated passage conflicts');
+  const neg = supportOf('Suez Canal transits did not decline in the first quarter of 2024', [sent], ['2024']);
+  assert.equal(neg.negation_conflict, false, 'negation parity holds in English');
+}
+{ // checkSource altText: Arabic claim against an English page selects candidates via the translated text
+  const html = '<p>Suez Canal transits fell by more than 50 percent in early 2024 after the Red Sea attacks began</p>';
+  const f = async () => ({ ok: true, headers: { get: () => 'text/html' }, text: async () => html });
+  const noAlt = await checkSource({ name: 'x', url: 'https://example.com/en' }, 'انخفضت حركة العبور في قناة السويس', ['50'], f, {});
+  assert.ok(noAlt.similarity < 0.15, 'Arabic claim alone does not match English page');
+  const withAlt = await checkSource({ name: 'x', url: 'https://example.com/en' }, 'انخفضت حركة العبور في قناة السويس', ['50'], f, {}, 'Suez Canal transits fell by more than 50 percent in early 2024');
+  assert.ok(withAlt.similarity >= 0.4, 'translated text matches the English passage');
+  assert.ok(withAlt.quote.includes('50'), 'English quote picked');
+  assert.equal(withAlt.numbers_ok, true, 'digits guard passes on the original passage');
+}

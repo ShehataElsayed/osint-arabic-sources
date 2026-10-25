@@ -5,7 +5,7 @@ An interactive Arabic guide to open-source intelligence (OSINT) tools and source
 The site itself is fully in Arabic (right-to-left). This repository's documentation is in English.
 
 - **Live site:** https://shehataelsayed.github.io/osint-arabic-sources/
-- **Verification experiment:** https://shehataelsayed.github.io/osint-arabic-sources/rag.html
+- **NewsRAG assistant:** https://shehataelsayed.github.io/osint-arabic-sources/assistant.html
 
 ![Home page](docs/images/home.png)
 
@@ -16,7 +16,7 @@ The site itself is fully in Arabic (right-to-left). This repository's documentat
 | [Home](https://shehataelsayed.github.io/osint-arabic-sources/) | Map of source and tool categories, analysis libraries and AI tools, with on-page search. |
 | [Investigative commands](https://shehataelsayed.github.io/osint-arabic-sources/commands.html) | Turns an investigation goal into ready-made search commands for search engines and platforms, ordered by methodology stage. Commands are built in the browser. Describing the goal in words is optional; that text goes to an external AI service after emails, phone numbers and URLs are replaced with tokens. |
 | [Smart search](https://shehataelsayed.github.io/osint-arabic-sources/smart-search.html) | Describe what you need and it recommends tools from the guide only. It may also show external web-search links, kept separate and marked as unchecked. |
-| [Verification experiment](https://shehataelsayed.github.io/osint-arabic-sources/rag.html) | Enter a claim and get an answer with a confidence level, the sources that were actually opened, and quotes copied from those pages. |
+| [NewsRAG assistant](https://shehataelsayed.github.io/osint-arabic-sources/assistant.html) | Two modes: ask your own sources and get a Gemini answer grounded in their excerpts with [E#] citations and exact offsets (abstains when evidence is weak), or check a viral claim with automated source opening and criteria. Export either result as a Markdown report. |
 | [Methodology](https://shehataelsayed.github.io/osint-arabic-sources/methodology.html) | The method, its limits and the licenses. |
 | [Journalistic verification platform](https://shehataelsayed.github.io/osint-arabic-sources/verification.html) | Separate cases, tracks by content type, an evidence and source log, and a clear statement of how far a conclusion can go. |
 

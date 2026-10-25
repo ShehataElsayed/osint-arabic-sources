@@ -16,7 +16,7 @@ class Foundation(unittest.TestCase):
             for c in n.get('children',[]):walk(c)
         walk(tree)
         self.assertEqual(len(tree['children']),33)
-        self.assertEqual(len(leaves),1168)
+        self.assertEqual(len(leaves),1171)  # 2026-10-25: +Perma.cc, +archive.today, +Google Fact Check Explorer (verified live; CourtListener dup reverted)
         self.assertTrue(all(n.get('arDescription') for n in leaves))
     def test_no_invented_review_dates(self):
         reviews=json.loads((ROOT/'3-review-queue.json').read_text())
@@ -25,7 +25,7 @@ class Foundation(unittest.TestCase):
     def test_admin_preserved(self):
         self.assertEqual((ROOT/'site/admin.html').read_bytes(),(ROOT/'_site/admin.html').read_bytes())
     def test_required_pages(self):
-        for f in ['index.html','admin.html','commands.html','methodology.html','verification.html','newsrag.html','rag.html','smart-search.html','catalog/category-01.html']:
+        for f in ['index.html','admin.html','commands.html','methodology.html','verification.html','assistant.html','smart-search.html','catalog/category-01.html']:
             self.assertTrue((ROOT/'_site'/f).is_file(),f)
     def test_local_links(self):
         missing=[]
