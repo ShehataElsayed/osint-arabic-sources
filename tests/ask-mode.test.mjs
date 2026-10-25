@@ -404,7 +404,7 @@ test('ask: cross-language bridge supports Arabic claims from an English source, 
 </body></html>`;
   const draft = JSON.stringify({
     answer: 'انخفضت حركة العبور في قناة السويس بأكثر من 50% في الربع الأول 2024 [S1]. ادعاء بلا سند عن ميناء جدة [S1].',
-    claims: ['انخفضت حركة العبور في قناة السويس بأكثر من 50% في الربع الأول 2024', 'تضاعفت حركة ميناء جدة ثلاث مرات في 2024'],
+    claims: ['انخفضت حركة العبور في قناة السويس بأكثر من 50% في الربع الأول 2024', 'تضاعفت حركة ميناء جدة ثلاث مرات في 2024', 'أطلقت الولايات المتحدة عملية حارس الازدهار في يناير 2024'],
     numbers: ['50', '2024'], time_sensitive: false,
     sources: [{ name: 'UNCTAD Red Sea report', url: EN_URL }],
   });
@@ -419,6 +419,7 @@ test('ask: cross-language bridge supports Arabic claims from an English source, 
         const dict = [
           'How did the Red Sea attacks affect shipping', 'Suez Canal transits fell by more than 50 percent in the first quarter of 2024',
           'Jeddah port traffic tripled in 2024',
+          'The United States launched Operation Prosperity Guardian in January 2024',
           'Suez Canal transits fell by more than 50 percent in the first quarter of 2024', 'An unsupported claim about Jeddah port',
         ];
         const en = Array.from({ length: n }, (_, i) => dict[i] || `translation ${i + 1} of an Arabic sentence about shipping`);
@@ -444,6 +445,8 @@ test('ask: cross-language bridge supports Arabic claims from an English source, 
   assert.equal(c1.cross_lang, true, 'flagged as translation-assisted');
   assert.ok(c1.evidence.includes('50 percent'), 'evidence is the original English passage');
   assert.ok(c2 && !c2.supported, 'unsupported claim still rejected (translation does not invent support)');
+  const c3 = r.claims.find(c => c.text.includes('حارس الازدهار'));
+  assert.ok(c3 && !c3.supported, 'entity guard blocks generic-overlap cross-language false positive (Prosperity Guardian absent)');
   assert.ok(r.warnings.some(w => w.includes('ترجمة آلية')), 'translation assistance disclosed');
   assert.notEqual(r.decision, 'insufficient', 'pipeline no longer starves on language mismatch');
 });

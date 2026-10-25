@@ -480,7 +480,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
       const b2 = pickBest(claimsEn[ci], null);
       if (b2 && (!best || b2.s > best.s)) { best = b2; winText = claimsEn[ci]; xl = true; }
     }
-    const supported = Boolean(best && groundedOk(winText, best.x.text, best.s, semantic));
+    const supported = Boolean(best && groundedOk(winText, best.x.text, best.s, semantic || xl));
     return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0, evidence: supported ? cleanText(best.x.text, 300) : '', source_ref: supported ? best.x.ref : 0, cross_lang: supported && xl };
   });
   // Citation reconciliation: every marker in the shown answer is RE-DERIVED from the fetched passages.
@@ -499,7 +499,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
       let best = useV ? pickBest(clean, vec) : pickBest(clean, null);
       let winText = clean;
       if (!useV && flatXl[fi]) { const b2 = pickBest(flatXl[fi], null); if (b2 && (!best || b2.s > best.s)) { best = b2; winText = flatXl[fi]; usedXl = true; } }
-      if (!(best && groundedOk(winText, best.x.text, best.s, useV))) return clean;
+      if (!(best && groundedOk(winText, best.x.text, best.s, useV || winText !== clean))) return clean;
       const m = clean.match(/^(.*?)([.!؟])$/);
       return m ? `${m[1]} [S${best.x.ref}]${m[2]}` : `${clean} [S${best.x.ref}]`;
     }).join(' ')).filter(Boolean).join('\n');
@@ -523,9 +523,9 @@ export async function askAssistant(question, candidates, env, f = fetch) {
       const newClaims = (Array.isArray(rc.json?.claims) ? rc.json.claims : []).slice(0, 5).map(c => cleanText(c, 220)).filter(c => c && !/لم نعثر|غير موثق|لا سند|بلا سند/.test(c));
       const newClaimsEn = newClaims.length ? await translateList(newClaims, env, f) : [];
       const injected = newClaims.filter((c, ci) => {
-        let best = pickBest(c, null), winText = c;
-        if (newClaimsEn[ci]) { const b2 = pickBest(newClaimsEn[ci], null); if (b2 && (!best || b2.s > best.s)) { best = b2; winText = newClaimsEn[ci]; } }
-        return !(best && groundedOk(winText, best.x.text, best.s, false));
+        let best = pickBest(c, null), winText = c, xlc = false;
+        if (newClaimsEn[ci]) { const b2 = pickBest(newClaimsEn[ci], null); if (b2 && (!best || b2.s > best.s)) { best = b2; winText = newClaimsEn[ci]; xlc = true; } }
+        return !(best && groundedOk(winText, best.x.text, best.s, xlc));
       });
       if (injected.length) { accepted = false; var rewriteInjected = true; }
     }
