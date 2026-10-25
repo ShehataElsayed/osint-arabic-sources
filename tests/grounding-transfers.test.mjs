@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { directionOf, groundedOk, markDuplicates, filterToolPicks, buildToolDf } from '../worker/rag-worker.js';
+import { directionOf, groundedOk, markDuplicates, filterToolPicks, buildToolDf, ragTokens } from '../worker/rag-worker.js';
 
 test('directionOf detects rise/fall cues in Arabic and English', () => {
   assert.equal(directionOf('ارتفعت أسعار الشحن بنسبة كبيرة'), 'up');
@@ -67,4 +67,24 @@ test('buildToolDf counts tools per stemmed token', () => {
   const df = buildToolDf([{ name: 'x', description: 'سفن ملاحة' }, { name: 'y', description: 'سفن' }]);
   assert.equal(df.get('سفن'), 2);
   assert.equal(df.get('ملاح'), 1);
+});
+
+test('xl path: moderate floor + 2/3 coverage separates grounded positives from negatives', async () => {
+  const { groundedWhy } = await import('../worker/rag-worker.js');
+  const cos = (a, b) => { const va = new Map(), vb = new Map(); ragTokens(a).forEach(x => va.set(x, (va.get(x) || 0) + 1)); ragTokens(b).forEach(x => vb.set(x, (vb.get(x) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [x, c] of va) { na += c * c; if (vb.has(x)) d += c * vb.get(x); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
+  const pos = [
+    ['Egypt population reached 106.5 million in July 2024', "Egypt's population reached 106.5 million in July 2024, according to the statistics agency CAPMAS, which tracks births and deaths through its population clock."],
+    ['Sea shipping prices increased by 60 percent since 2023', 'Container shipping costs increased by 60 percent since 2023 as vessels rerouted around the Cape of Good Hope, industry data showed.'],
+    ['The Suez Canal Authority announced that it is closely following developments', 'The Suez Canal Authority announced it is closely monitoring developments in the Red Sea to assess their impact on navigation.'],
+  ];
+  for (const [c, p] of pos) assert.equal(groundedWhy(c, p, cos(c, p), false, true), '', 'true support passes: ' + c.slice(0, 30));
+  const neg = [
+    ['Egypt population reached 106.5 million in July 2024', "Egypt's population density reached 106.5 people per square kilometer in 2024, with most residents concentrated along the Nile valley."],
+    ['Sea shipping prices increased by 60 percent since 2023', 'Shipping prices decreased by 60 percent since 2023 as demand collapsed on major routes, industry data showed.'],
+    ['Egypt population reached 106.5 million in July 2024', "Egypt's population reached 105.6 million in July 2024, according to the statistics agency."],
+    ['The Suez Canal Authority announced that it is closely following developments', 'The Panama Canal Authority announced new transit fees for 2024 as vessel traffic recovered through the waterway.'],
+  ];
+  for (const [c, p] of neg) assert.notEqual(groundedWhy(c, p, cos(c, p), false, true), '', 'negative blocked: ' + c.slice(0, 30));
+  // vector-semantic path keeps its calibrated 0.78 floor
+  assert.equal(groundedWhy(pos[0][0], pos[0][1], 0.6, true, false), 'score_floor');
 });

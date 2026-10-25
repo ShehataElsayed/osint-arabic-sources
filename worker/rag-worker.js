@@ -155,18 +155,28 @@ const STOP_ENT = new Set(['في', 'على', 'إلى', 'من', 'عن', 'مع', '�
 const coreOf = s => { const i = String(s).indexOf(':'); return i > 0 && i < 40 ? String(s).slice(i + 1).trim() : String(s); };
 const distinctive = s => [...new Set(stok(coreOf(s)))].filter(t => t.length >= 3 && !STOP_ENT.has(t));
 const sameScript = (a, b) => { const ar = x => /[\u0600-\u06ff]/.test(x); return ar(a) === ar(b); };
-export const groundedWhy = (claim, passage, score, semantic) => {
+const STOP_EN = new Set(['the', 'and', 'that', 'with', 'from', 'this', 'these', 'those', 'its', 'for', 'are', 'was', 'were', 'has', 'have', 'had', 'been', 'according', 'said', 'say', 'says', 'over', 'per', 'than', 'into', 'their', 'but', 'also', 'more', 'most', 'new', 'about']);
+// xl translation path gate: moderate lexical floor PLUS >=2/3 of the translated claim's distinctive
+// content tokens present in the passage. Justified offline on grounded positive/negative pairs
+// (tests/xl-paths.eval.mjs): the 0.78 floor rejected ALL true supports; full coverage rejected
+// translation-synonym variance (prices/costs); 2/3 coverage separated every positive from the
+// entity-swap, direction-flip, number-change and unrelated-overlap negatives in that set. Margins are
+// thin on 7 pairs — translation is always disclosed as an automatic signal, never entailment, and the
+// shown evidence stays the original source text.
+const xlCoverageOk = (claim, passage) => { const pt = new Set(stok(passage)); const d = [...new Set(stok(claim))].filter(t => t.length >= 3 && !STOP_ENT.has(t) && !STOP_EN.has(t) && !/^\d/.test(t)); return d.length ? d.filter(t => pt.has(t)).length / d.length >= 2 / 3 : false; };
+export const groundedWhy = (claim, passage, score, semantic, xl = false) => {
   if (score == null || score < (semantic ? SEM_SUPPORT : 0.4)) return 'score_floor';
   if ((negCount(claim) % 2) !== (negCount(passage) % 2)) return 'negation_parity';
   const pd = digits(passage), want = numTokens(claim);
   if (!want.every(n => pd.includes(n))) return 'numbers';
   // Direction parity: claim asserting a rise/fall needs the same cue in the passage (fail closed).
   const cd = directionOf(claim); if (cd && cd !== 'mixed' && directionOf(passage) !== cd) return 'direction';
-  // Entity guard binds on the semantic path, where vector cosine alone cannot catch an entity swap.
+  // Entity guard binds on the vector-semantic path, where vector cosine alone cannot catch an entity swap.
   if (semantic && sameScript(claim, passage)) { const pt = new Set(stok(passage)); if (!distinctive(claim).every(t => pt.has(t))) return 'entity'; }
+  if (xl && !semantic && !xlCoverageOk(claim, passage)) return 'xl_coverage';
   return '';
 };
-export const groundedOk = (claim, passage, score, semantic) => groundedWhy(claim, passage, score, semantic) === '';
+export const groundedOk = (claim, passage, score, semantic, xl = false) => groundedWhy(claim, passage, score, semantic, xl) === '';
 
 // Source verification: do the sources cited in the model answer exist, and does the page text support the claim.
 // Page text is compared locally (term overlap and numbers); it is never sent to the model and never shown.
@@ -567,7 +577,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
       const b2 = pickBest(claimsEn[ci], null);
       if (b2 && (!best || b2.s > best.s)) { best = b2; winText = claimsEn[ci]; xl = true; }
     }
-    const supported = Boolean(best && groundedOk(winText, best.x.text, best.s, semantic || xl));
+    const supported = Boolean(best && groundedOk(winText, best.x.text, best.s, semantic, xl));
     return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0, evidence: supported ? cleanText(best.x.text, 300) : '', source_ref: supported ? best.x.ref : 0, cross_lang: supported && xl };
   });
   // Citation reconciliation: every marker in the shown answer is RE-DERIVED from the fetched passages.
@@ -586,7 +596,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
       let best = useV ? pickBest(clean, vec) : pickBest(clean, null);
       let winText = clean;
       if (!useV && flatXl[fi]) { const b2 = pickBest(flatXl[fi], null); if (b2 && (!best || b2.s > best.s)) { best = b2; winText = flatXl[fi]; usedXl = true; } }
-      if (!(best && groundedOk(winText, best.x.text, best.s, useV || winText !== clean))) return clean;
+      if (!(best && groundedOk(winText, best.x.text, best.s, useV, winText !== clean))) return clean;
       const m = clean.match(/^(.*?)([.!؟])$/);
       return m ? `${m[1]} [S${best.x.ref}]${m[2]}` : `${clean} [S${best.x.ref}]`;
     }).join(' ')).filter(Boolean).join('\n');
@@ -612,7 +622,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
       const injected = newClaims.filter((c, ci) => {
         let best = pickBest(c, null), winText = c, xlc = false;
         if (newClaimsEn[ci]) { const b2 = pickBest(newClaimsEn[ci], null); if (b2 && (!best || b2.s > best.s)) { best = b2; winText = newClaimsEn[ci]; xlc = true; } }
-        return !(best && groundedOk(winText, best.x.text, best.s, xlc));
+        return !(best && groundedOk(winText, best.x.text, best.s, false, xlc));
       });
       if (injected.length) { accepted = false; var rewriteInjected = true; }
     }
@@ -808,7 +818,7 @@ ${pList}`, env, f, 0.3, 4096, 'synthesize');
         if (c1 > best) { best = c1; win = clean; xl = false; }
         if (en && !/[\u0600-\u06ff]/.test(st)) { const c2 = cos(en, st); if (c2 > best) { best = c2; win = en; xl = true; } }
       }
-      const why = groundedWhy(win, p.text, best, xl);
+      const why = groundedWhy(win, p.text, best, false, xl);
       if (!why) { okRefs.push(n); if (xl) xlRefs.push(n); }
       else if (best > bestAny) { bestAny = best; bestWhy = why; }
     }
@@ -865,7 +875,8 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
     if (unknowns.length) score = Math.min(score, 84); // جوانب من السؤال بلا تغطية موثقة
     if (dropped.length) score = Math.min(score, 69);
   }
-  const band = score >= 70 ? 'high' : score >= 40 ? 'mid' : 'low';
+  let band = score >= 70 ? 'high' : score >= 40 ? 'mid' : 'low';
+  if ((decision !== 'answer' || unknowns.length) && band === 'high') band = 'mid'; // تغطية ناقصة لا تُعرض كتغطية مرتفعة
   // Warnings: honest disclosures only.
   if (decision === 'insufficient') warnings.push('الأدلة المفتوحة غير كافية لإجابة موثقة: لم تُعرض صياغة النموذج');
   if (!checked.length) warnings.push('لم يُفتح أي مصدر من نتائج الاكتشاف');
@@ -875,6 +886,10 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   if (timeSensitive) warnings.push('موضوع حساس زمنيًا؛ تحقق من أحدث تطور قبل النشر');
   warnings.push('الإجابة توليف مقيد من مقاطع صفحات مفتوحة فقط (عينة محدودة بسقف يقارب عشر صفحات)، وليس مسحًا شاملًا لكل ما هو منشور');
   if (checked.some(x => x.via === 'exa')) warnings.push('بعض الصفحات تعذّر فتحها مباشرة فجُلب نصها عبر وسيط بحث خارجي (Exa) مع إبقاء النسب لعنوان المصدر الأصلي');
+  const noPass = checked.filter(x => x.similarity < 0.15).map(x => x.host).slice(0, 4);
+  if (noPass.length) warnings.push(`صفحات فُتحت بلا مقطع مطابق للسؤال — فتح النطاق الرسمي ليس سندًا بذاته: ${noPass.join('، ')}`);
+  const years = [...new Set(factual.flatMap(v => v.clean.match(/20\d{2}/g) || []))].sort();
+  if (timeSensitive && years.length) warnings.push(`الأرقام المعروضة مؤرخة (${years.join('، ')}) وقد لا تعكس القيمة الحالية لحظة النشر؛ تحقق من المصدر الرسمي مباشرة قبل الاعتماد`);
   if (checked.some(x => x.duplicate_of)) warnings.push('نص متطابق حرفيًا بين أكثر من مصدر مفتوح؛ لا تُعد النسخ المتطابقة مصادر مستقلة (تطابق نصي حرفي فقط، لا يُكشف شبه التطابق)');
   if (usedXl) warnings.push('بعض المطابقات أُجريت عبر ترجمة آلية إلى لغة المصدر؛ التطابق بعد الترجمة إشارة آلية لا إثبات استدلال، والمعروض هو نص المصدر الأصلي');
   warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');

@@ -110,3 +110,24 @@ test('Exa budget: requests stop at EXA_CALL_BUDGET and are ledgered', async () =
   assert.ok(env._exaCalls <= 1, 'never exceeded Exa budget');
   assert.ok(r.calls.some(c => c.status === 'exa_budget_skip'), 'skip recorded in ledger');
 });
+
+test('indicator honesty: extractive without dropped sentences still caps mid-band; dated figures and no-passage sources are diagnosed', async () => {
+  const P3 = 'تقرير رسمي عن الاقتصاد المصري وأسعار الصرف والتضخم ومعدلات البطالة في المحافظات خلال الربع الأخير من العام الحالي';
+  const syn = JSON.stringify({ answer: `موثقة: ${P1} [P1].`, unknowns: ['معدل النمو السكاني السنوي'] });
+  const f0 = scripted({ synthesis: syn, pages: { ...PAGES, 'https://www.capmas.gov.eg/x': `<p>${P3}</p>` } });
+  const f = async (url, o = {}) => {
+    const u = String(url);
+    if (u.includes('api.exa.ai/search')) return { ok: true, status: 200, json: async () => ({ results: [{ url: U1, title: 'تقرير' }, { url: 'https://www.capmas.gov.eg/x', title: 'صفحة رسمية' }] }) };
+    if (u.includes('generativelanguage.googleapis.com')) {
+      const prompt = JSON.parse(o.body).contents[0].parts[0].text;
+      if (prompt.includes('مخطط بحث')) return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '{"queries":["موجات الحر 2023"],"time_sensitive":true}' }] } }] }) };
+    }
+    return f0(url, o);
+  };
+  const r = await askEvidenceFirst(Q, CANDS, { ...ENV, _ledger: [] }, f);
+  assert.equal(r.decision, 'extractive');
+  assert.equal(r.dropped_count, 0);
+  assert.ok(r.confidence.score <= 84, 'extractive caps score at 84');
+  assert.notEqual(r.confidence.band, 'high', 'incomplete coverage never shows top band');
+  assert.ok(r.warnings.some(w => w.includes('فتح النطاق الرسمي ليس سندًا')), 'no-passage page distinguished from supporting source');
+});
