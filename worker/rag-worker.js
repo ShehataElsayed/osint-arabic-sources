@@ -155,11 +155,13 @@ const STOP_ENT = new Set(['في', 'على', 'إلى', 'من', 'عن', 'مع', '�
 const coreOf = s => { const i = String(s).indexOf(':'); return i > 0 && i < 40 ? String(s).slice(i + 1).trim() : String(s); };
 const distinctive = s => [...new Set(stok(coreOf(s)))].filter(t => t.length >= 3 && !STOP_ENT.has(t));
 const sameScript = (a, b) => { const ar = x => /[\u0600-\u06ff]/.test(x); return ar(a) === ar(b); };
-const groundedOk = (claim, passage, score, semantic) => {
+export const groundedOk = (claim, passage, score, semantic) => {
   if (score == null || score < (semantic ? SEM_SUPPORT : 0.4)) return false;
   if ((negCount(claim) % 2) !== (negCount(passage) % 2)) return false;
   const pd = digits(passage), want = numTokens(claim);
   if (!want.every(n => pd.includes(n))) return false;
+  // Direction parity: claim asserting a rise/fall needs the same cue in the passage (fail closed).
+  const cd = directionOf(claim); if (cd && cd !== 'mixed' && directionOf(passage) !== cd) return false;
   // Entity guard binds on the semantic path, where vector cosine alone cannot catch an entity swap.
   if (semantic && sameScript(claim, passage)) { const pt = new Set(stok(passage)); if (!distinctive(claim).every(t => pt.has(t))) return false; }
   return true;
@@ -187,6 +189,19 @@ const stok = s => nrm(s).split(' ').filter(t => t.length > 2).map(w => /[\u0600-
 export const ragTokens = stok;
 const NEG = new Set(['لا', 'لم', 'لن', 'ليس', 'ليست', 'ليسوا', 'غير', 'بدون', 'عدم', 'نفي', 'نفت', 'نفى', 'تنفي', 'ينفي', 'تنفى', 'ينفى', 'لايوجد', 'ما', 'not', 'no', 'never', 'without', 'hardly', 'denies', 'denied', 'deny']);
 const negCount = s => nrm(s).split(' ').filter(t => NEG.has(t) && t !== 'ما').length;
+// Comparison-direction cues (ported from newsrag lab.py comparison_signals, fail-closed): a claim
+// asserting a rise/fall needs the same cue in its passage; opposite or absent cue -> unsupported.
+const DIR_UP = new Set(['ارتفع', 'ارتفعت', 'ارتفاع', 'زاد', 'زادت', 'زياد', 'تزايد', 'صعد', 'صعدت', 'صعود', 'نما', 'نمت', 'نمو', 'تضاعف', 'تضاعفت', 'قفز', 'قفزت', 'increase', 'increas', 'rose', 'rise', 'grew', 'growth', 'grow', 'surg', 'jump', 'higher', 'gain']);
+const DIR_DOWN = new Set(['انخفض', 'انخفضت', 'انخفاض', 'تراجع', 'تراجعت', 'هبط', 'هبطت', 'هبوط', 'نقص', 'نقصت', 'تناقص', 'تناقصت', 'خفض', 'خفضت', 'قلل', 'انكمش', 'انكمشت', 'decrease', 'decreas', 'decline', 'declin', 'fell', 'fall', 'drop', 'dropp', 'down', 'lower', 'slump', 'shrank', 'shrink', 'loss']);
+export const directionOf = s => {
+  const t = stok(s), up = t.some(x => DIR_UP.has(x)), down = t.some(x => DIR_DOWN.has(x));
+  return up && down ? 'mixed' : up ? 'up' : down ? 'down' : '';
+};
+// Exact-content fingerprint (ported from newsrag lab.py exact_duplicate_groups): SHA-256 of the raw
+// fetched page. Identical text on different domains is one content group, not independent sources.
+// Exact match only - near-duplicates and semantic equivalence stay out of scope by design.
+const sha256Hex = async s2 => { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(String(s2))); return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join(''); };
+export function markDuplicates(list) { const seen = new Map(); (Array.isArray(list) ? list : []).forEach((x, i) => { const h = x && x.text_sha256; if (!h) return; if (seen.has(h)) x.duplicate_of = seen.get(h); else seen.set(h, i + 1); }); return list; }
 const cos = (a, b) => { const va = new Map(), vb = new Map(); stok(a).forEach(t => va.set(t, (va.get(t) || 0) + 1)); stok(b).forEach(t => vb.set(t, (vb.get(t) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [t, c] of va) { na += c * c; if (vb.has(t)) d += c * vb.get(t); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
 const digits = s => String(s).replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[,٬\s]/g, '');
 export function safeSourceUrl(u) {
@@ -245,7 +260,7 @@ export function supportOf(claimText, sents, nums) {
   return { cands: scored.slice(0, 10).map(c => c.x.slice(0, 300)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
 }
 export async function checkSource(src, claimText, nums, f = fetch, env = {}, altText = '') {
-  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' };
+  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' };
   if (!url) return out;
   out.host = new URL(url).hostname; out.tier = tierOf(out.host);
   let rawText = '';
@@ -263,6 +278,7 @@ export async function checkSource(src, claimText, nums, f = fetch, env = {}, alt
     const sup = supportOf(claimText, sents, nums);
     const supAlt = altText ? supportOf(altText, sents, nums) : null;
     const bestSup = supAlt && supAlt.similarity > sup.similarity ? supAlt : sup;
+    out.text_sha256 = await sha256Hex(raw);
     out.page = pageIdentity(raw); out.cands = bestSup.cands; out.similarity = bestSup.similarity; out.quote = bestSup.quote;
     out.numbers_ok = bestSup.numbers_ok; out.negation_conflict = bestSup.negation_conflict; out.verified = bestSup.verified;
   }
@@ -600,7 +616,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   const verifiedQuotes = checked.filter(x => x.exists && x.quote).map(x => x.quote).slice(0, 4).join('\n- ');
   const toolCands = cleanCandidates(candidates);
   const aj = await modelJson(`السؤال: ${q}\nالإجابة بعد الفحص: ${finalAnswer.slice(0, 2500)}\nنصوص موثقة من المصادر:\n- ${verifiedQuotes || 'لا يوجد'}\n${toolCands.length ? `واختر حتى 4 أدوات من القائمة فقط تناسب السؤال (بمعرفاتها)، بلا روابط، ولكل أداة سبب قصير وخطوات استخدام من الوصف فقط:\n${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'لا تختر أدوات.'}\nأعد JSON فقط: {"issues":["حتى 4 إشكاليات أو فجوات في الصورة الحالية"],"angles":["حتى 4 زوايا صحفية قابلة للتنفيذ مع تحديد ما تحتاجه كل زاوية"],"picks":[{"id":رقم,"why":"...","how":"..."}]}`, env, f, 0.6, 2048, 'extras');
-  const tools = filterToolPicks(aj.json?.picks, toolCands, q);
+  const tools = filterToolPicks(aj.json?.picks, toolCands, q, env.TOOL_DF);
   const issues = (Array.isArray(aj.json?.issues) ? aj.json.issues : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
   const angles = (Array.isArray(aj.json?.angles) ? aj.json.angles : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
   const warnings = [];
@@ -626,14 +642,23 @@ export async function askAssistant(question, candidates, env, f = fetch) {
 // Relevance guard shared by ask modes: a picked tool must share stemmed tokens with the question (name
 // or description), otherwise the card mislinks the guide (e.g. a people-search tool for a shipping
 // question). No overlap → abstain. Links are never produced here; ids must be among the candidates.
-export function filterToolPicks(picks, toolCands, q) {
+// Document frequency of each stemmed token across the FULL guide catalog, built caller-side (the
+// worker only receives a candidate subset). Rare tokens (df <= ~3% of a 1128-tool catalog) count as
+// distinctive for the single-token pass in filterToolPicks.
+export function buildToolDf(catalog) { const df = new Map(); (Array.isArray(catalog) ? catalog : []).forEach(t => new Set(stok(`${t?.name || ''} ${t?.description || ''}`)).forEach(tok => df.set(tok, (df.get(tok) || 0) + 1))); return df; }
+export function filterToolPicks(picks, toolCands, q, dfmap) {
   const toolIds = new Map((Array.isArray(toolCands) ? toolCands : []).map(x => [x.id, x]));
   const seen = new Set(), badLink = /https?:|www\./i, qToks = new Set(stok(q));
   return (Array.isArray(picks) ? picks : []).filter(x => {
     const cand = toolIds.get(Number(x?.id));
     if (!cand || seen.has(Number(x.id)) || !seen.add(Number(x.id))) return false;
     if (typeof x.why !== 'string' || typeof x.how !== 'string' || badLink.test(x.why + x.how)) return false;
-    return stok(`${cand.name} ${cand.description}`).some(t => qToks.has(t) && !STOP_ENT.has(t) && t.length >= 3);
+    // Task-fit guard: one generic shared token (e.g. «حركة») must not promote a marginal tool. Pass
+    // needs two shared content tokens, or one distinctive token (long, or rare across the FULL catalog).
+    const shared = [...new Set(stok(`${cand.name} ${cand.description}`).filter(t => qToks.has(t) && !STOP_ENT.has(t) && t.length >= 3))];
+    if (shared.length >= 2) return true;
+    if (shared.length === 1) { const t = shared[0], df = dfmap instanceof Map ? dfmap.get(t) : null; return t.length >= 6 || (Number.isFinite(df) && df <= 34); }
+    return false;
   }).slice(0, 4).map(x => ({ id: Number(x.id), why: x.why.slice(0, 240), how: x.how.slice(0, 360) }));
 }
 
@@ -675,11 +700,12 @@ export async function askEvidenceFirst(question, candidates, env, f = fetch) {
   const qEn = (await translateList([q], env, f))[0] || '';
   const checkedAll = await Promise.all(found.map(a => checkSource({ name: a.title || a.host, url: a.url }, q, [], f, env, qEn)));
   const checked = checkedAll.filter(x => x.exists);
+  markDuplicates(checked); // exact-text copies no longer count as independent sources
   await Promise.all(checked.map(async x => { x.identity = await rdapInfo(x.host, f); x.rel = reliabilityOf(x.tier, x.identity, x.page); }));
   // 4) Deterministic passage selection: candidate sentences ranked by lexical similarity to the
   //    question in both languages; per-source cap keeps independence.
   const pool = [];
-  checked.forEach((x, gi) => (x.cands || []).forEach(t => pool.push({ text: t, ref: gi + 1, s: Math.max(cos(q, t), qEn ? cos(qEn, t) : 0) })));
+  checked.forEach((x, gi) => { if (x.duplicate_of) return; (x.cands || []).forEach(t => pool.push({ text: t, ref: gi + 1, s: Math.max(cos(q, t), qEn ? cos(qEn, t) : 0) })); });
   pool.sort((a, b) => b.s - a.s);
   const passages = [], perRef = {};
   for (const p of pool) {
@@ -688,7 +714,7 @@ export async function askEvidenceFirst(question, candidates, env, f = fetch) {
     passages.push(p); perRef[p.ref] = (perRef[p.ref] || 0) + 1;
     if (passages.length >= 12) break;
   }
-  const srcRow = x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.quote), by_search: true, discovered: true, via: x.exists ? (x.via || '') : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, identity: x.exists ? x.identity : null, page: x.exists ? x.page : null });
+  const srcRow = x => ({ duplicate_of: x.duplicate_of || 0, name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.quote), by_search: true, discovered: true, via: x.exists ? (x.via || '') : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, identity: x.exists ? x.identity : null, page: x.exists ? x.page : null });
   const warnings = [];
   const baseResult = () => ({
     sources: checkedAll.map(srcRow), time_sensitive: timeSensitive, factcheck: [],
@@ -776,10 +802,10 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
 أعد JSON فقط: {"issues":["حتى 4 إشكاليات أو فجوات"],"angles":["حتى 4 زوايا صحفية قابلة للتنفيذ مع تحديد ما تحتاجه كل زاوية"],"picks":[{"id":رقم,"why":"...","how":"..."}]}`, env, f, 0.6, 2048, 'extras');
     issues = (Array.isArray(aj.json?.issues) ? aj.json.issues : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
     angles = (Array.isArray(aj.json?.angles) ? aj.json.angles : []).slice(0, 4).map(x => cleanText(x, 240)).filter(Boolean);
-    tools = filterToolPicks(aj.json?.picks, toolCands, q);
+    tools = filterToolPicks(aj.json?.picks, toolCands, q, env.TOOL_DF);
   }
   // 8) Transparent confidence criteria (0/0.5/1 over available criteria) — checklist, never accuracy.
-  const hosts = new Set(checked.map(x => registrable(x.host)));
+  const hosts = new Set(checked.filter(x => !x.duplicate_of).map(x => registrable(x.host)));
   const crit = [];
   const push = (id, label, score, detail) => crit.push({ id, label, score, detail });
   push('sources_opened', 'فتح مصادر الاكتشاف', found.length && checked.length / found.length >= 0.6 ? 1 : checked.length ? 0.5 : 0, `فُتح ${checked.length} من ${found.length}`);
@@ -800,6 +826,7 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   if (timeSensitive) warnings.push('موضوع حساس زمنيًا؛ تحقق من أحدث تطور قبل النشر');
   warnings.push('الإجابة توليف مقيد من مقاطع صفحات مفتوحة فقط (عينة محدودة بسقف يقارب عشر صفحات)، وليس مسحًا شاملًا لكل ما هو منشور');
   if (checked.some(x => x.via === 'exa')) warnings.push('بعض الصفحات تعذّر فتحها مباشرة فجُلب نصها عبر وسيط بحث خارجي (Exa) مع إبقاء النسب لعنوان المصدر الأصلي');
+  if (checked.some(x => x.duplicate_of)) warnings.push('نص متطابق حرفيًا بين أكثر من مصدر مفتوح؛ لا تُعد النسخ المتطابقة مصادر مستقلة (تطابق نصي حرفي فقط، لا يُكشف شبه التطابق)');
   if (usedXl) warnings.push('بعض المطابقات أُجريت عبر ترجمة آلية إلى لغة المصدر؛ التطابق بعد الترجمة إشارة آلية لا إثبات استدلال، والمعروض هو نص المصدر الأصلي');
   warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
