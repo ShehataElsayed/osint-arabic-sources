@@ -102,3 +102,11 @@ test('filterToolPicks: irrelevant tool abstains (Thats-Them class)', () => {
   const out = filterToolPicks(picks, cands, Q);
   assert.deepEqual(out.map(x => x.id), [0], 'people-search tool excluded for a marine question');
 });
+
+test('Exa budget: requests stop at EXA_CALL_BUDGET and are ledgered', async () => {
+  const env = { ...ENV, _ledger: [], EXA_CALL_BUDGET: 1 };
+  const syn = JSON.stringify({ answer: 'شيء ما [P1].', unknowns: [] });
+  const r = await askEvidenceFirst(Q, CANDS, env, scripted({ synthesis: syn, pages: PAGES }));
+  assert.ok(env._exaCalls <= 1, 'never exceeded Exa budget');
+  assert.ok(r.calls.some(c => c.status === 'exa_budget_skip'), 'skip recorded in ledger');
+});

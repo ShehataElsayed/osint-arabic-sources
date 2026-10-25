@@ -285,10 +285,20 @@ async function sitemapLocs(host, f) {
   if (kids.length) { all = all.filter(u => !/\.xml(\.gz)?$/i.test(u)); for (const k of kids) all = all.concat(locs(await get(k))); }
   return all;
 }
+// Exa requests share the same bounded discipline: EXA_CALL_BUDGET caps requests per question
+// (default 8), counted in env._exaCalls and recorded in env._ledger with stage names.
+function exaAllow(env, stage) {
+  env._exaCalls = (env._exaCalls || 0);
+  const cap = Math.max(1, Number(env?.EXA_CALL_BUDGET) || 8);
+  if (env._exaCalls >= cap) { env?._ledger?.push({ stage, ms: 0, status: 'exa_budget_skip' }); return false; }
+  if (env?._deadline && Date.now() > env._deadline) { env?._ledger?.push({ stage, ms: 0, status: 'deadline_skip' }); return false; }
+  env._exaCalls++;
+  return true;
+}
 const searchCache = new Map();
 // Domain-restricted web search (Exa includeDomains). Used only after a cited URL failed to open. Quota/network errors are swallowed.
 export async function exaSameDomain(host, text, env, f = fetch) {
-  if (!env?.EXA_API_KEY) return [];
+  if (!env?.EXA_API_KEY || !exaAllow(env, 'exa_samedomain')) return [];
   const h = host.replace(/^www\./, ''), q = String(text || '').slice(0, 300), key = h + '|' + q;
   if (searchCache.has(key)) return searchCache.get(key);
   let out = [];
@@ -301,7 +311,7 @@ export async function exaSameDomain(host, text, env, f = fetch) {
 }
 // Open-web search (Exa). Results are only candidates: verify mode fetches and checks them; the guide search shows them as external links.
 export async function exaWeb(query, env, f = fetch, n = 4) {
-  if (!env?.EXA_API_KEY) return [];
+  if (!env?.EXA_API_KEY || !exaAllow(env, 'exa_search')) return [];
   const q = String(query || '').slice(0, 300); if (!q) return [];
   const key = 'web|' + n + '|' + q; if (searchCache.has(key)) return searchCache.get(key);
   let out = [];
@@ -316,7 +326,7 @@ export async function exaWeb(query, env, f = fetch, n = 4) {
 // geo-block, transient). Exa fetches the page, not us; the returned text is external untrusted content and
 // flows through the same lexical checks as directly fetched text. Provenance stays the original URL, marked via='exa'.
 export async function exaFetchText(url, env, f = fetch) {
-  if (!env?.EXA_API_KEY) return null;
+  if (!env?.EXA_API_KEY || !exaAllow(env, 'exa_contents')) return null;
   const u = safeSourceUrl(url); if (!u || denied(u)) return null;
   try {
     const r = await f('https://api.exa.ai/contents', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': env.EXA_API_KEY }, body: JSON.stringify({ urls: [u], text: { maxCharacters: 6000 } }), signal: AbortSignal.timeout(10000) });
@@ -427,6 +437,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (!((env.GEMINI_API_KEY && env.GEMINI_MODEL) || (env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL)) || !q) return { error: 'off' };
   env._deadline = Date.now() + Math.max(30000, Number(env.PIPELINE_DEADLINE_MS) || 240000);
   env._calls = 0; // budget is per question, not per shared env object
+  env._exaCalls = 0; // Exa budget is per question too
   const draftP = `أنت مساعد صحفي. أجب عن السؤال التالي إجابة مفصلة طويلة منظمة بالعربية من معرفتك: افتح بخلاصة مباشرة ثم قسّم الإجابة إلى عناوين فرعية وفقرات، وقدّم أمثلة متنوعة من سياقات وجهات مختلفة، وميّز ما هو مؤكد مما هو محل خلاف أو تحديث. إن كان السؤال عن حدث حديث جدًا أو متغير فاذكر ذلك صراحة داخل الإجابة. ثم اذكر من ثلاثة إلى ثمانية مصادر بعنوان كامل ورابط https كامل لصفحة محددة تعرف أنها موجودة فعلًا، ولا تخترع روابط ولا اقتباسات، ولا تذكر صفحات رئيسية أو بوابات عامة بل رابط صفحة المحتوى المحددة، ونوّع جهات النشر بحيث تأتي من نطاقات مستقلة قدر الإمكان. أشر إلى المصدر داخل الإجابة بصيغة [S1] [S2] بحسب ترتيب قائمتك، ولا تشر إلا إلى مصدر ذكرته. أعد JSON فقط: {"answer":"...","claims":["حتى 8 ادعاءات جوهرية قابلة للفحص من الإجابة"],"numbers":["أرقام أو تواريخ مفتاحية"],"time_sensitive":true|false,"sources":[{"name":"العنوان الكامل والجهة","url":"https://..."}]}. السؤال: ${q}`;
   const d = await modelJson(draftP, env, f, 0.4, 8192, 'draft');
   if (d.error === 'http_429') return { error: 'busy' };
@@ -639,6 +650,7 @@ export async function askEvidenceFirst(question, candidates, env, f = fetch) {
   if (!((env.GEMINI_API_KEY && env.GEMINI_MODEL) || (env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL)) || !q) return { error: 'off' };
   env._deadline = Date.now() + Math.max(30000, Number(env.PIPELINE_DEADLINE_MS) || 240000);
   env._calls = 0; // budget is per question, not per shared env object
+  env._exaCalls = 0; // Exa budget is per question too
   // 1) Query planner: search terms only — never URLs, never an answer. A planner failure still leaves
   //    the raw question as the single discovery query.
   const pl = await modelJson(`أنت مخطط بحث لصحفي. حوّل السؤال إلى حتى 4 استعلامات بحث ويب دقيقة (عربية أو إنجليزية حسب الأنسب للموضوع) للعثور على مصادر موثوقة حديثة عنه. لا تكتب إجابة ولا روابط ولا أسماء صفحات. أعد JSON فقط: {"queries":["..."],"time_sensitive":true|false}
