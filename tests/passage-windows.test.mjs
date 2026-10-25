@@ -60,3 +60,18 @@ test('checkSource end-to-end: split fact in a fetched page yields a joined candi
   assert.ok(out.cand_spans[i] && Number.isInteger(out.cand_spans[i].start) && out.cand_spans[i].end > out.cand_spans[i].start, 'exact span offsets attached');
   assert.equal(out.numbers_ok, true);
 });
+
+test('groundedWhy names the failing guard; best-sentence scoring rescues window dilution', async () => {
+  const { groundedWhy } = await import('../worker/rag-worker.js');
+  const claim = 'بلغت نسبة الانخفاض في حركة السفن 60 بالمئة';
+  const windowText = 'بلغت نسبة الانخفاض في حركة السفن العابرة للقناة 60 بالمئة مقارنة بالعام الماضي. وشهدت أسعار الشحن العالمية تقلبات واسعة مع تغير مسارات كثيرة للشركات الكبرى خلال الفترة نفسها من العام.';
+  const { ragTokens } = await import('../worker/rag-worker.js');
+  const cos = (a, b) => { const va = new Map(), vb = new Map(); ragTokens(a).forEach(x => va.set(x, (va.get(x) || 0) + 1)); ragTokens(b).forEach(x => vb.set(x, (vb.get(x) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [x, c] of va) { na += c * c; if (vb.has(x)) d += c * vb.get(x); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
+  const wholeCos = cos(claim, windowText);
+  const bestSent = Math.max(...sentSpans(windowText).map(x => cos(claim, x.text)));
+  assert.ok(bestSent > wholeCos, 'sentence-level score exceeds diluted window score');
+  assert.equal(groundedWhy(claim, windowText, bestSent, false), '', 'passes on best-sentence score with window-level guards');
+  assert.equal(groundedWhy(claim, windowText, 0.2, false), 'score_floor');
+  assert.equal(groundedWhy('ارتفعت حركة السفن 60 بالمئة', windowText, bestSent, false), 'direction');
+  assert.equal(groundedWhy('بلغت النسبة 75 بالمئة', windowText, bestSent, false), 'numbers');
+});

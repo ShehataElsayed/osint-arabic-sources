@@ -155,17 +155,18 @@ const STOP_ENT = new Set(['في', 'على', 'إلى', 'من', 'عن', 'مع', '�
 const coreOf = s => { const i = String(s).indexOf(':'); return i > 0 && i < 40 ? String(s).slice(i + 1).trim() : String(s); };
 const distinctive = s => [...new Set(stok(coreOf(s)))].filter(t => t.length >= 3 && !STOP_ENT.has(t));
 const sameScript = (a, b) => { const ar = x => /[\u0600-\u06ff]/.test(x); return ar(a) === ar(b); };
-export const groundedOk = (claim, passage, score, semantic) => {
-  if (score == null || score < (semantic ? SEM_SUPPORT : 0.4)) return false;
-  if ((negCount(claim) % 2) !== (negCount(passage) % 2)) return false;
+export const groundedWhy = (claim, passage, score, semantic) => {
+  if (score == null || score < (semantic ? SEM_SUPPORT : 0.4)) return 'score_floor';
+  if ((negCount(claim) % 2) !== (negCount(passage) % 2)) return 'negation_parity';
   const pd = digits(passage), want = numTokens(claim);
-  if (!want.every(n => pd.includes(n))) return false;
+  if (!want.every(n => pd.includes(n))) return 'numbers';
   // Direction parity: claim asserting a rise/fall needs the same cue in the passage (fail closed).
-  const cd = directionOf(claim); if (cd && cd !== 'mixed' && directionOf(passage) !== cd) return false;
+  const cd = directionOf(claim); if (cd && cd !== 'mixed' && directionOf(passage) !== cd) return 'direction';
   // Entity guard binds on the semantic path, where vector cosine alone cannot catch an entity swap.
-  if (semantic && sameScript(claim, passage)) { const pt = new Set(stok(passage)); if (!distinctive(claim).every(t => pt.has(t))) return false; }
-  return true;
+  if (semantic && sameScript(claim, passage)) { const pt = new Set(stok(passage)); if (!distinctive(claim).every(t => pt.has(t))) return 'entity'; }
+  return '';
 };
+export const groundedOk = (claim, passage, score, semantic) => groundedWhy(claim, passage, score, semantic) === '';
 
 // Source verification: do the sources cited in the model answer exist, and does the page text support the claim.
 // Page text is compared locally (term overlap and numbers); it is never sent to the model and never shown.
@@ -739,7 +740,7 @@ export async function askEvidenceFirst(question, candidates, env, f = fetch) {
   // 4) Deterministic passage selection: candidate sentences ranked by lexical similarity to the
   //    question in both languages; per-source cap keeps independence.
   const pool = [];
-  checked.forEach((x, gi) => { if (x.duplicate_of) return; (x.cands || []).forEach(t => pool.push({ text: t, ref: gi + 1, s: Math.max(cos(q, t), qEn ? cos(qEn, t) : 0) })); });
+  checked.forEach((x, gi) => { if (x.duplicate_of) return; (x.cands || []).forEach(t => pool.push({ text: t, sents: sentSpans(t).map(y => y.text), ref: gi + 1, s: Math.max(cos(q, t), qEn ? cos(qEn, t) : 0) })); });
   pool.sort((a, b) => b.s - a.s);
   const passages = [], perRef = {};
   for (const p of pool) {
@@ -781,7 +782,7 @@ ${pList}`, env, f, 0.3, 4096, 'synthesize');
   const citedIdx = sents.map((s, i) => /\[P\d{1,2}\]/.test(s) ? i : -1).filter(i => i >= 0);
   const anyLatin = passages.some(p => !/[\u0600-\u06ff]/.test(p.text));
   const citedEn = (anyLatin && citedIdx.length) ? await translateList(citedIdx.map(i => sents[i].replace(/\s*\[P\d{1,2}\]/g, '').trim()), env, f) : [];
-  const verified = [], dropped = [];
+  const verified = [], dropped = [], droppedDetail = [];
   let ci = 0, usedXl = false;
   sents.forEach(s => {
     const refs = [...new Set([...s.matchAll(/\[P(\d{1,2})\]/g)].map(m => Number(m[1])))].filter(n => n >= 1 && n <= passages.length);
@@ -795,15 +796,25 @@ ${pList}`, env, f, 0.3, 4096, 'synthesize');
     }
     const en = citedEn[ci] || ''; ci++;
     const okRefs = [], xlRefs = [];
+    let bestAny = 0, bestWhy = '';
     for (const n of refs) {
       const p = passages[n - 1];
-      let best = cos(clean, p.text), win = clean, xl = false;
-      if (en && !/[\u0600-\u06ff]/.test(p.text)) { const s2 = cos(en, p.text); if (s2 > best) { best = s2; win = en; xl = true; } }
-      if (groundedOk(win, p.text, best, xl)) { okRefs.push(n); if (xl) xlRefs.push(n); }
+      // Score gate on the best-matching SENTENCE inside the window (windows dilute whole-text cosine);
+      // numbers/negation/direction guards still bind on the full window (fail closed).
+      const sentsOf = Array.isArray(p.sents) && p.sents.length ? p.sents : [p.text];
+      let best = 0, win = clean, xl = false;
+      for (const st of sentsOf) {
+        const c1 = cos(clean, st);
+        if (c1 > best) { best = c1; win = clean; xl = false; }
+        if (en && !/[\u0600-\u06ff]/.test(st)) { const c2 = cos(en, st); if (c2 > best) { best = c2; win = en; xl = true; } }
+      }
+      const why = groundedWhy(win, p.text, best, xl);
+      if (!why) { okRefs.push(n); if (xl) xlRefs.push(n); }
+      else if (best > bestAny) { bestAny = best; bestWhy = why; }
     }
     if (xlRefs.length) usedXl = true;
     if (okRefs.length) verified.push({ clean, refs: okRefs, xl: xlRefs.length > 0 });
-    else dropped.push(clean);
+    else { dropped.push(clean); droppedDetail.push({ text: clean.slice(0, 200), refs, score: Math.round(bestAny * 100) / 100, reason: bestWhy || 'no_ref' }); }
   });
   const factual = verified.filter(v => v.refs.length);
   let decision, finalAnswer;
@@ -866,7 +877,7 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   const out = { ...baseResult(), decision, answer: finalAnswer, answer_qualified: decision !== 'answer' || dropped.length > 0,
     claims: factual.map(v => ({ text: v.clean, supported: true, similarity: 0, evidence: cleanText(passages[v.refs[0] - 1].text, 300), source_ref: passages[v.refs[0] - 1].ref, cross_lang: v.xl })),
-    dropped_count: dropped.length, unknowns, confidence: { score, band, criteria: crit }, issues, angles, tools, warnings, generated: true };
+    dropped_count: dropped.length, dropped_detail: droppedDetail.slice(0, 10), unknowns, confidence: { score, band, criteria: crit }, issues, angles, tools, warnings, generated: true };
   if (env.DEBUG_LEDGER) out.calls = (env._ledger || []).slice();
   return out;
 }
