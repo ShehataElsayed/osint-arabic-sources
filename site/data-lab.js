@@ -30,7 +30,7 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
     status.textContent = 'يُحمَّل محرك الاستعلام لأول مرة (نحو ٤٠ ميغابايت من خادم الدليل نفسه)...';
     const worker = new Worker('./duckdb/duckdb-browser-mvp.worker.js');
     db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
-    await db.instantiate('./duckdb/duckdb-mvp.wasm', null);
+    await db.instantiate(new URL('./duckdb/duckdb-mvp.wasm', window.location.href).toString(), null);
   }
   function jsonToCSV(text) {
     const v = JSON.parse(text);
