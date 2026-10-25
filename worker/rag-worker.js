@@ -250,6 +250,37 @@ export function reliabilityOf(tier, id, page) {
 }
 // Pure support decision for one page. Similarity uses stemmed terms; numbers must appear in the best sentence or its neighbours
 // (not anywhere on the page); a sentence whose negation differs from the claim's is not treated as support (weak heuristic).
+// Sentence spans with EXACT offsets into the stripped page text (offset unit: JS string chars of that
+// stripped text). Span text includes its sentence terminator; text.slice(start, end) === span text.
+export function sentSpans(text) {
+  const t = String(text || ''), out = [], re = /[^.!؟?\n]+[.!؟?]?/g;
+  let m;
+  while ((m = re.exec(t))) {
+    const rawSeg = m[0], lead = rawSeg.length - rawSeg.trimStart().length;
+    const txt = rawSeg.trim(); if (!txt) continue;
+    out.push({ text: txt, start: m.index + lead, end: m.index + lead + txt.length });
+  }
+  return out;
+}
+// Adjacent-sentence passage windows: a kept sentence extends to the IMMEDIATELY following span only
+// when the gap in the original text is a bare separator (no filtered heading between: the partner must
+// itself end with sentence punctuation) and the joined window fits maxChars. Verbatim slice of the
+// source text; never joins across sections or skips over removed content.
+export function passageWindows(text, spans, maxChars = 500) {
+  const t = String(text || ''), out = [];
+  for (let i = 0; i < spans.length; i++) {
+    const a = spans[i];
+    if (a.text.length <= 15 || a.text.split(' ').length < 6) continue;
+    let win = { text: a.text.slice(0, maxChars), start: a.start, end: a.start + Math.min(a.text.length, maxChars) };
+    const b = spans[i + 1];
+    if (b && b.start - a.end <= 3 && /[.!؟?]$/.test(b.text)) {
+      const joined = t.slice(a.start, b.end).replace(/\s+/g, ' ').trim();
+      if (joined.length <= maxChars && joined.length > a.text.length) win = { text: joined, start: a.start, end: b.end };
+    }
+    out.push(win);
+  }
+  return out;
+}
 export function supportOf(claimText, sents, nums) {
   const scored = sents.map((x, i) => ({ x, i, s: cos(claimText, x) })).sort((a, b) => b.s - a.s);
   const best = scored[0], similarity = best ? Math.round(best.s * 100) / 100 : 0;
@@ -257,7 +288,7 @@ export function supportOf(claimText, sents, nums) {
   const win = best ? digits([sents[best.i - 1], sents[best.i], sents[best.i + 1]].filter(Boolean).join(' ')) : '';
   const numbers_ok = want.length ? want.every(n => win.includes(n)) : null;
   const negation_conflict = best ? (negCount(claimText) % 2) !== (negCount(best.x) % 2) : false;
-  return { cands: scored.slice(0, 10).map(c => c.x.slice(0, 300)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
+  return { cands: scored.slice(0, 10).map(c => c.x.slice(0, 500)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
 }
 export async function checkSource(src, claimText, nums, f = fetch, env = {}, altText = '') {
   const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' };
@@ -274,13 +305,16 @@ export async function checkSource(src, claimText, nums, f = fetch, env = {}, alt
     const raw = rawText.slice(0, 400000); const text = raw.replace(/<(script|style|head|title|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|td|section|article|header|footer|blockquote)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
     out.exists = true; out.url = url;
     const tm = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i); out.title = cleanText((tm ? tm[1] : '').replace(/&nbsp;|&amp;/g, ' '), 160);
-    const sents = text.split(/[.!؟?\n]+/).map(x => x.replace(/\s+/g, ' ').trim()).filter(x => x.length > 15 && x.split(' ').length >= 6);
-    const sup = supportOf(claimText, sents, nums);
-    const supAlt = altText ? supportOf(altText, sents, nums) : null;
+    const spans = passageWindows(text, sentSpans(text));
+    const wins = spans.map(w => w.text);
+    const sup = supportOf(claimText, wins, nums);
+    const supAlt = altText ? supportOf(altText, wins, nums) : null;
+    const spanByText = new Map(spans.map(w => [w.text, { start: w.start, end: w.end }]));
     const bestSup = supAlt && supAlt.similarity > sup.similarity ? supAlt : sup;
     out.text_sha256 = await sha256Hex(raw);
     out.page = pageIdentity(raw); out.cands = bestSup.cands; out.similarity = bestSup.similarity; out.quote = bestSup.quote;
     out.numbers_ok = bestSup.numbers_ok; out.negation_conflict = bestSup.negation_conflict; out.verified = bestSup.verified;
+    out.cand_spans = bestSup.cands.map(cx => spanByText.get(cx) || null);
   }
   return out;
 }
