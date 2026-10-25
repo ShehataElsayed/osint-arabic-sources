@@ -75,3 +75,8 @@ test('groundedWhy names the failing guard; best-sentence scoring rescues window 
   assert.equal(groundedWhy('ارتفعت حركة السفن 60 بالمئة', windowText, bestSent, false), 'direction');
   assert.equal(groundedWhy('بلغت النسبة 75 بالمئة', windowText, bestSent, false), 'numbers');
 });
+
+test('groundedWhy available for diagnostics (smoke)', async () => {
+  const { groundedWhy } = await import('../worker/rag-worker.js');
+  assert.equal(typeof groundedWhy, 'function');
+});

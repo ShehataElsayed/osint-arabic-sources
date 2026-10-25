@@ -860,7 +860,11 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   if (checked.length) push('provenance', 'شفافية جهات النشر (نطاق وتسجيل، لا دقة محتوى)', checked.some(x => x.tier === 'official' || x.rel === 'high') ? 1 : checked.some(x => x.rel === 'medium') ? 0.5 : 0, checked.some(x => x.tier === 'official') ? 'جهة رسمية بينها' : 'حسب النطاق وبيانات التسجيل');
   let score = Math.round(100 * crit.reduce((a, c) => a + c.score, 0) / (crit.length || 1));
   if (decision === 'insufficient') score = Math.min(score, 39);
-  else if (dropped.length) score = Math.min(score, 69);
+  else {
+    if (decision === 'extractive') score = Math.min(score, 84); // مقتطفات فقط: تغطية غير مكتملة مهما سلمت الاستشهادات
+    if (unknowns.length) score = Math.min(score, 84); // جوانب من السؤال بلا تغطية موثقة
+    if (dropped.length) score = Math.min(score, 69);
+  }
   const band = score >= 70 ? 'high' : score >= 40 ? 'mid' : 'low';
   // Warnings: honest disclosures only.
   if (decision === 'insufficient') warnings.push('الأدلة المفتوحة غير كافية لإجابة موثقة: لم تُعرض صياغة النموذج');
@@ -876,7 +880,7 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   const out = { ...baseResult(), decision, answer: finalAnswer, answer_qualified: decision !== 'answer' || dropped.length > 0,
-    claims: factual.map(v => ({ text: v.clean, supported: true, similarity: 0, evidence: cleanText(passages[v.refs[0] - 1].text, 300), source_ref: passages[v.refs[0] - 1].ref, cross_lang: v.xl })),
+    claims: factual.map(v => ({ text: v.clean, supported: true, similarity: 0, evidence: cleanText(passages[v.refs[0] - 1].text, 500), source_ref: passages[v.refs[0] - 1].ref, cross_lang: v.xl })),
     dropped_count: dropped.length, dropped_detail: droppedDetail.slice(0, 10), unknowns, confidence: { score, band, criteria: crit }, issues, angles, tools, warnings, generated: true };
   if (env.DEBUG_LEDGER) out.calls = (env._ledger || []).slice();
   return out;
