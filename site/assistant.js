@@ -1,6 +1,6 @@
 // مساعد NewsRAG: تجربة السؤال الواحد. المستخدم يكتب السؤال فقط؛ جيمناي يجهّز المسودة،
 // وفحوص NewsRAG تمر عليها قبل العرض (فتح المصادر، اقتباسات حرفية، دعم الادعاءات، معايير الثقة).
-// العرض: إجابة واحدة مفصلة، مؤشر ثقة بمعايير معلنة، مصادر بموثوقية جهة النشر،
+// العرض: إجابة واحدة مفصلة، اكتمال إجابة صريح + نتائج فحوص بمعايير معلنة (بلا رقم إجمالي)، مصادر بموثوقية جهة النشر،
 // إشكاليات، زوايا صحفية، وأدوات مناسبة من الدليل بسبب الاختيار وطريقة الاستخدام.
 import { BACKEND_URL } from './rag-config.js';
 import { buildIndex, search } from './tool-search.js';
@@ -10,7 +10,7 @@ const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const SERVER = Boolean(BACKEND_URL);
 const TEAL = '#0a827d', AMBER = '#b88932', RED = '#9b2218', NAVY = '#102735';
-const BAND = { high: { label: 'تغطية فحوص مرتفعة', color: TEAL }, mid: { label: 'تغطية فحوص متوسطة', color: AMBER }, low: { label: 'تغطية فحوص منخفضة', color: RED } };
+const BAND = { high: { label: 'تغطية فحوص مرتفعة', color: TEAL }, mid: { label: 'تغطية فحوص متوسطة', color: AMBER }, low: { label: 'تغطية فحوص منخفضة', color: RED } }; // وصف تغطية الفحوص، لا حكم على صحة الإجابة
 const REL = { very_high: ['جهة رسمية — تصنيف نطاق', 'tier-official'], high: ['جهة معروفة — تصنيف نطاق', 'tier-news'], medium: ['هوية موثقة جزئيًا', 'tier-academic'], unknown: ['غير مُقيَّمة', 'tier-unknown'] };
 const TIER_TXT = { official: 'نطاق رسمي', news: 'موقع إخباري', academic: 'موقع أكاديمي', unknown: 'نطاق غير مصنف' };
 function provenance(s) {
@@ -47,21 +47,6 @@ async function toolCandidates(q) {
 }
 const toolById = id => (tIndex ? tIndex.items[id] : null);
 
-function gauge(conf) {
-  const b = BAND[conf.band] || BAND.mid, v = Math.max(0, Math.min(100, Number(conf.score) || 0));
-  const r = 62, c = 2 * Math.PI * r, dash = c * v / 100;
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 160 160'); svg.setAttribute('width', '140'); svg.setAttribute('height', '140'); svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', `مؤشر تغطية الفحوص الآلية: ${v} من 100 نقطة — ${b.label} — متوسط معايير معلنة كل منها يسجل 0 أو 0.5 أو 1؛ يقيس اكتمال الفحوص ولا يقيس احتمال صحة الإجابة ولا موثوقيتها`);
-  const mk = (tag, attrs) => { const n = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, val] of Object.entries(attrs)) n.setAttribute(k, val); return n; };
-  svg.append(
-    mk('circle', { cx: 80, cy: 80, r, fill: 'none', stroke: '#e6efed', 'stroke-width': 14 }),
-    mk('circle', { cx: 80, cy: 80, r, fill: 'none', stroke: b.color, 'stroke-width': 14, 'stroke-linecap': 'round', 'stroke-dasharray': `${dash} ${c - dash}`, transform: 'rotate(-90 80 80)' }),
-    mk('text', { x: 80, y: 88, 'text-anchor': 'middle', style: `font:800 34px Cairo,Tahoma,sans-serif;fill:${NAVY}` }),
-    mk('text', { x: 80, y: 108, 'text-anchor': 'middle', style: 'font:700 12px Cairo,Tahoma,sans-serif;fill:#52646d' }));
-  svg.childNodes[2].textContent = String(Math.round(v)); svg.childNodes[3].textContent = 'من 100';
-  return svg;
-}
 // [n] markers in the answer become safe link chips to the matching source card; everything else stays plain text.
 function appendMarked(p, text, sources) {
   const re = /\[S?(\d{1,2})\]/g; let last = 0, m;
@@ -93,20 +78,18 @@ function render(conf, question) {
   box.append(answerCard);
 
   const confCard = el('div', 'src-card fade sec-block');
-  confCard.append(el('span', 'badge', 'مؤشر تغطية الفحوص — معايير معلنة'));
-  const wrap = el('div', 'conf-wrap');
-  const left = el('div'); left.append(gauge(conf.confidence || {}));
+  confCard.append(el('span', 'badge', 'نتائج الفحوص الآلية — معايير معلنة'));
   const band = (conf.confidence || {}).band || 'low';
-  left.append(el('div', 'conf-band band-' + band, BAND[band].label + ` — ${Math.round(conf.confidence.score)}/100 نقطة في المؤشر`));
-  wrap.append(left);
-  const crits = el('div');
+  // Answer completeness leads; no aggregate score is displayed — per-check counts only.
+  confCard.append(el('div', 'conf-complete band-' + band, (conf.completeness || 'اكتمال الإجابة غير محدد') + ' — ' + BAND[band].label));
+  const crits = el('div', 'crit-list');
   ((conf.confidence || {}).criteria || []).forEach(c => {
     const row = el('div', 'crit'); row.append(el('span', 'dot ' + CRIT_DOT(c.score)));
     row.append(el('strong', null, c.label + ' ')); row.append(el('small', null, '— ' + c.detail));
     crits.append(row);
   });
-  wrap.append(crits); confCard.append(wrap);
-  confCard.append(el('p', 'note', 'طريقة الحساب: كل معيار معلن أعلاه يسجل 0 أو 0.5 أو 1، والمؤشر هو متوسطها على 100 نقطة — يقيس تغطية الفحوص الآلية، لا احتمال صحة الإجابة ولا موثوقيتها، ولا يغني عن مراجعة المصادر الأصلية.'));
+  confCard.append(crits);
+  confCard.append(el('p', 'note', 'كل معيار أعلاه يسجل 0 أو 0.5 أو 1 لأغراض الفرز الآلي ولا يُجمع في رقم كلي معروض: هذه الفحوص تقيس اكتمال إجراءات التحقق، لا احتمال صحة الإجابة ولا موثوقيتها، ولا تغني عن مراجعة المصادر الأصلية.'));
   const claims = (conf.claims || []).filter(c => c && c.text);
   if (claims.length) {
     const h = el('h3', null, 'سند الادعاءات الرئيسية'); h.style.marginTop = '14px'; confCard.append(h);

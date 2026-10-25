@@ -67,7 +67,8 @@ export function buildAskReport({ question, result, catalog, when }) {
   out.push(`التاريخ: ${line(when) || new Date().toISOString()}`);
   out.push(`السؤال: ${line(question)}`);
   out.push(`نوع النتيجة: ${DECISION_LBL[r.decision] || 'إجابة بعد الفحص'}`);
-  out.push(`مؤشر تغطية الفحوص الآلي: ${Math.round(conf.score)}/100 نقطة — ${BAND_LBL[conf.band] || conf.band} (متوسط ${(conf.criteria || []).length} معايير معلنة، كل معيار 0/0.5/1؛ يقيس تغطية الفحوص لا احتمال الصحة ولا الموثوقية)`);
+  out.push(`اكتمال الإجابة: ${line(r.completeness) || DECISION_LBL[r.decision] || 'غير محدد'} — ${BAND_LBL[conf.band] || conf.band}`);
+  out.push('لا يُعرض رقم إجمالي: كل معيار أدناه يسجل 0 أو 0.5 أو 1 لأغراض الفرز الآلي فقط؛ الفحوص تقيس اكتمال إجراءات التحقق لا احتمال الصحة ولا الموثوقية');
   out.push('', r.decision === 'insufficient' ? '## لم تُعرض إجابة: الأدلة المفتوحة غير كافية' : '## الإجابة بعد الفحص');
   out.push(r.answer || '—');
   if ((r.claims || []).length) {
@@ -78,7 +79,7 @@ export function buildAskReport({ question, result, catalog, when }) {
     });
   }
   if ((conf.criteria || []).length) {
-    out.push('', '## معايير مؤشر الثقة');
+    out.push('', '## معايير الفحص الآلي المعلنة');
     conf.criteria.forEach(c => out.push(`- (${c.score}/1) ${c.label}: ${line(c.detail)}`));
   }
   const srcs = r.sources || [];

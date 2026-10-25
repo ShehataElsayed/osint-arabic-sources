@@ -157,12 +157,11 @@ const distinctive = s => [...new Set(stok(coreOf(s)))].filter(t => t.length >= 3
 const sameScript = (a, b) => { const ar = x => /[\u0600-\u06ff]/.test(x); return ar(a) === ar(b); };
 const STOP_EN = new Set(['the', 'and', 'that', 'with', 'from', 'this', 'these', 'those', 'its', 'for', 'are', 'was', 'were', 'has', 'have', 'had', 'been', 'according', 'said', 'say', 'says', 'over', 'per', 'than', 'into', 'their', 'but', 'also', 'more', 'most', 'new', 'about']);
 // xl translation path gate: moderate lexical floor PLUS >=2/3 of the translated claim's distinctive
-// content tokens present in the passage. Justified offline on grounded positive/negative pairs
-// (tests/xl-paths.eval.mjs): the 0.78 floor rejected ALL true supports; full coverage rejected
-// translation-synonym variance (prices/costs); 2/3 coverage separated every positive from the
-// entity-swap, direction-flip, number-change and unrelated-overlap negatives in that set. Margins are
-// thin on 7 pairs — translation is always disclosed as an automatic signal, never entailment, and the
-// shown evidence stays the original source text.
+// content tokens present in the passage. EXPERIMENTAL — not calibrated: tuned on 7 development
+// fixtures derived from prior run examples (tests/xl-paths.eval.mjs), which are not independent
+// validation; a separate holdout set (tests/xl-holdout.eval.mjs) tracks observed errors by category
+// without any accuracy/generalization claim. Margins are thin — translation is always disclosed as
+// an automatic signal, never entailment, and the shown evidence stays the original source text.
 const xlCoverageOk = (claim, passage) => { const pt = new Set(stok(passage)); const d = [...new Set(stok(claim))].filter(t => t.length >= 3 && !STOP_ENT.has(t) && !STOP_EN.has(t) && !/^\d/.test(t)); return d.length ? d.filter(t => pt.has(t)).length / d.length >= 2 / 3 : false; };
 export const groundedWhy = (claim, passage, score, semantic, xl = false) => {
   if (score == null || score < (semantic ? SEM_SUPPORT : 0.4)) return 'score_floor';
@@ -647,7 +646,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (named.length) push('sources_opened', 'فتح المصادر المذكورة', opened.length / named.length >= 1 ? 1 : opened.length ? 0.5 : 0, `فُتح ${opened.length} من ${named.length}`);
   else push('sources_opened', 'فتح المصادر المذكورة', 0, 'لم يذكر النموذج مصدرًا');
   if (claimRows.length) { const sup = claimRows.filter(r => r.supported).length / claimRows.length; push('claim_support', semantic ? 'سند الادعاءات: استرجاع دلالي + فحوص أرقام ونفي على النص الفعلي (إشارة آلية لا إثبات استدلال)' : 'تطابق نصي بين الادعاءات ونصوص المصادر (لفظي، لا استدلالي)', sup >= 0.8 ? 1 : sup >= 0.4 ? 0.5 : 0, `${claimRows.filter(r => r.supported).length} من ${claimRows.length} ادعاء له سند نصي`); }
-  push('independence', 'استقلال نطاقات المصادر', hosts.size >= 2 ? 1 : hosts.size === 1 ? 0.5 : 0, hosts.size ? `${hosts.size} نطاق مستقل` : 'لا مصدر مفتوح');
+  push('independence', 'تنوّع نطاقات المصادر المفتوحة', hosts.size >= 2 ? 1 : hosts.size === 1 ? 0.5 : 0, hosts.size ? `${hosts.size} نطاق مميز (تنوّع نطاقات لا يثبت استقلالًا تحريريًا)` : 'لا مصدر مفتوح');
   if (opened.length) push('provenance', 'شفافية جهات النشر (نطاق وتسجيل، لا دقة محتوى)', opened.some(x => x.tier === 'official' || x.rel === 'high') ? 1 : opened.some(x => x.rel === 'medium') ? 0.5 : 0, opened.some(x => x.tier === 'official') ? 'جهة رسمية بينها' : 'حسب النطاق وبيانات التسجيل');
   if (criticOk) push('self_critic', 'نقد ذاتي للتناقض (تقدير آلي)', cs < GATE.contradiction ? 1 : 0, cs.toFixed(2));
   if (env.FACTCHECK_API_KEY) push('factcheck_db', 'قاعدة مدققي الحقائق', fcHits.length ? 1 : 0.5, fcHits.length ? `${fcHits.length} نتيجة مطابقة` : 'لا نتيجة مطابقة');
@@ -657,6 +656,12 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (claimRows.length && un === claimRows.length) score = Math.min(score, 39);
   else if (un > 0) score = Math.min(score, 69);
   const band = score >= 70 ? 'high' : score >= 40 ? 'mid' : 'low';
+  // The aggregate above is a heuristic display guard (average of declared checks, with caps), not a
+  // calibrated measurement; the UI leads with per-check counts and explicit answer completeness.
+  const completeness = decision === 'insufficient' ? 'لم تُقدَّم إجابة: الأدلة المفتوحة غير كافية'
+    : decision === 'extractive' ? 'مقتطفات موثقة فقط من النصوص المفتوحة؛ لم تُصغ إجابة كاملة'
+    : qualified ? 'إجابة بعد الفحص مع حذف أو تطويق ما لم يجد سندًا نصيًا'
+    : 'إجابة كاملة الشكل بعد الفحص الآلي';
   // Issues + angles, grounded in the answer and the verified quotes only.
   const verifiedQuotes = checked.filter(x => x.exists && x.quote).map(x => x.quote).slice(0, 4).join('\n- ');
   const toolCands = cleanCandidates(candidates);
@@ -678,7 +683,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   if (semantic) warnings.push('المطابقة الدلالية إشارة استرجاع آلية: قد لا تكشف استبدال الكيانات أو تناقضًا دقيقًا رغم فحوص الأرقام والنفي — راجع نص المصدر الأصلي');
   return {
-    decision, answer: finalAnswer, answer_qualified: qualified, claims: claimRows, confidence: { score, band, criteria: crit },
+    decision, answer: finalAnswer, answer_qualified: qualified, claims: claimRows, completeness, confidence: { score, band, criteria: crit },
     sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), discovered: Boolean(x.discovered), escalated: Boolean(x.escalated), via: x.exists ? (x.via || '') : '', original: (x.repaired || x.escalated) ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
     issues, angles, tools: Array.isArray(tools) ? tools : [], factcheck: fcHits, time_sensitive: d.json.time_sensitive === true, warnings, generated: true
   };
@@ -866,7 +871,7 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   push('sources_opened', 'فتح مصادر الاكتشاف', found.length && checked.length / found.length >= 0.6 ? 1 : checked.length ? 0.5 : 0, `فُتح ${checked.length} من ${found.length}`);
   const cited = citedIdx.length, okd = factual.length;
   push('citation_support', 'سند الاستشهادات: تحقق آلي من كل جملة مقابل مقطعها (لفظي، لا استدلالي)', cited && okd / cited >= 0.8 ? 1 : okd ? 0.5 : 0, `${okd} من ${cited} جملة مستشهد بها اجتازت الفحص`);
-  push('independence', 'استقلال نطاقات المصادر', hosts.size >= 2 ? 1 : hosts.size === 1 ? 0.5 : 0, hosts.size ? `${hosts.size} نطاق مستقل` : 'لا مصدر مفتوح');
+  push('independence', 'تنوّع نطاقات المصادر المفتوحة', hosts.size >= 2 ? 1 : hosts.size === 1 ? 0.5 : 0, hosts.size ? `${hosts.size} نطاق مميز (تنوّع نطاقات لا يثبت استقلالًا تحريريًا)` : 'لا مصدر مفتوح');
   if (checked.length) push('provenance', 'شفافية جهات النشر (نطاق وتسجيل، لا دقة محتوى)', checked.some(x => x.tier === 'official' || x.rel === 'high') ? 1 : checked.some(x => x.rel === 'medium') ? 0.5 : 0, checked.some(x => x.tier === 'official') ? 'جهة رسمية بينها' : 'حسب النطاق وبيانات التسجيل');
   let score = Math.round(100 * crit.reduce((a, c) => a + c.score, 0) / (crit.length || 1));
   if (decision === 'insufficient') score = Math.min(score, 39);
@@ -877,6 +882,13 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   }
   let band = score >= 70 ? 'high' : score >= 40 ? 'mid' : 'low';
   if ((decision !== 'answer' || unknowns.length) && band === 'high') band = 'mid'; // تغطية ناقصة لا تُعرض كتغطية مرتفعة
+  // Explicit answer completeness, shown ahead of any check list; the aggregate above stays an
+  // internal heuristic guard (with caps), not a calibrated measurement, and is not displayed.
+  const completeness = decision === 'insufficient' ? 'لم تُقدَّم إجابة: الأدلة المفتوحة غير كافية'
+    : decision === 'extractive' ? 'مقتطفات موثقة فقط من النصوص المفتوحة؛ لم تُصغ إجابة كاملة'
+    : unknowns.length ? `إجابة جزئية: ${unknowns.length} من جوانب السؤال بلا تغطية موثقة، مذكورة في «ما لم تغطّه المصادر»`
+    : dropped.length ? 'إجابة بعد الفحص مع حذف جمل لم تجتز التحقق الآلي'
+    : 'إجابة كاملة الشكل بعد الفحص الآلي';
   // Warnings: honest disclosures only.
   if (decision === 'insufficient') warnings.push('الأدلة المفتوحة غير كافية لإجابة موثقة: لم تُعرض صياغة النموذج');
   if (!checked.length) warnings.push('لم يُفتح أي مصدر من نتائج الاكتشاف');
@@ -896,7 +908,7 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   const out = { ...baseResult(), decision, answer: finalAnswer, answer_qualified: decision !== 'answer' || dropped.length > 0,
     claims: factual.map(v => ({ text: v.clean, supported: true, similarity: 0, evidence: cleanText(passages[v.refs[0] - 1].text, 500), source_ref: passages[v.refs[0] - 1].ref, cross_lang: v.xl })),
-    dropped_count: dropped.length, dropped_detail: droppedDetail.slice(0, 10), unknowns, confidence: { score, band, criteria: crit }, issues, angles, tools, warnings, generated: true };
+    dropped_count: dropped.length, dropped_detail: droppedDetail.slice(0, 10), unknowns, completeness, confidence: { score, band, criteria: crit }, issues, angles, tools, warnings, generated: true };
   if (env.DEBUG_LEDGER) out.calls = (env._ledger || []).slice();
   return out;
 }

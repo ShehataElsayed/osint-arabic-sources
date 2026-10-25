@@ -29,13 +29,13 @@ const fs=require('fs');
   const stored=JSON.parse(await page.evaluate(()=>localStorage.getItem('osint-verification-v2')));
   assert.ok(stored.cases[0].evidence.length>=1,'tool saved into case evidence');
   // assistant page: question-only flow against a fixture backend (fixtures live in tests only, never shipped).
-  const fixture={generated:true,decision:'answer',answer_qualified:true,
+  const fixture={generated:true,decision:'answer',answer_qualified:true,completeness:'إجابة بعد الفحص مع حذف أو تطويق ما لم يجد سندًا نصيًا',
    answer:'خلاصة مباشرة: ارتفعت درجات حرارة البحر بشكل قياسي [S1]. لم نعثر على سند موثق لادعاء انخفاض الصيد في خليج السويس، فحُذف من الإجابة.',
    claims:[{text:'ارتفعت درجات حرارة البحر خلال العقد الأخير',supported:true,similarity:0.62,evidence:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',source_ref:1},{text:'انخفض الصيد في خليج السويس بنسبة محددة',supported:false,similarity:0.05,evidence:'',source_ref:0}],
    confidence:{score:69,band:'mid',criteria:[
     {id:'sources_opened',label:'فتح المصادر المذكورة',score:1,detail:'فُتح 1 من 2'},
     {id:'claim_support',label:'تطابق نصي بين الادعاءات ونصوص المصادر (لفظي، لا استدلالي)',score:0.5,detail:'1 من 2 ادعاء له سند نصي'},
-    {id:'independence',label:'استقلال نطاقات المصادر',score:0.5,detail:'1 نطاق مستقل'},
+    {id:'independence',label:'تنوّع نطاقات المصادر المفتوحة',score:0.5,detail:'1 نطاق مميز (تنوّع نطاقات لا يثبت استقلالًا تحريريًا)'},
     {id:'provenance',label:'شفافية جهات النشر (نطاق وتسجيل، لا دقة محتوى)',score:1,detail:'جهة رسمية بينها'},
     {id:'self_critic',label:'نقد ذاتي للتناقض (تقدير آلي)',score:1,detail:'0.10'}]},
    sources:[{name:'تقرير المنظمة العالمية للأرصاد',url:'https://www.who.int/ar/news/item/x',claimed:'',host:'www.who.int',exists:true,title:'تقرير المنظمة العالمية للأرصاد',quote:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',picked:true,repaired:false,by_search:false,original:'',rel:'very_high',tier:'official',similarity:0.62,verified:true,numbers_ok:null,negation_conflict:false,identity:{domain:'who.int',age_years:28,registrar:null,registrant:null,rdap:'ok'},page:{site_name:'WHO',author:null,has_about:true,has_contact:true}},
@@ -52,13 +52,13 @@ const fs=require('fs');
   assert.equal(await page.locator('#askBtn').count(),1);
   await page.getByLabel('سؤالك',{exact:true}).fill('ما أثر موجات الحر البحرية على الصيد؟');
   await page.getByRole('button',{name:'اسأل الآن',exact:true}).click();
-  await page.locator('#askResult svg[role="img"]').waitFor();
+  await page.locator('#askResult .conf-complete').waitFor();
   await page.waitForTimeout(700); // let the fade-in finish before pixel checks
   const rt=await page.locator('#askResult').innerText();
   assert.ok(rt.includes('خلاصة مباشرة'),'answer rendered');
-  assert.ok(rt.includes('مؤشر تغطية الفحوص — معايير معلنة'),'coverage card');
+  assert.ok(rt.includes('نتائج الفحوص الآلية — معايير معلنة'),'checks card');
   assert.ok(rt.includes('لا احتمال صحة الإجابة'),'honest coverage caveat');
-  assert.ok(rt.includes('لا يغني عن مراجعة المصادر الأصلية'),'lexical-not-entailment caveat');
+  assert.ok(rt.includes('لا تغني عن مراجعة المصادر الأصلية'),'lexical-not-entailment caveat');
   assert.ok(rt.includes('المصادر المفتوحة (1)'),'only opened source counted');
   assert.ok(rt.includes('لا سند نصي'),'unsupported claim flagged');
   assert.ok(rt.includes('الإجابة بعد الفحص والتنقية'),'qualification badge shown');
@@ -68,18 +68,20 @@ const fs=require('fs');
   
   assert.ok(rt.includes('جهة رسمية — تصنيف نطاق'),'provenance pill, not accuracy');
   assert.ok(rt.includes('مسجل منذ 28'),'rdap provenance shown');
-  assert.ok(rt.includes('خيوط اكتشاف لا تحققًا'),'discovery-leads caveat');
+  assert.ok(rt.includes('خيوط لا تحققًا'),'discovery-leads caveat');
   assert.ok(rt.includes('الإشكاليات')&&rt.includes('زوايا صحفية'),'issues and angles');
   assert.ok(await page.locator('#askResult a[href^="https://www.who.int"]').count()===1,'source link present');
   assert.ok(await page.locator('#askResult .cite-chip').count()>=1,'citation chips in answer');
   assert.ok(!(await page.content()).includes('84.1'),'no historical lab metrics on assistant page');
-  const gaugeAria=await page.locator('#askResult svg[role="img"]').getAttribute('aria-label');
-  assert.ok(gaugeAria.includes('69')&&gaugeAria.includes('تغطية الفحوص')&&gaugeAria.includes('لا يقيس احتمال صحة')&&gaugeAria.includes('0 أو 0.5 أو 1'),'gauge accessible label: points index with rubric, not likelihood');
-  const confCard=await page.evaluate(()=>{const c=document.querySelectorAll('#askResult .src-card')[1];return {op:+getComputedStyle(c).opacity,band:getComputedStyle(c.querySelector('.conf-band')).color};});
+  assert.equal(await page.locator('#askResult svg[role="img"]').count(),0,'no aggregate gauge ring displayed');
+  assert.ok(rt.includes('إجابة بعد الفحص مع حذف أو تطويق ما لم يجد سندًا نصيًا'),'explicit answer completeness leads');
+  assert.ok(rt.includes('تغطية فحوص متوسطة'),'checks-coverage band word, not truth claim');
+  const confCard=await page.evaluate(()=>{const c=document.querySelectorAll('#askResult .src-card')[1];return {op:+getComputedStyle(c).opacity,band:getComputedStyle(c.querySelector('.conf-complete')).color};});
   assert.equal(confCard.op,1,'confidence card fully opaque');
   assert.equal(confCard.band,'rgb(184, 137, 50)','guide amber for mid band with unsupported claim');
-  assert.ok(rt.includes('69/100 نقطة في المؤشر'),'score reads as points on an index');
-  assert.ok(rt.includes('طريقة الحساب'),'rubric visible');
+  assert.ok(!rt.includes('69/100')&&!rt.includes('نقطة في المؤشر'),'no aggregate score displayed');
+  assert.ok(rt.includes('لا يُجمع في رقم كلي'),'per-check-only rubric visible');
+  assert.ok(rt.includes('تنوّع نطاقات المصادر المفتوحة'),'distinct-domains wording, not independence');
   assert.equal(await page.evaluate(()=>sessionStorage.getItem('newsrag-sources-session-v1')),null,'no session source storage in question-only flow');
   assert.equal(await page.evaluate(()=>localStorage.getItem('newsrag-sources-v1')),null,'nothing written to localStorage');
   await page.unroute('https://osint-rag.egkrkr.workers.dev/**');
