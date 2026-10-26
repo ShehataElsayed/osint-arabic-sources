@@ -1,0 +1,549 @@
+[
+ {
+  "id": "claims",
+  "name_ar": "الادعاءات والاقتباسات",
+  "desc_ar": "استخراج ما يحتاج تحققًا ومقارنته بالمصدر والاقتباس الحرفي.",
+  "tools": [
+   {
+    "id": "claims",
+    "name_ar": "مستخرج الادعاءات",
+    "name_en": "Claim Extractor",
+    "desc_ar": "يلتقط الجمل القابلة للتحقق (أرقام، تواريخ، نسب، أقوال) ويرتبها حسب قابلية التحقق.",
+    "inputs": [
+     [
+      "text",
+      "نص",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "quotes",
+    "name_ar": "محلل الاقتباسات",
+    "name_en": "Quote Attributor",
+    "desc_ar": "يستخرج الاقتباسات ومن نُسبت إليه ويكشف الاقتباس بلا مصدر.",
+    "inputs": [
+     [
+      "text",
+      "نص",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "quotecheck",
+    "name_ar": "فاحص أصالة الاقتباس",
+    "name_en": "Quote Provenance Check",
+    "desc_ar": "لكل اقتباس في مقالك يبحث في مصادرك عن نصه الحرفي، فإن لم يجده يبحث عن أقرب جملة ويعرض الكلمات والأرقام المختلفة. عدم العثور لا يعني التلفيق: قد تكون مصادرك ناقصة.",
+    "inputs": [
+     [
+      "article",
+      "نص المقال",
+      "textarea"
+     ],
+     [
+      "sources",
+      "المصادر (افصل بينها بسطر ---)",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "numdiff",
+    "name_ar": "مقارن الأرقام",
+    "name_en": "Number Reconciler",
+    "desc_ar": "يقارن الأرقام بين نصين (ادعاء ومصدر) ويكشف التعارض والأرقام غير الموجودة في المصدر.",
+    "inputs": [
+     [
+      "claim",
+      "الادعاء",
+      "textarea"
+     ],
+     [
+      "source",
+      "المصدر",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "hedging",
+    "name_ar": "كاشف اليقين والتحوّط",
+    "name_en": "Certainty Meter",
+    "desc_ar": "يميز بين صيغ الجزم والتحوط والنفي في النص ليظهر مدى قوة الادعاء.",
+    "inputs": [
+     [
+      "text",
+      "نص",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "tone",
+    "name_ar": "كاشف التهويل",
+    "name_en": "Sensationalism Detector",
+    "desc_ar": "يقيس اللغة المهيّجة والتعميم ونقص الإسناد في عنوان أو نص ويشرح كل إشارة.",
+    "inputs": [
+     [
+      "text",
+      "نص",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   }
+  ]
+ },
+ {
+  "id": "entities",
+  "name_ar": "الكيانات والزمن",
+  "desc_ar": "الأشخاص والجهات والأماكن والتواريخ والتسلسل الزمني للنص.",
+  "tools": [
+   {
+    "id": "entities",
+    "name_ar": "مستخرج الكيانات",
+    "name_en": "Entity Spotter",
+    "desc_ar": "يستخرج أشخاصًا ومؤسسات وأماكن وروابط وحسابات بقواعد عربية بدون إنترنت.",
+    "inputs": [
+     [
+      "text",
+      "نص",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "timeline",
+    "name_ar": "باني الخط الزمني",
+    "name_en": "Timeline Builder",
+    "desc_ar": "يلتقط التواريخ (ميلادي وهجري وعربي) من نص ويرتبها زمنيًا مع الجملة المرتبطة.",
+    "inputs": [
+     [
+      "text",
+      "نص",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "ngrams",
+    "name_ar": "محلل المصطلحات",
+    "name_en": "Term Analyzer",
+    "desc_ar": "أكثر الكلمات والعبارات تكرارًا بعد حذف الكلمات الشائعة وتطبيع العربية.",
+    "inputs": [
+     [
+      "text",
+      "نص",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "hijri",
+    "name_ar": "محوّل التاريخ الهجري",
+    "name_en": "Hijri Converter",
+    "desc_ar": "تحويل ميلادي ↔ هجري (تقويم جدولي، قد يختلف يومًا عن الرؤية) مع اليوم من الأسبوع.",
+    "inputs": [
+     [
+      "date",
+      "التاريخ (YYYY-MM-DD ميلادي أو hYYYY-MM-DD هجري)",
+      "text"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   }
+  ]
+ },
+ {
+  "id": "links",
+  "name_ar": "الروابط والمصادر والأدلة",
+  "desc_ar": "تنظيف الروابط وفحصها، وتوثيق الأدلة، وقراءة ترويسات البريد، وإخفاء البيانات الشخصية.",
+  "tools": [
+   {
+    "id": "urlcheck",
+    "name_ar": "فاحص الروابط",
+    "name_en": "Link Inspector",
+    "desc_ar": "يفحص الرابط محليًا: اختصارات، نطاق مقلَّد، تشفير بونيكود، IP، معاملات تتبع.",
+    "inputs": [
+     [
+      "url",
+      "الرابط",
+      "text"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "urlclean",
+    "name_ar": "منظّف الروابط والأرشفة",
+    "name_en": "Link Cleaner & Archiver",
+    "desc_ar": "يزيل معاملات التتبع ويولّد روابط أرشفة لحفظ الدليل قبل حذفه (أرشيف الإنترنت وأرشيف اليوم).",
+    "inputs": [
+     [
+      "url",
+      "الرابط",
+      "text"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "evidence",
+    "name_ar": "سجل الأدلة والبصمة",
+    "name_en": "Evidence Ledger",
+    "desc_ar": "يحسب بصمة SHA-256 للملف ويضيفها لسجل أدلة بوقت وتسلسل مرتبط بالسجل السابق لكشف العبث.",
+    "inputs": [
+     [
+      "path",
+      "مسار الملف",
+      "file"
+     ],
+     [
+      "note",
+      "ملاحظة",
+      "text"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "headers",
+    "name_ar": "محلل ترويسة البريد",
+    "name_en": "Email Header Analyzer",
+    "desc_ar": "يحلل ترويسة بريد خام: مسار الخوادم، SPF/DKIM/DMARC، وتناقض المرسل والرد.",
+    "inputs": [
+     [
+      "raw",
+      "ترويسة البريد الخام",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "redact",
+    "name_ar": "حاجب البيانات الشخصية",
+    "name_en": "PII Redactor",
+    "desc_ar": "يكشف ويحجب الهواتف والبريد وأرقام الهوية والبطاقات والـIBAN قبل النشر.",
+    "inputs": [
+     [
+      "text",
+      "نص",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   }
+  ]
+ },
+ {
+  "id": "media",
+  "name_ar": "الصور والملفات",
+  "desc_ar": "بيانات الصور، وتكرار الصور، وفحص ماكرو ملفات Office ساكنًا.",
+  "tools": [
+   {
+    "id": "exif",
+    "name_ar": "قارئ بيانات الصور",
+    "name_en": "EXIF Reader",
+    "desc_ar": "يقرأ بيانات JPEG الوصفية (الكاميرا، الوقت، GPS) محليًا ويحذّر من غيابها أو تعديلها.",
+    "inputs": [
+     [
+      "path",
+      "مسار الصورة",
+      "file"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "imghash",
+    "name_ar": "كاشف تكرار الصور",
+    "name_en": "Image Reuse Finder",
+    "desc_ar": "يحسب بصمة إدراكية (dHash) لصور مجلد ويجمع الصور المتشابهة حتى بعد تغيير الحجم أو الضغط أو قص بسيط. يتطلب Pillow. ليس بحثًا عكسيًا في الإنترنت.",
+    "inputs": [
+     [
+      "folder",
+      "مجلد الصور",
+      "file"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "olevba",
+    "name_ar": "فاحص ماكرو ملفات أوفيس (olevba)",
+    "name_en": "Office Macro Static Inspector",
+    "desc_ar": "يفحص ملف Office محليًا بحثًا عن وحدات ماكرو VBA وكلمات مفتاحية مثيرة للريبة دون تشغيل أي شيء. عدم العثور على ماكرو لا يثبت سلامة الملف. مكتبة oletools بترخيص BSD.",
+    "inputs": [
+     [
+      "path",
+      "ملف Office (doc/xls/ppt/docm...)",
+      "file"
+     ]
+    ],
+    "kind": "external_library",
+    "source": "oletools (BSD)",
+    "runs_in_browser": true
+   }
+  ]
+ },
+ {
+  "id": "data",
+  "name_ar": "البيانات والشبكات",
+  "desc_ar": "مؤشرات على تنسيق الحسابات وأرقام غير طبيعية وتشابه النصوص وتحليل نطاقات التقليد.",
+  "tools": [
+   {
+    "id": "coord",
+    "name_ar": "كاشف التنسيق بين الحسابات",
+    "name_en": "Coordination Finder",
+    "desc_ar": "من جدول منشورات (account,time,text) يكشف نصوصًا متطابقة تُنشر من حسابات متعددة في نافذة زمنية قصيرة.",
+    "inputs": [
+     [
+      "csv",
+      "CSV بأعمدة account,time,text",
+      "textarea"
+     ],
+     [
+      "window_min",
+      "النافذة بالدقائق",
+      "text"
+     ],
+     [
+      "min_accounts",
+      "أقل عدد حسابات (الافتراضي 3)",
+      "text"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "benford",
+    "name_ar": "اختبار بنفورد",
+    "name_en": "Benford Test",
+    "desc_ar": "يختبر توزيع أول رقم في عمود أرقام (مبالغ/إحصاءات) ويكشف انحرافات تستحق التدقيق.",
+    "inputs": [
+     [
+      "numbers",
+      "الأرقام مفصولة بمسافة أو سطر",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "profile",
+    "name_ar": "محلل الجداول والشواذ",
+    "name_en": "Table Profiler",
+    "desc_ar": "يلخص أعمدة CSV ويكشف القيم الشاذة والمفقودة والمكررة قبل أي تحليل أو نشر.",
+    "inputs": [
+     [
+      "csv",
+      "CSV",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "similar",
+    "name_ar": "كاشف التطابق والنسخ",
+    "name_en": "Reuse Detector",
+    "desc_ar": "يقيس تشابه نصين (نسخ حرفي وإعادة صياغة جزئية) ويعرض الجمل المشتركة.",
+    "inputs": [
+     [
+      "a",
+      "النص الأول",
+      "textarea"
+     ],
+     [
+      "b",
+      "النص الثاني",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "dnstwist",
+    "name_ar": "مولّد نطاقات التشابه (dnstwist)",
+    "name_en": "Look-alike Domain Permutations",
+    "desc_ar": "يولّد صيغًا مشابهة لاسم نطاق (حروف مبدّلة أو ناقصة أو متشابهة الشكل) لمراجعة محاكاة محتملة. يولّد قوائم فقط: لا يفحص DNS ولا يتحقق من تسجيل أي نطاق. مكتبة dnstwist بترخيص Apache-2.0.",
+    "inputs": [
+     [
+      "domain",
+      "النطاق (مثال: example.org)",
+      "text"
+     ]
+    ],
+    "kind": "external_library",
+    "source": "dnstwist (Apache-2.0)",
+    "runs_in_browser": true
+   }
+  ]
+ },
+ {
+  "id": "workflows",
+  "name_ar": "البحث والتدفقات",
+  "desc_ar": "سؤال على مستنداتك، وملف تحقيق متسلسل يجمع عدة أدوات.",
+  "tools": [
+   {
+    "id": "ask",
+    "name_ar": "السؤال على وثائقك بالأدلة",
+    "name_en": "Evidence Q&A",
+    "desc_ar": "يبحث في وثائق تلصقها (BM25 عربي) ويعيد المقاطع المطابقة مع أرقامها؛ والذكاء الاصطناعي اختياري ويُقيَّد بالمقاطع فقط.",
+    "inputs": [
+     [
+      "question",
+      "السؤال",
+      "text"
+     ],
+     [
+      "docs",
+      "الوثائق (افصل بينها بسطر ---)",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   },
+   {
+    "id": "case",
+    "name_ar": "ملف التحقيق المتسلسل",
+    "name_en": "Case Pipeline",
+    "desc_ar": "يمرر النص عبر سلسلة أدوات مترابطة: كيانات ← ادعاءات ← تحوط وتهويل ← فحص كل رابط ← مقارنة أرقام بالمصدر ← حجب البيانات، ثم يخرج قائمة تحقق.",
+    "inputs": [
+     [
+      "text",
+      "النص المراد فحصه",
+      "textarea"
+     ],
+     [
+      "source",
+      "نص المصدر الأصلي (اختياري)",
+      "textarea"
+     ]
+    ],
+    "kind": "rules",
+    "source": "OshAi",
+    "runs_in_browser": true
+   }
+  ]
+ },
+ {
+  "id": "ai",
+  "name_ar": "نماذج ذكاء اصطناعي محلية",
+  "desc_ar": "أدوات تعتمد على نماذج لغوية تعمل محليًا؛ لا تحكم بالصدق وإنما ترشّح مقاطع للمراجعة.",
+  "tools": [
+   {
+    "id": "semcheck",
+    "name_ar": "باحث المقاطع المقابلة للادعاء",
+    "name_en": "Counter-Passage Finder",
+    "desc_ar": "يجد لكل ادعاء أقرب مقاطع في مصادرك بالمعنى (حتى عبر العربية والإنجليزية) ويعرض ما قد يعارضه (أرقام، اتجاه، نفي، استدلال نصي). ليس تحققًا: لا يحكم بالصدق ولا بالتأييد، وغياب التنبيه لا يعني شيئًا.",
+    "inputs": [
+     [
+      "claims",
+      "الادعاءات (سطر لكل ادعاء)",
+      "textarea"
+     ],
+     [
+      "sources",
+      "المصادر (افصل بينها بسطر ---)",
+      "textarea"
+     ]
+    ],
+    "kind": "model",
+    "source": "OshAi",
+    "runs_in_browser": false
+   },
+   {
+    "id": "narratives",
+    "name_ar": "كاشف السرديات المعاد صياغتها",
+    "name_en": "Paraphrased Narrative Finder",
+    "desc_ar": "يجمّع منشورات من حسابات متعددة تروّج للموضوع نفسه بصياغات مختلفة (وبلغات مختلفة)، ويفرّق النسخ الحرفي عن إعادة الصياغة ويعرض نافذة النشر. مؤشر يستحق الفحص وليس إثباتًا للتنسيق.",
+    "inputs": [
+     [
+      "csv",
+      "CSV بأعمدة account,time,text",
+      "textarea"
+     ],
+     [
+      "min_accounts",
+      "أقل عدد حسابات (الافتراضي 3)",
+      "text"
+     ]
+    ],
+    "kind": "model",
+    "source": "OshAi",
+    "runs_in_browser": false
+   },
+   {
+    "id": "topics",
+    "name_ar": "فرز الوثائق بالموضوع",
+    "name_en": "Document Topic Triage",
+    "desc_ar": "لمجموعة وثائق أو مقالات (افصل بينها بسطر ---) يجمّعها بحسب الموضوع بالمعنى (عربي وإنجليزي) ويسمّي كل مجموعة بأبرز مصطلحاتها لتقرر بسرعة ما تقرؤه أولًا. لا يلخّص ولا يحكم.",
+    "inputs": [
+     [
+      "docs",
+      "الوثائق (افصل بينها بسطر ---)",
+      "textarea"
+     ]
+    ],
+    "kind": "model",
+    "source": "OshAi",
+    "runs_in_browser": false
+   }
+  ]
+ }
+]

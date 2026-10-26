@@ -114,8 +114,7 @@ def glyph(n, size=(132, 74)):
 
 HEAD_FONT = '@font-face{font-family:Cairo;src:url("%sCairo.ttf") format("truetype");font-weight:200 1000;font-display:swap}'
 NAV = [
-    ('الفروع', '%sindex.html#branches'), ('المنهجية', '%smethodology.html'), ('التحقق', '%sverification.html'),
-    ('الأوامر', '%scommands.html'), ('OCR', '%socr.html'), ('مختبر البيانات', '%sdata-lab.html'), ('NewsRAG', '%sassistant.html'),
+    ('الفروع', '%sindex.html#branches'), ('الأدوات', '%stools/index.html'), ('المنهجية', '%smethodology.html'), ('التحقق', '%sverification.html'), ('من نحن', '%sabout.html'),
 ]
 
 
@@ -137,7 +136,7 @@ def site_header(base, here=''):
 def footer(base):
     return ('<footer class="foot"><div><img src="%sbrand/oshai-mark.svg" alt="" width="40" height="24"><p>صممت بواسطة مهندس شحاته السيد · OshAi · <a class="fb" href="https://www.facebook.com/share/19PTDvQ789/" target="_blank" rel="noopener noreferrer">فيسبوك ↗</a></p></div>'
             '<p class="fine">الترشيح والتصنيف مساعدان للبحث، لا يثبتان صحة أي معلومة. ارجع إلى المصدر الأولي قبل النشر. '
-            '<a href="%smap.html">المكتبات وقوائم إضافية</a> · <a href="%sTHIRD_PARTY_NOTICES.md">التراخيص</a></p></footer>') % (base, base, base)
+            '<a href="%smap.html">المكتبات وقوائم إضافية</a> · <a href="%sprivacy.html">الخصوصية</a> · <a href="%slimits.html">الحدود</a> · <a href="%ssources.html">المصادر والتراخيص</a></p></footer>') % (base, base, base, base, base)
 
 
 def badges(n):
@@ -264,6 +263,7 @@ FEATURES = [
     ('منشئ الأوامر الاستقصائية', 'يحوّل هدف التحقيق إلى أوامر بحث جاهزة مرتبة على مراحل المنهجية.', 'commands.html', 'ابنِ أوامر'),
     ('OCR محلي', 'استخراج نص عربي وإنجليزي من الصور داخل متصفحك؛ الملف لا يُرفع إلى أي خادم.', 'ocr.html', 'استخرج نصًا'),
     ('مختبر البيانات', 'استعلامات SQL كاملة على CSV وTSV وJSON عبر DuckDB في متصفحك، مع منع الوصول الخارجي.', 'data-lab.html', 'افتح المختبر'),
+    ('مساعدات تحقق بالبايثون (تجريبية)', 'مساعدات قاعدية تعمل داخل متصفحك دون إرسال نصوصك: مقارنة أرقام، فحص اقتباسات، تنظيف روابط، تاريخ هجري وغيرها. بعضها يحتاج نموذجًا محليًا غير متاح هنا، ولا ذكاء اصطناعي متصل. أول تحميل ثقيل (نحو 20 ميجابايت).', 'tools/index.html', 'افتح الأدوات'),
     ('مساعد NewsRAG (تجريبي)', 'مسودة إجابة بمصادر مفحوصة آليًا. يتطلب خدمة خارجية، وجودته لم تُقَس على مجموعة ادعاءات معروفة النتيجة.', 'assistant.html', 'اقرأ حدوده'),
 ]
 feat_html = ''.join(f'<article class="feat"><span class="bar" aria-hidden="true"></span><small class="eyebrow">{k + 1:02d}</small><h3>{E(a)}</h3><p>{E(b)}</p><a href="{h}">{E(l)} <span aria-hidden="true">←</span></a></article>' for k, (a, b, h, l) in enumerate(FEATURES))
@@ -296,11 +296,46 @@ route_html = ''.join(
 
 EXAMPLES = ['أين أجد سجلات الشركات والملكية؟', 'أريد تتبع سفينة', 'حساب باسم مستخدم عبر المنصات', 'أرشيف نسخة قديمة من صفحة محذوفة']
 
+import build_pages
+n_run, n_py = build_pages.build_all(globals())
+def card(k, a, b, h, l):
+    return f'<article class="feat"><span class="bar" aria-hidden="true"></span><small class="eyebrow">{k + 1:02d}</small><h3>{E(a)}</h3><p>{E(b)}</p><a href="{h}">{E(l)} <span aria-hidden="true">←</span></a></article>'
+cats_html = ''.join(card(k, *c) for k, c in enumerate(CAT_CARDS))
+others_html = ''.join(f'<article class="feat"><span class="bar" aria-hidden="true"></span><h3>{E(a)}</h3><p>{E(b)}</p><a href="{h}">{E(l)} <span aria-hidden="true">←</span></a></article>' for a, b, h, l in build_pages.OTHERS)
+verify_html = ''.join(f'<article class="feat"><span class="bar" aria-hidden="true"></span><h3>{E(a)}</h3><p>{E(b)}</p><a href="{h}">{E(l)} <span aria-hidden="true">←</span></a></article>' for a, b, h, l in [
+    ('منصة التحقق', 'حالات مستقلة ومسارات بحسب نوع المادة وسجل أدلة، وتصدير نسخة قابلة للمراجعة. لا تصدر حكمًا تلقائيًا.', 'verification.html', 'افتح التحقق'),
+    ('المنهجية', 'سبع مراحل من السؤال إلى النشر، مع علامات إنجاز تُحفظ على جهازك فقط.', 'methodology.html', 'افتح المنهجية')])
+
+def tool_link(branch, name):
+    bi, bt = by_name[branch]
+    for n, _ in leaves(bt):
+        if n['name'] == name:
+            return f'<li><a href="{E(n["url"])}" rel="noopener noreferrer" dir="auto">{E(name)} ↗</a> <small class="muted">({E(title(bt))})</small></li>'
+    raise SystemExit('tool not found: ' + name)
+case1 = ('<article class="case"><h3>«مسار الحبوب»: سفن عند محطة الحبوب في القرم وإشارات AIS مطفأة</h3>'
+  '<p>تتبّع التقرير (11 مايو 2023) زيارات سفن إلى محطة أفليتا للحبوب في القرم خلال أول 12 شهرًا من الغزو الروسي الشامل. بيانات AIS وحدها أظهرت حركة قليلة، فجمع الفريق صور أقمار صناعية وبيانات رادار لكشف السفن.</p>'
+  '<ul><li><b>148 يومًا</b> ظهرت فيها سفن في المحطة بحسب صور Planet وحدها.</li><li><b>31 يومًا</b> إضافية بأداة كشف السفن المعتمدة على رادار Sentinel-1.</li><li>المحصلة بحسب التقرير: <b>179 يومًا على الأقل</b> وُجدت فيها سفن مع إشارات AIS مطفأة ظاهريًا.</li></ul>'
+  '<p><b>ما في الدليل لهذه الحالة:</b> طبقة AIS فقط. أما صور الأقمار الصناعية وكشف السفن بالرادار فلا يغطيهما الدليل. وقد استخدمنا أداة مقارنة الأرقام على مقتطفات التقرير، والتشغيل ظاهر في القسم الثالث.</p>'
+  '<ul class="tl">' + tool_link('Transportation', 'Vessel Finder') + tool_link('Transportation', 'Vessel Tracker') + '</ul>'
+  '<p><a href="https://www.bellingcat.com/news/2023/05/11/grain-trail-tracking-russias-ghost-ships-with-satellite-imagery/" rel="noopener noreferrer">اقرأ التقرير الأصلي في بيلينغكات ↗</a></p></article>')
+case2 = ('<article class="case"><h3>تحديد موقع مقطع إعدام نسب إلى الورفلي</h3>'
+  '<p>في أغسطس 2017 أصدرت المحكمة الجنائية الدولية أول مذكرة توقيف في تاريخها تستند وحدها إلى أدلة من وسائل التواصل. التقرير (3 أكتوبر 2017) يشرح تحديد موقع أحد المقاطع.</p>'
+  '<ul><li>رُفع المقطع على فيسبوك في 23 يوليو 2017 وحُذف لاحقًا، ونسخة مؤرشفة منه موجودة.</li><li>حُدد الموقع غرب بنغازي عند الإحداثيات <b dir="ltr">32.023144, 20.029181</b>.</li><li>صُوّر المقطع من الشمال إلى الجنوب، ويرجَّح أن ذلك كان في 17 يوليو 2017 قرابة السادسة والنصف صباحًا.</li><li>الطرق: صور الأقمار الصناعية في Google Earth وصورة بانورامية مجمّعة وظلال الشمس عبر SunCalc وصور موسومة جغرافيًا ومقالات إخبارية.</li></ul>'
+  '<p><b>ما في الدليل لهذه الحالة:</b></p><ul class="tl">' + tool_link('Geolocation Tools / Maps', 'Google Earth') + tool_link('Geolocation Tools / Maps', 'SunCalc') + tool_link('Archives', 'Internet Archive: Wayback Machine') + tool_link('Archives', 'archive.today') + '</ul>'
+  '<p>وشغّلنا أدوات بايثون على مقتطفات التقرير: سؤال بالإنجليزية يعيد الجملة الصحيحة، والسؤال نفسه بالعربية على النص الإنجليزي لا يعيد شيئًا، وهذا حد البحث اللفظي. وتاريخ 17 يوليو 2017 يقابل 22 شوال 1438 بحساب جدولي.</p>'
+  '{{run:ask-werfalli}}{{run:ask-werfalli-ar}}{{run:hijri-werfalli}}'
+  '<p><a href="https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/" rel="noopener noreferrer">اقرأ التقرير الأصلي في بيلينغكات ↗</a></p></article>')
+
+real_route = ('<div class="case" style="margin-top:26px"><h3>حالة حقيقية تمر بفرعين</h3>'
+  '<p>في تقرير بيلينغكات عن تحديد موقع مقطع الورفلي (3 أكتوبر 2017) اجتمع فرعان من هذا الدليل: <a href="branches/' + slugs['Geolocation Tools / Maps'] + '.html">تحديد المواقع والخرائط</a> لقراءة صور الأقمار الصناعية وظلال الشمس، و<a href="branches/' + slugs['Archives'] + '.html">الأرشيف</a> لأن المقطع حُذف من فيسبوك وبقيت نسخة مؤرشفة منه. الأدوات في الدليل: <bdi dir="ltr">Google Earth</bdi>، <bdi dir="ltr">SunCalc</bdi>، <bdi dir="ltr">Wayback Machine</bdi>، <bdi dir="ltr">archive.today</bdi>. التفاصيل والتشغيلات في القسم الخامس، والتقرير الأصلي <a href="https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/" rel="noopener noreferrer">هنا ↗</a>.</p></div>')
 tpl = (SITE / 'index.html').read_text()
-home = (tpl.replace('__HEADER__', site_header('./', 'الفروع').replace('aria-current="page"', '')).replace('__FOOTER__', footer('./')).replace('__BRANCH_MAP__', ''.join(map_html)).replace('__STAGES__', stages_html).replace('__FEATURES__', feat_html)
-        .replace('__ROUTE__', route_html).replace('__N_BRANCH__', str(len(tops))).replace('__N_SUB__', str(total_sub)).replace('__N_UNIQUE__', str(n_unique)).replace('__N_TOOLS__', str(total_tools))
+home = (tpl.replace('__HEADER__', site_header('./', 'الفروع').replace('aria-current="page"', '')).replace('__FOOTER__', footer('./')).replace('__BRANCH_MAP__', ''.join(map_html)).replace('__STAGES__', stages_html)
+        .replace('__CATS__', cats_html).replace('__OTHERS__', others_html).replace('__VERIFY_LINKS__', verify_html).replace('__CASES__', case1 + case2)
+        .replace('__N_TOOLS_PY__', str(n_py)).replace('__N_TOOLS_RUN__', str(n_run))
+        .replace('__ROUTE__', route_html).replace('__REAL_ROUTE__', real_route).replace('__N_BRANCH__', str(len(tops))).replace('__N_SUB__', str(total_sub)).replace('__N_UNIQUE__', str(n_unique)).replace('__N_TOOLS__', str(total_tools))
         .replace('__N_CLUSTERS__', str(len(clusters))).replace('__EXAMPLES_JSON__', json.dumps(EXAMPLES, ensure_ascii=False))
         .replace('__BRANCH_META__', json.dumps([{'t': title(t), 's': slugs[t['name']], 'n': count(t)} for t in tops], ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')))
+home = build_pages.expand_runs(home)
 assert '__' not in re.sub(r'__proto__', '', ''.join(re.findall(r'__[A-Z_]+__', home))), 'unfilled placeholder'
 (SITE / 'index.html').write_text(home)
 print('branches', len(tops), 'clusters', len(clusters), 'tools', total_tools)

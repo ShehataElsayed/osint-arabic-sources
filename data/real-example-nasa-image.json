@@ -1,0 +1,71 @@
+{
+ "title": "Real public-file trial: metadata and reuse check of a NASA image",
+ "sources": [
+  {
+   "role": "image page",
+   "title": "Great Observatories' Unique Views of the Milky Way (PIA12348), NASA/JPL Photojournal",
+   "url": "https://photojournal.jpl.nasa.gov/catalog/PIA12348",
+   "date": "2009-11-10"
+  },
+  {
+   "role": "original file",
+   "url": "https://images-assets.nasa.gov/image/PIA12348/PIA12348~orig.jpg",
+   "sha256": "a0a1cad866d6e68f127a09d72bf53397049afd03211090529864d26794d80064",
+   "bytes": 3844531,
+   "size_px": "9725x4862"
+  },
+  {
+   "role": "NASA web-size version of the same image",
+   "url": "https://assets.science.nasa.gov/dynamicimage/assets/science/psd/photojournal/pia/pia12/pia12348/jpeg/PIA12348.jpg?w=1536&h=768&fit=clip&crop=faces%2Cfocalpoint",
+   "sha256": "3d5568f452683e6ac4e7ab5211aeb7248801b37a391a3301a53d088305eae239",
+   "size_px": "1536x767"
+  }
+ ],
+ "licence": "NASA media usage guidelines (https://www.nasa.gov/nasa-brand-center/images-and-media/): content generally not subject to copyright in the US for educational or informational use. The image itself is not redistributed in this package; only metadata and hashes.",
+ "fetched": "2026-10-26",
+ "trials": [
+  {
+   "tool": "exif",
+   "kind": "real",
+   "input": "the original file above",
+   "output": {
+    "ok": true,
+    "has_exif": true,
+    "tags": {
+     "DateTimeDigitized": "2009:11:10 17:55:16"
+    },
+    "warnings": [
+     "لا وقت التقاط أصلي."
+    ]
+   },
+   "note": "Only one EXIF tag, DateTimeDigitized 2009:11:10 17:55:16. No original capture time and no camera or GPS tags. This is typical of a processed or published image; it is not a sign of anything else."
+  },
+  {
+   "tool": "imghash",
+   "kind": "real_plus_our_resize",
+   "input": "NASA's own web-size version + a copy we resized to 1/8 and recompressed (pia_small_ourcopy.jpg, our edit, not from NASA)",
+   "output": {
+    "ok": true,
+    "images": 2,
+    "groups": [
+     {
+      "files": [
+       {
+        "file": "pia_small_ourcopy.jpg",
+        "distance": 0
+       },
+       {
+        "file": "pia_web.jpg",
+        "distance": 0
+       }
+      ]
+     }
+    ],
+    "note": "التشابه الإدراكي يعني أن الصور متقاربة بصريًا وليس أنها من الحدث نفسه أو من المصدر نفسه. عتبة 8 من 64 بت للتجربة."
+   },
+   "note": "Both land in one group at distance 0: the same picture at different sizes. Perceptual similarity does not show where an image came from."
+  }
+ ],
+ "limits": "imghash refuses images over 25 million pixels (a memory safety cap); the 47-megapixel original was therefore not hashed. exif reads bytes only and works on it.",
+ "browser_check": "Same inputs run in the browser build through the file picker (headless Chrome, localhost): same results, no external requests."
+}
