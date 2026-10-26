@@ -1,4 +1,6 @@
 const {chromium}=require('playwright');
+const http=require('node:http');
+function httpStatus(url){return new Promise((res,rej)=>{const q=http.get(url,{agent:false,headers:{Connection:'close'}},r=>{r.resume();r.on('end',()=>res(r.statusCode));r.on('error',rej)});q.on('error',rej);q.setTimeout(10000,()=>q.destroy(new Error('timeout '+url)))})}
 const {spawn}=require('child_process');
 const assert=require('node:assert/strict');
 const fs=require('fs');
@@ -23,7 +25,7 @@ const fs=require('fs');
   await page.waitForFunction(()=>document.querySelector('#reply')?.innerText.includes('لا أجد أداة'));
   assert.equal(await page.locator('.node.lit').count(),0,'abstention lights nothing');
   const hrefs=await page.locator('.node').evaluateAll(a=>a.map(x=>x.getAttribute('href')));
-  for(const h of hrefs.slice(0,33)){const r=await fetch('http://127.0.0.1:8765/'+h);assert.ok(r.ok,h)}
+  for(const h of hrefs.slice(0,33)){const st=await httpStatus('http://127.0.0.1:8765/'+h);assert.equal(st,200,h+' status '+st)}
   await page.goto('http://127.0.0.1:8765/branches/domain-name.html');
   assert.ok(await page.locator('.tool').count()>100,'branch page lists its tools');
   await page.fill('#filter','whois');
