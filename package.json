@@ -8,7 +8,8 @@
     "check:js": "node --check worker/rag-worker.js && find site -name '*.js' -exec node --check {} \\;",
     "test:browser": "node tests/browser-smoke.cjs",
     "test:contract": "node tests/browser-smoke.cjs && node tests/contract-ui.cjs && node tests/data-lab-runtime.cjs && node tests/data-lab-edge.cjs",
-    "test:local-state": "node tests/local-tool-state.cjs"
+    "test:local-state": "node tests/local-tool-state.cjs",
+    "test:home-design": "node tests/homepage-redesign.cjs"
   },
   "devDependencies": {
     "pagefind": "1.5.2",
