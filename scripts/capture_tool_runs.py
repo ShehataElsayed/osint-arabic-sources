@@ -46,6 +46,17 @@ add('numdiff-ecb', 'numdiff', ECB, {'claim': EU_NUM, 'source': ECB_SRC},
     'الادعاء جملتان حرفيتان من تقرير يورونيوز نفسه، والمصدر فقرات البيان الرسمي الأربع.', True)
 add('quotecheck-ecb-control', 'quotecheck', ECB, {'article': EU_ART + ' It also wrote "inflation will average 4% this year".', 'sources': ECB_SRC},
     'ضابط أضفناه نحن: الاقتباس الأخير مختلق من عندنا وليس في تقرير يورونيوز ولا في البيان. نريد أن نرى كيف تعامله الأداة، وليس اتهام أي جهة بخطأ.', False)
+
+# Runs on binary files cannot be re-run from text here: the builder ran them on the real NASA files
+# (exact outputs recorded in data/real-example-nasa-image.json) and we re-ran EXIF/imghash in the browser build.
+NASA = json.loads((ROOT / 'data' / 'real-example-nasa-image.json').read_text(encoding='utf-8'))
+NASA_SRC = {'title': 'Great Observatories’ Unique Views of the Milky Way (PIA12348), NASA/JPL Photojournal', 'by': 'NASA/JPL', 'date': '2009-11-10', 'url': NASA['sources'][0]['url']}
+for t, rid, desc, note in [
+    (NASA['trials'][0], 'exif-nasa', {'file': 'PIA12348~orig.jpg (الملف الأصلي من ناسا، 9725x4862، sha256 a0a1cad8...0064)'},
+     'لا وقت التقاط أصلي ولا كاميرا ولا GPS: وسم واحد هو DateTimeDigitized. هذا شائع في الصور المعالجة والمنشورة ولا يدل على شيء آخر.'),
+    (NASA['trials'][1], 'imghash-nasa', {'files': ['pia_web.jpg: نسخة ناسا المصغّرة من الصورة نفسها (1536x767)', 'pia_small_ourcopy.jpg: نسخة صغّرناها نحن إلى الثُّمن وأعدنا ضغطها (تعديل منا وليس من ناسا)']},
+     'وقعت الصورتان في مجموعة واحدة بمسافة 0: الصورة نفسها بحجمين. التشابه الإدراكي لا يثبت من أين جاءت الصورة. رفضت الأداة الأصل بحجم 47 ميغابكسل لتجاوزه سقف 25 مليونًا فلم يُحسب له تجزئة.')]:
+    runs.append({'id': rid, 'tool': 'exif' if rid == 'exif-nasa' else 'imghash', 'source': NASA_SRC, 'input': desc, 'output': t['output'], 'input_note': note, 'input_is_real_text': True, 'file_input': True})
 d = tempfile.mkdtemp(); p = os.path.join(d, 'werfalli-excerpt.txt'); open(p, 'w', encoding='utf-8').write(W_DOCS)
 os.chdir(d)
 ev = run('evidence', path=p, note='Bellingcat Werfalli, مقتطفات حرفية')

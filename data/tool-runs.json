@@ -290,6 +290,70 @@
    "input_is_real_text": false
   },
   {
+   "id": "exif-nasa",
+   "tool": "exif",
+   "source": {
+    "title": "Great Observatories’ Unique Views of the Milky Way (PIA12348), NASA/JPL Photojournal",
+    "by": "NASA/JPL",
+    "date": "2009-11-10",
+    "url": "https://photojournal.jpl.nasa.gov/catalog/PIA12348"
+   },
+   "input": {
+    "file": "PIA12348~orig.jpg (الملف الأصلي من ناسا، 9725x4862، sha256 a0a1cad8...0064)"
+   },
+   "output": {
+    "ok": true,
+    "has_exif": true,
+    "tags": {
+     "DateTimeDigitized": "2009:11:10 17:55:16"
+    },
+    "warnings": [
+     "لا وقت التقاط أصلي."
+    ]
+   },
+   "input_note": "لا وقت التقاط أصلي ولا كاميرا ولا GPS: وسم واحد هو DateTimeDigitized. هذا شائع في الصور المعالجة والمنشورة ولا يدل على شيء آخر.",
+   "input_is_real_text": true,
+   "file_input": true
+  },
+  {
+   "id": "imghash-nasa",
+   "tool": "imghash",
+   "source": {
+    "title": "Great Observatories’ Unique Views of the Milky Way (PIA12348), NASA/JPL Photojournal",
+    "by": "NASA/JPL",
+    "date": "2009-11-10",
+    "url": "https://photojournal.jpl.nasa.gov/catalog/PIA12348"
+   },
+   "input": {
+    "files": [
+     "pia_web.jpg: نسخة ناسا المصغّرة من الصورة نفسها (1536x767)",
+     "pia_small_ourcopy.jpg: نسخة صغّرناها نحن إلى الثُّمن وأعدنا ضغطها (تعديل منا وليس من ناسا)"
+    ]
+   },
+   "output": {
+    "ok": true,
+    "images": 2,
+    "groups": [
+     {
+      "files": [
+       {
+        "file": "pia_small_ourcopy.jpg",
+        "distance": 0
+       },
+       {
+        "file": "pia_web.jpg",
+        "distance": 0
+       }
+      ]
+     }
+    ],
+    "note": "التشابه الإدراكي يعني أن الصور متقاربة بصريًا وليس أنها من الحدث نفسه أو من المصدر نفسه. عتبة 8 من 64 بت للتجربة."
+   },
+   "input_note": "وقعت الصورتان في مجموعة واحدة بمسافة 0: الصورة نفسها بحجمين. التشابه الإدراكي لا يثبت من أين جاءت الصورة. رفضت الأداة الأصل بحجم 47 ميغابكسل لتجاوزه سقف 25 مليونًا فلم يُحسب له تجزئة.",
+   "input_is_real_text": true,
+   "file_input": true
+  },
+  {
    "id": "evidence-werfalli",
    "tool": "evidence",
    "source": {

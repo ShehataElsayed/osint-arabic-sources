@@ -20,7 +20,7 @@ def runbox(rid):
     s = r['source']
     inp = r['input']
     shown = {k: v for k, v in inp.items()}
-    real = 'النص المدخل مأخوذ من المصدر' if r['input_is_real_text'] else 'المدخل معدّل منا عمدًا'
+    real = 'ملفات حقيقية من المصدر مع نسخة معدّلة منا' if r.get('file_input') else ('النص المدخل مأخوذ من المصدر' if r['input_is_real_text'] else 'المدخل معدّل منا عمدًا')
     return ('<figure class="run"><figcaption><b>ناتج تشغيل فعلي</b> · الأداة <code>%s</code> · %s · المصدر: <a href="%s" rel="noopener noreferrer">%s (%s)</a></figcaption>'
             '<div class="io"><div><h4>المدخل</h4><pre dir="auto">%s</pre></div><div><h4>المخرج كما أعادته الأداة</h4><pre>%s</pre></div></div>'
             '<p class="muted">%s</p></figure>') % (E(r['tool']), E(real), E(s['url']), E(s['title']), E(s['date']), E(pj(shown)), E(pj(r['output'])), E(r['input_note']))
@@ -40,8 +40,8 @@ CAT_HERO = {
     'ai': 'نماذج محلية لا تتوفر في المتصفح في هذه النسخة.',
 }
 CAT_RUNS = {'claims': ['quotecheck-ecb', 'numdiff-ecb', 'numdiff-grain', 'quotecheck-werfalli'], 'entities': ['hijri-werfalli'], 'links': ['urlclean-grain', 'evidence-werfalli'],
-            'media': [], 'data': [], 'workflows': ['ask-werfalli', 'ask-werfalli-ar'], 'ai': []}
-CAT_NOTE = {'media': 'لا نعرض هنا تشغيلًا حقيقيًا: أدوات هذه الفئة تحتاج ملفًا ترفعه أنت، ولم نجد ملفًا عامًا نعيد نشره بحقوق واضحة.',
+            'media': ['exif-nasa', 'imghash-nasa'], 'data': [], 'workflows': ['ask-werfalli', 'ask-werfalli-ar'], 'ai': []}
+CAT_NOTE = {'media': 'الصورة نفسها غير منشورة هنا. نعرض بيانات الوصف والبصمات فقط وروابط المصدر. لا نعرض مثالًا حقيقيًا لفاحص ماكرو Office. استخدام مواد ناسا بحسب إرشادات ناسا: https://www.nasa.gov/nasa-brand-center/images-and-media/ ، وبعض المواد قد تحمل حقوقًا خاصة فتحقق من كل مادة.',
             'data': 'لا نعرض هنا تشغيلًا حقيقيًا بعد: لم نجمع بيانات عامة مناسبة لهذه الأدوات. لا نعرض أرقامًا مصطنعة على أنها واقع.',
             'ai': 'هذه الأدوات الثلاث مسجلة في المصدر المفتوح لكنها لا تعمل في المتصفح هنا، ولا ندّعي أن ذكاءً اصطناعيًا يعمل على الموقع. التفاصيل في ملفي MODELS.md وREADME.md داخل python-tools.'}
 
