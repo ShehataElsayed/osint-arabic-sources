@@ -1,16 +1,15 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a0b0a">
-<meta name="description" content="منصة عربية للصحفيين: __N_TOOLS__ مدخلًا لأدوات ومصادر متاحة للعموم في __N_BRANCH__ فرعًا مترابطًا، بحث بالمهمة، منهجية تحقيق، وأدوات تعمل في متصفحك.">
+<meta name="description" content="منصة عربية للصحفيين: __N_TOOLS__ مدخلًا لأدوات ومصادر متاحة للعموم في __N_BRANCH__ فرعًا مترابطًا، بحث بالمهمة، منهجية تحقيق، وأدوات تعمل في متصفحك مع تسجيلات فعلية لاستخدامها.">
 <title>دليل المصادر المفتوحة للصحفيين العرب | OshAi</title>
 <style>@font-face{font-family:Cairo;src:url("./Cairo.ttf") format("truetype");font-weight:200 1000;font-display:swap}</style>
 <link rel="stylesheet" href="./platform.css"></head><body>
 <a class="skip" href="#main">تخطَّ إلى المحتوى</a>
 __HEADER__
 <main id="main">
-<div class="stage" id="stage"><svg class="lines" id="lines" aria-hidden="true" focusable="false"></svg>
 <section class="hero wrap" aria-labelledby="h1">
 <span class="badge"><i></i>OSINT / منصة الصحفي العربي</span>
 <h1 id="h1">ابدأ بمهمتك. <em>نرشّح لك الفرع</em> والأداة.</h1>
-<p class="lead">__N_TOOLS__ مدخلًا (__N_UNIQUE__ رابطًا فريدًا) لأدوات ومصادر متاحة للعموم، مرتبة في __N_BRANCH__ فرعًا مترابطًا بوصف عربي لكل أداة. اكتب ما تريد إنجازه، فيرتّب لك الدليل الأدوات الأقرب لوصفك ويضيء فروعها.</p>
+<p class="lead">__N_TOOLS__ مدخلًا (__N_UNIQUE__ رابطًا فريدًا) لأدوات ومصادر متاحة للعموم، مرتبة في __N_BRANCH__ فرعًا مترابطًا بوصف عربي لكل أداة. اكتب ما تريد إنجازه، فيرتّب لك الدليل الأدوات الأقرب لوصفك.</p>
 <form class="console" id="search" role="search" aria-label="بحث في أدوات الدليل" onsubmit="return false">
 <div class="field"><span class="prompt" aria-hidden="true">›</span><label class="sr" for="q">اكتب مهمتك</label>
 <input id="q" type="search" dir="auto" maxlength="300" autocomplete="off" enterkeyhint="search" placeholder="مثال: أريد تتبع سفينة ومعرفة مسارها" aria-controls="out"><kbd aria-hidden="true">/</kbd></div>
@@ -22,40 +21,26 @@ __HEADER__
 <div class="reply" id="reply"></div>
 </div>
 </section>
-<section class="sec wrap" id="branches" aria-labelledby="hb"><span id="tree"></span>
-<div class="sec-head"><small class="eyebrow">القسم 01 من 05</small><h2 id="hb">الفروع في __N_CLUSTERS__ مسارات</h2><p>كل مسار سؤال تحقيقي، وكل بطاقة فرع تفتح صفحته المستقلة بأدواته. شكل كل بطاقة مرسوم من بنية فرعها: نقطة لكل قسم، ومساحتها بعدد أدواته.</p></div>
-<div class="stats"><span><b>__N_BRANCH__</b>فرعًا</span><span><b>__N_SUB__</b>قسمًا</span><span><b>__N_TOOLS__</b>مدخلًا</span><span><b>__N_UNIQUE__</b>رابطًا فريدًا</span><span><b>7</b>مراحل منهجية</span></div>
-<div class="map" id="map">__BRANCH_MAP__</div>
-<div class="sec-head" style="margin-top:42px"><h3>مسار توضيحي: صورة متداولة بلا مصدر</h3><p>هذا المسار توضيحي وليس حالة وقعت. أدواته موجودة فعلًا في الدليل لكن اختيارها مثال وليس توصية بأفضلها.</p></div><ol class="route">__ROUTE__</ol>
-__REAL_ROUTE__</section>
-</div>
-<section class="sec wrap" id="search-real" aria-labelledby="h3"><div class="sec-head"><small class="eyebrow">القسم 02 من 05</small><h2 id="h3">البحث بالمهمة</h2><p>هذه أسئلة شغّلناها فعليًا على محرك البحث نفسه، وما تراه ناتجه الآن على فهرس الدليل. الترتيب لفظي: يعتمد على تطابق الكلمات، ويعرض «قوة التطابق» وليس احتمال صحة، وقد يرشّح أداة بسبب كلمة مشتركة فقط. عند ضعف التطابق يمتنع عن الترشيح بدل أن يخمّن.</p></div>
-<div class="exgrid" id="exgrid"><noscript><p class="muted">تعرض هذه الأمثلة نتائج البحث وتحتاج جافاسكربت.</p></noscript></div></section>
-<section class="sec wrap" id="tools" aria-labelledby="h4"><div class="sec-head"><small class="eyebrow">القسم 03 من 05</small><h2 id="h4">أدوات تعمل في متصفحك</h2><p>__N_TOOLS_PY__ أداة بايثون مفتوحة المصدر، منها __N_TOOLS_RUN__ تعمل داخل المتصفح دون رفع نصك إلى خادم. كل فئة في صفحة مستقلة بأدواتها. نتائجها قواعدية تحتاج مراجعة بشرية ولا تحكم بالصدق.</p></div>
-<div class="feats">__CATS__</div>
-<div class="sec-head" style="margin-top:34px"><h2>وأدوات أخرى في المنصة</h2></div>
-<div class="feats">__OTHERS__</div>
-<h3 style="margin:34px 0 8px">تشغيل فعلي: مقارنة رقم بمصدره</h3>
-{{run:numdiff-grain}}
-
-{{run:urlclean-grain}}</section>
-<section class="sec wrap" id="verify" aria-labelledby="h5"><div class="sec-head"><small class="eyebrow">القسم 04 من 05</small><h2 id="h5">التحقق والتوثيق</h2><p>منصة التحقق تفتح حالات مستقلة وتحفظ سجل أدلة وتصدّر نسخة قابلة للمراجعة، ولا تصدر حكمًا تلقائيًا. هنا تشغيلان فعليان على مقتطفات حرفية من تقرير منشور.</p></div>
-<div class="feats">__VERIFY_LINKS__</div>
-<h3 style="margin:34px 0 8px">بيان رسمي وتقرير إخباري عنه</h3>
-<p class="muted">نصان عامان بتاريخ 10 سبتمبر 2026: بيان البنك المركزي الأوروبي وتقرير يورونيوز عنه. الاقتباسان والأرقام في التقرير تطابق البيان بحسب الأداة. هذا اختبار لوظيفة الأدوات وليس حكمًا على صحة التقرير أو البيان، ولم نجد خطأ في التقرير.</p>
-{{run:quotecheck-ecb}}{{run:numdiff-ecb}}
-<p class="muted">في الضابط التالي أضفنا نحن اقتباسًا مختلقًا لنرى الاستجابة. الأداة صنفته «غير موجود» ولا تعني هذه الحالة أن أحدًا لفّق شيئًا: قد تكون مصادرك ناقصة.</p>
-{{run:quotecheck-ecb-control}}
-<h3 style="margin:34px 0 8px">اقتباس عدّلنا تاريخه عمدًا</h3>
-{{run:quotecheck-werfalli}}
-<h3 style="margin:34px 0 8px">صورة منشورة من ناسا: بيانات الملف وتكرار الصورة</h3>
-{{run:exif-nasa}}{{run:imghash-nasa}}
-<h3 style="margin:34px 0 8px">بصمة وسجل للدليل</h3>
-{{run:evidence-werfalli}}</section>
-<section class="sec wrap" id="cases" aria-labelledby="h6"><div class="sec-head"><small class="eyebrow">القسم 05 من 05</small><h2 id="h6">منهجية من سبع مراحل وحالتان حقيقيتان</h2><p>من السؤال إلى النشر بالترتيب. بعدها حالتان نشرهما بيلينغكات نربطهما بما في الدليل من أدوات.</p></div>
-<ol class="stages">__STAGES__</ol>
-__CASES__
-</section>
+<section class="sec wrap" id="branches" aria-labelledby="hb"><div class="pair"><div class="txt"><small class="eyebrow">القسم 01 من 05</small><h2 id="hb">فروع مترابطة بدل قائمة طويلة</h2><p>يقسم الدليل مدخلاته إلى <b>__N_CLUSTERS__</b> مسارات تحقيقية. كل مسار يضم فروعًا، وكل فرع يفتح في صفحة مستقلة بأدواته وأقسامه ومربع لتصفيتها.</p>
+<div class="stats"><span><b>__N_BRANCH__</b>فرعًا</span><span><b>__N_SUB__</b>قسمًا</span><span><b>__N_TOOLS__</b>مدخلًا</span><span><b>__N_UNIQUE__</b>رابطًا فريدًا</span></div>
+</div><figure class="vid"><video controls preload="none" playsinline width="800" height="1000" poster="./media/branches-nav.jpg" aria-label="تسجيل شاشة: فتح فرع تحديد المواقع والخرائط وتصفية أدواته"><source src="./media/branches-nav.mp4" type="video/mp4"></video>
+<figcaption><b>ما يظهر في التسجيل</b><span>فتح صفحة الفروع ثم فرع «تحديد المواقع والخرائط» وتصفية أدواته بكلمة «قمر».</span><small>الصفحة المسجلة: صفحة الفرع في هذا الدليل. تسجيل فعلي بلا تعديل.</small></figcaption></figure></div><p class="row"><a class="btn" href="branches.html">استعرض الفروع</a></p></section>
+<section class="sec wrap" id="search-real" aria-labelledby="h3"><div class="pair rev"><div class="txt"><small class="eyebrow">القسم 02 من 05</small><h2 id="h3">البحث بالمهمة</h2><p>اكتب ما تريد إنجازه بكلماتك، فيرتّب الدليل الأدوات الأقرب لوصفك ويذكر فرع كل أداة. يعمل البحث داخل متصفحك على فهرس الدليل نفسه، ولا يُرسل سؤالك إلى خادم.</p>
+<p class="muted">الترتيب لفظي: يعتمد على تطابق الكلمات، ويعرض «قوة التطابق» وليس احتمال صحة. قد يرشّح أداة بسبب كلمة مشتركة فقط، وعند ضعف التطابق يمتنع عن الترشيح بدل أن يخمّن.</p>
+<p><a class="btn" href="#q" onclick="document.getElementById('q').focus();">جرّب شريط البحث</a></p></div><figure class="vid"><video controls preload="none" playsinline width="800" height="1000" poster="./media/task-search.jpg" aria-label="تسجيل شاشة: كتابة «أريد تتبع سفينة ومعرفة مسارها» وظهور أقرب ثلاث أدوات"><source src="./media/task-search.mp4" type="video/mp4"></video>
+<figcaption><b>ما يظهر في التسجيل</b><span>كتابة السؤال «أريد تتبع سفينة ومعرفة مسارها» في الشريط، ثم ظهور مسار البحث وأقرب ثلاث أدوات.</span><small>تسجيل فعلي لشريط البحث في الصفحة الرئيسية بلا تعديل في النتيجة.</small></figcaption></figure></div></section>
+<section class="sec wrap" id="tools" aria-labelledby="h4"><div class="pair"><div class="txt"><small class="eyebrow">القسم 03 من 05</small><h2 id="h4">أدوات تعمل في متصفحك</h2><p><b>__N_TOOLS_PY__</b> أداة بايثون مفتوحة المصدر، منها <b>__N_TOOLS_RUN__</b> تعمل داخل المتصفح دون رفع نصك إلى خادم. كل فئة لها صفحة مستقلة بأدواتها.</p>
+<p class="muted">نتائج الأدوات قواعدية تحتاج مراجعة بشرية، ولا تحكم بالصدق.</p>
+<p><a class="btn" href="tools/index.html">افتح الأدوات</a></p></div><figure class="vid"><video controls preload="none" playsinline width="800" height="1000" poster="./media/quotecheck-werfalli.jpg" aria-label="تسجيل شاشة: أداة فاحص أصالة الاقتباس تكشف تاريخًا عدّلناه عمدًا"><source src="./media/quotecheck-werfalli.mp4" type="video/mp4"></video>
+<figcaption><b>ما يظهر في التسجيل</b><span>تشغيل أداة «فاحص أصالة الاقتباس» على اقتباس عدّلنا تاريخه نحن عمدًا من 17 إلى 18 يوليو لاختبار الأداة. هذا ليس خطأ في مقال حقيقي، والأداة تكشف الاختلاف ولا تثبت صحة المصدر.</span><small>نص المصادر مقتطف من تقرير: <a href="https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/" rel="noopener noreferrer"><bdi>Bellingcat</bdi> - How an Execution Site Was Geolocated (2017) ↗</a></small></figcaption></figure></div></section>
+<section class="sec wrap" id="verify" aria-labelledby="h5"><div class="pair rev"><div class="txt"><small class="eyebrow">القسم 04 من 05</small><h2 id="h5">التحقق والتوثيق</h2><p>تفتح منصة التحقق حالات مستقلة، وتحفظ سجل أدلة مرتبطًا بتسلسل بصمات، وتصدّر نسخة قابلة للمراجعة. لا تصدر حكمًا تلقائيًا بالصدق.</p>
+<p class="muted">يحسب «سجل الأدلة» بصمة SHA-256 للملف الذي ترفعه وتبقى المعالجة على جهازك. البصمة تثبت أن الملف لم يتغير بعد تسجيله، ولا تثبت صحة محتواه.</p>
+<p class="row"><a class="btn" href="verification.html">منصة التحقق</a><a class="btn ghost" href="tools/links.html#evidence">جرّب سجل الأدلة</a></p></div><figure class="vid"><video controls preload="none" playsinline width="800" height="1000" poster="./media/evidence-ledger.jpg" aria-label="تسجيل شاشة: رفع مقتطف نصي وحساب بصمة SHA-256"><source src="./media/evidence-ledger.mp4" type="video/mp4"></video>
+<figcaption><b>ما يظهر في التسجيل</b><span>رفع مقتطف نصي من تقرير منشور، وكتابة ملاحظة، ثم تشغيل الأداة لتظهر بصمة الملف وختم الوقت ورابط السجل السابق.</span><small>المقتطف نص حرفي من تقرير <bdi>Bellingcat</bdi> عن تحديد موقع الورفلي (2017). تسجيل فعلي بلا تعديل.</small></figcaption></figure></div></section>
+<section class="sec wrap" id="cases" aria-labelledby="h6"><div class="pair"><div class="txt"><small class="eyebrow">القسم 05 من 05</small><h2 id="h6">منهجية من سبع مراحل</h2><p>خارطة طريق من السؤال الصحفي إلى النشر الآمن، لكل مرحلة خطواتها والأدوات المساعدة فيها. تعلّم المرحلة المنجزة ويُحفظ تقدمك في متصفحك فقط.</p>
+<ol class="stagenames">__STAGE_NAMES__</ol>
+<p><a class="btn" href="methodology.html">افتح المنهجية</a></p></div><figure class="vid"><video controls preload="none" playsinline width="800" height="1000" poster="./media/methodology.jpg" aria-label="تسجيل شاشة: تعليم ثلاث مراحل منجزة في المنهجية وظهور التقدم"><source src="./media/methodology.mp4" type="video/mp4"></video>
+<figcaption><b>ما يظهر في التسجيل</b><span>تعليم ثلاث مراحل من المنهجية كمنجزة، فيظهر في شريط الخارطة «أنجزت 3 من 7 مراحل».</span><small>تسجيل فعلي بلا تعديل. يُحفظ التقدم على الجهاز نفسه.</small></figcaption></figure></div></section>
 </main>
 __FOOTER__
 <script>window.BRANCHES=__BRANCH_META__;window.TOTAL_ENTRIES=__N_TOOLS__;window.EXAMPLES=__EXAMPLES_JSON__;</script>
