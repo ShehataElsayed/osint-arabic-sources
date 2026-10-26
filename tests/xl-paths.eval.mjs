@@ -1,7 +1,7 @@
 // Offline cross-language DEVELOPMENT study (fixtures, not calibration — holdout lives in xl-holdout.eval.mjs). Grounded pairs hand-authored from real run material
 // (ef1/ef2) — no API calls. Positive = true support; negative = entity swap / direction flip /
 // number change / unrelated overlap. Compares verification paths on translated-claim vs EN passage.
-import { ragTokens } from '../worker/rag-worker.js';
+import { ragTokens } from '../worker/rag-lib.js';
 
 const cos = (a, b) => { const va = new Map(), vb = new Map(); ragTokens(a).forEach(x => va.set(x, (va.get(x) || 0) + 1)); ragTokens(b).forEach(x => vb.set(x, (vb.get(x) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [x, c] of va) { na += c * c; if (vb.has(x)) d += c * vb.get(x); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
 const STOP = new Set(['the', 'and', 'that', 'with', 'from', 'this', 'its', 'for', 'are', 'was', 'has', 'have', 'been', 'according']);

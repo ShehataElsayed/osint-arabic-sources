@@ -4,7 +4,7 @@
 // unsupported causal claim, partial support, contradiction, entity swap, number change), plus positive
 // probes proving the scale/causal guards do not over-block true support. Reports OBSERVED ERRORS ONLY:
 // a small hand-authored set is a scope probe, not calibration — no accuracy or generalization claim.
-import { ragTokens, groundedWhy } from '../worker/rag-worker.js';
+import { ragTokens, groundedWhy } from '../worker/rag-lib.js';
 
 const cos = (a, b) => { const va = new Map(), vb = new Map(); ragTokens(a).forEach(x => va.set(x, (va.get(x) || 0) + 1)); ragTokens(b).forEach(x => vb.set(x, (vb.get(x) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [x, c] of va) { na += c * c; if (vb.has(x)) d += c * vb.get(x); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
 const gate = (c, p) => groundedWhy(c, p, cos(c, p), false, true);

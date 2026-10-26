@@ -1,5 +1,5 @@
 import test from 'node:test'; import assert from 'node:assert/strict';
-import { askEvidenceFirst, filterToolPicks } from '../worker/rag-worker.js';
+import { askEvidenceFirst, filterToolPicks } from '../worker/rag-lib.js';
 
 const ENV = { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm', EXA_API_KEY: 'x', DEBUG_LEDGER: true };
 const U1 = 'https://www.who.int/ar/news/item/heat-report';
