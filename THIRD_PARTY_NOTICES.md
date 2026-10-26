@@ -161,3 +161,6 @@ Source: https://ucdp.uu.se/downloads/ (candidateged). License: CC BY 4.0 per the
 - OCHA COD-AB Yemen subnational boundaries via HDX (source: Central Statistical Organization): CC BY-IGO (https://data.humdata.org/dataset/cod-ab-yem). Simplified for display.
 - VIEWS conflict forecasts (CC BY-SA): link-out only, no data copied.
 Credits shown on the page. Data are context, not conflict events.
+
+## Browser Python tools (site/tools)
+The bundle under site/tools vendors Pyodide (MPL-2.0), CPython (PSF), NumPy, Pillow, dnstwist, oletools, olefile, colorclass, easygui, pyparsing and the Cairo font (OFL). License texts and notices are in site/tools/THIRD_PARTY/. No model weights are included.

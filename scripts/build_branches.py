@@ -115,7 +115,7 @@ def glyph(n, size=(132, 74)):
 HEAD_FONT = '@font-face{font-family:Cairo;src:url("%sCairo.ttf") format("truetype");font-weight:200 1000;font-display:swap}'
 NAV = [
     ('الفروع', '%sindex.html#branches'), ('المنهجية', '%smethodology.html'), ('التحقق', '%sverification.html'),
-    ('الأوامر', '%scommands.html'), ('OCR', '%socr.html'), ('مختبر البيانات', '%sdata-lab.html'), ('NewsRAG', '%sassistant.html'),
+    ('الأوامر', '%scommands.html'), ('OCR', '%socr.html'), ('مختبر البيانات', '%sdata-lab.html'), ('أدوات التحقق', '%stools/index.html'), ('NewsRAG', '%sassistant.html'),
 ]
 
 
@@ -264,6 +264,7 @@ FEATURES = [
     ('منشئ الأوامر الاستقصائية', 'يحوّل هدف التحقيق إلى أوامر بحث جاهزة مرتبة على مراحل المنهجية.', 'commands.html', 'ابنِ أوامر'),
     ('OCR محلي', 'استخراج نص عربي وإنجليزي من الصور داخل متصفحك؛ الملف لا يُرفع إلى أي خادم.', 'ocr.html', 'استخرج نصًا'),
     ('مختبر البيانات', 'استعلامات SQL كاملة على CSV وTSV وJSON عبر DuckDB في متصفحك، مع منع الوصول الخارجي.', 'data-lab.html', 'افتح المختبر'),
+    ('مساعدات تحقق بالبايثون (تجريبية)', 'مساعدات قاعدية تعمل داخل متصفحك دون إرسال نصوصك: مقارنة أرقام، فحص اقتباسات، تنظيف روابط، تاريخ هجري وغيرها. بعضها يحتاج نموذجًا محليًا غير متاح هنا، ولا ذكاء اصطناعي متصل. أول تحميل ثقيل (نحو 20 ميجابايت).', 'tools/index.html', 'افتح الأدوات'),
     ('مساعد NewsRAG (تجريبي)', 'مسودة إجابة بمصادر مفحوصة آليًا. يتطلب خدمة خارجية، وجودته لم تُقَس على مجموعة ادعاءات معروفة النتيجة.', 'assistant.html', 'اقرأ حدوده'),
 ]
 feat_html = ''.join(f'<article class="feat"><span class="bar" aria-hidden="true"></span><small class="eyebrow">{k + 1:02d}</small><h3>{E(a)}</h3><p>{E(b)}</p><a href="{h}">{E(l)} <span aria-hidden="true">←</span></a></article>' for k, (a, b, h, l) in enumerate(FEATURES))
