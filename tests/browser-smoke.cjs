@@ -52,6 +52,8 @@ const fs=require('fs');
   await page.screenshot({path:'test-output/home-desktop.png'});
   // task file: add a tool from smart search into the local case
   await page.goto('http://127.0.0.1:8765/smart-search.html?q='+encodeURIComponent('كيف أتتبع سفينة'));
+  await page.locator('a[href*="workflows.html#planner"]').first().waitFor();
+  await page.locator('summary',{hasText:'نتائج بحث بالكلمات'}).click();
   await page.locator('.tf-btn').first().waitFor();
   await page.locator('.tf-btn').first().click();
   const stored=JSON.parse(await page.evaluate(()=>localStorage.getItem('osint-verification-v2')));
