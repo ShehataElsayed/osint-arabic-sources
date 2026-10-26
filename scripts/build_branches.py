@@ -35,6 +35,16 @@ CLUSTERS = [
 ]
 
 
+def ar_n(n, one, two, few, many):
+    """Arabic counted noun: 1 / 2 / 3-10 / 11+ (n=0 handled by callers)."""
+    if n == 1: return one
+    if n == 2: return two
+    return few if 3 <= n <= 10 else many
+
+def ar_tools(n): return f'<b>{n}</b> ' + ar_n(n, 'أداة', 'أداتان', 'أدوات', 'أداة')
+def ar_subs(n): return 'بلا أقسام فرعية' if n == 0 else (ar_n(n, 'قسم واحد', 'قسمان', f'{n} أقسام', f'{n} قسمًا'))
+def ar_brs(n): return ar_n(n, 'فرع واحد', 'فرعان', f'{n} فروع', f'{n} فرعًا')
+
 def title(n):
     return n.get('ar') or n['name']
 
@@ -230,7 +240,7 @@ def node_html(i, t, k):
     nsub = folders(t)
     return (f'<a class="node" href="branches/{sl}.html" data-b="{i}" style="--tilt:{tilt:.2f}deg"><span class="bar" aria-hidden="true"></span>'
             f'<small class="eyebrow">{i + 1:02d} / <span dir="ltr">{E(short(t["name"]))}</span></small>{glyph(t)}'
-            f'<strong>{E(title(t))}</strong><span class="meta"><b>{count(t)}</b> أداة · {nsub} قسم</span><span class="hit-badge" hidden></span></a>')
+            f'<strong>{E(title(t))}</strong><span class="meta">{ar_tools(count(t))} · {ar_subs(nsub)}</span><span class="hit-badge" hidden></span></a>')
 
 
 map_html = []
@@ -239,7 +249,7 @@ for ci, (num, q, name, blurb, members) in enumerate(clusters):
     cnt = sum(count(by_name[n][1]) for n in members)
     map_html.append(
         f'<div class="cluster" data-c="{ci}"><div class="hub"><span class="bar" aria-hidden="true"></span><small class="eyebrow">{num} / المسار</small>'
-        f'<h3>{E(q)}</h3><p class="hub-name">{E(name)}</p><p class="hub-blurb">{E(blurb)}</p><span class="meta"><b>{cnt}</b> أداة · {len(members)} فروع</span></div>'
+        f'<h3>{E(q)}</h3><p class="hub-name">{E(name)}</p><p class="hub-blurb">{E(blurb)}</p><span class="meta">{ar_tools(cnt)} · {ar_brs(len(members))}</span></div>'
         f'<div class="nodes">{nodes}</div></div>')
 
 STAGES = [('التحضير والأمان', 'احمِ نفسك ومصادرك قبل أول بحث.'), ('الهدف والفرضيات', 'حوّل الفكرة إلى فرضيات قابلة للفحص.'), ('جمع المصادر', 'ابدأ بمحركات البحث ثم وسّع الدائرة.'),
