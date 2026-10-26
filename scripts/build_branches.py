@@ -64,6 +64,7 @@ clusters[-1][4] += extra
 clusters = [c for c in clusters if c[4]]
 
 total_tools = sum(1 for _ in leaves(data))
+n_unique = len({n['url'] for n, _ in leaves(data)})
 total_sub = 0
 
 
@@ -246,7 +247,7 @@ STAGES = [('التحضير والأمان', 'احمِ نفسك ومصادرك ق
 stages_html = ''.join(f'<li><span class="n">{k + 1:02d}</span><b>{E(a)}</b><p>{E(b)}</p></li>' for k, (a, b) in enumerate(STAGES))
 
 FEATURES = [
-    ('خريطة الفروع', f'{len(tops)} فرعًا و{total_sub} قسمًا و{total_tools} أداة، لكل أداة وصف عربي وشارات: تثبيت محلي، بحث متقدم، تسجيل.', '#branches', 'تصفح الفروع'),
+    ('خريطة الفروع', f'{len(tops)} فرعًا و{total_sub} قسمًا و{total_tools} مدخلًا ({n_unique} رابطًا فريدًا؛ بعض الأدوات تتكرر في أكثر من فرع)، لكل مدخل وصف عربي وشارات: تثبيت محلي، بحث متقدم، تسجيل.', '#branches', 'تصفح الفروع'),
     ('البحث بالمهمة', 'اكتب مهمتك بكلماتك فيرتب البحث أدوات الدليل ويوضح الكلمات والفروع التي استند إليها. يعمل في متصفحك.', '#search', 'جرّب البحث'),
     ('منهجية من سبع مراحل', 'خارطة طريق من السؤال إلى النشر، مع علامات إنجاز تُحفظ على جهازك فقط.', 'methodology.html', 'افتح المنهجية'),
     ('منصة التحقق', 'حالات مستقلة، مسارات بحسب نوع المادة، سجل أدلة، وتصدير نسخة قابلة للمراجعة. لا تصدر حكمًا تلقائيًا.', 'verification.html', 'افتح التحقق'),
@@ -287,7 +288,7 @@ EXAMPLES = ['أين أجد سجلات الشركات والملكية؟', 'أر�
 
 tpl = (SITE / 'index.html').read_text()
 home = (tpl.replace('__HEADER__', site_header('./', 'الفروع').replace('aria-current="page"', '')).replace('__FOOTER__', footer('./')).replace('__BRANCH_MAP__', ''.join(map_html)).replace('__STAGES__', stages_html).replace('__FEATURES__', feat_html)
-        .replace('__ROUTE__', route_html).replace('__N_BRANCH__', str(len(tops))).replace('__N_SUB__', str(total_sub)).replace('__N_TOOLS__', str(total_tools))
+        .replace('__ROUTE__', route_html).replace('__N_BRANCH__', str(len(tops))).replace('__N_SUB__', str(total_sub)).replace('__N_UNIQUE__', str(n_unique)).replace('__N_TOOLS__', str(total_tools))
         .replace('__N_CLUSTERS__', str(len(clusters))).replace('__EXAMPLES_JSON__', json.dumps(EXAMPLES, ensure_ascii=False))
         .replace('__BRANCH_META__', json.dumps([{'t': title(t), 's': slugs[t['name']], 'n': count(t)} for t in tops], ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')))
 assert '__' not in re.sub(r'__proto__', '', ''.join(re.findall(r'__[A-Z_]+__', home))), 'unfilled placeholder'

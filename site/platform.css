@@ -165,3 +165,5 @@ h1,h2,h3,p{margin:0}
 @media(max-width:900px){.cluster{grid-template-columns:1fr;gap:16px}.hub{position:relative;top:0}.out{grid-template-columns:1fr}.trace{border-inline-end:0;border-bottom:1px solid var(--line);padding:0 0 10px}.b-hero{grid-template-columns:1fr}.route>li:not(:last-child):after{display:none}}
 @media(max-width:560px){.top{padding:12px 14px}.wrap{padding:0 14px}.nodes{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.node{min-height:150px;padding:10px 12px 10px 8px;padding-inline-start:16px}.node strong{font-size:15px}.field kbd{display:none}.nav a{padding:4px 9px;font-size:13.5px}.tools{grid-template-columns:1fr}.node .meta{font-size:12px}.out{padding:14px}}
 .out[hidden]{display:none}
+html,body{overflow-x:clip}
+.case{border:1px solid #2a3025;border-inline-start:3px solid var(--lime);background:#0e100d;border-radius:12px;padding:18px 20px;margin-top:14px;max-width:60em}.case h3{font-size:19px;font-weight:900;margin:0 0 8px}.case ul{margin:10px 0;padding-inline-start:20px}.case li{margin:4px 0}.case a{color:var(--lime)}

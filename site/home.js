@@ -13,30 +13,49 @@ const ready = fetch('./search-tools.json').then(r => { if (!r.ok) throw new Erro
 function ctr(e) { const r = e.getBoundingClientRect(), s = stage.getBoundingClientRect(); return [r.left - s.left + r.width / 2, r.top - s.top + r.height / 2, r]; }
 function path(cls, d) { const p = document.createElementNS(NS, 'path'); p.setAttribute('class', cls); p.setAttribute('d', d); svg.append(p); return p; }
 function dot(x, y) { const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 3.5); svg.append(c); }
+function rp(pts, r) { /* orthogonal polyline with rounded corners */
+  r = r || 8; let d = `M${pts[0][0]} ${pts[0][1]}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [px, py] = pts[i - 1], [cx, cy] = pts[i], [nx, ny] = pts[i + 1];
+    const l1 = Math.hypot(cx - px, cy - py), l2 = Math.hypot(nx - cx, ny - cy), k = Math.min(r, l1 / 2, l2 / 2);
+    if (k < 1) { d += `L${cx} ${cy}`; continue; }
+    d += `L${cx - (cx - px) / l1 * k} ${cy - (cy - py) / l1 * k}Q${cx} ${cy} ${cx + (nx - cx) / l2 * k} ${cy + (ny - cy) / l2 * k}`;
+  }
+  const e = pts[pts.length - 1]; return d + `L${e[0]} ${e[1]}`;
+}
+const R = Math.round;
 function draw() {
   svg.replaceChildren();
-  const hubs = [...document.querySelectorAll('.hub')];
+  const hubs = [...document.querySelectorAll('.hub')], s = stage.getBoundingClientRect();
   document.querySelectorAll('.cluster').forEach(c => {
-    const [hx, hy, hr] = ctr(c.querySelector('.hub'));
-    c.querySelectorAll('.node').forEach(n => {
-      const [nx, ny, nr] = ctr(n);
-      if (nr.top > hr.bottom - 4) { const my = (hy + ny) / 2; path('w', `M${hx} ${hr.bottom - 10}C${hx} ${my},${nx} ${my},${nx} ${nr.top + 10}`); }
-      else { const mx = (hx + nx) / 2; path('w', `M${hr.left + 10} ${hy}C${mx} ${hy},${mx} ${ny},${nr.right - 10} ${ny}`); }
+    const [hx0, , hr] = ctr(c.querySelector('.hub')), hx = R(hx0), hb = R(hr.bottom - s.top);
+    const nodes = [...c.querySelectorAll('.node')].map(n => ctr(n));
+    if (!nodes.length) return;
+    const left = Math.min(...nodes.map(n => n[2].left)) - s.left, right = Math.max(...nodes.map(n => n[2].right)) - s.left;
+    const spine = R(hx < (left + right) / 2 ? left - 10 : right + 10), y0 = hb + 12;
+    nodes.forEach(([nx0, , nr]) => {
+      const nx = R(nx0), top = R(nr.top - s.top), bus = top - 9;
+      const pts = bus <= y0 + 1 ? [[hx, hb - 8], [hx, y0], [nx, y0], [nx, top + 8]]
+        : [[hx, hb - 8], [hx, y0], [spine, y0], [spine, bus], [nx, bus], [nx, top + 8]];
+      path('w', rp(pts));
     });
   });
   for (let i = 0; i < hubs.length - 1; i++) {
     const [ax, , ar] = ctr(hubs[i]), [bx, , br] = ctr(hubs[i + 1]);
-    path('hh', `M${ax} ${ar.bottom}C${ax} ${(ar.bottom + br.top) / 2},${bx} ${(ar.bottom + br.top) / 2},${bx} ${br.top}`);
+    const y1 = R(ar.bottom - s.top), y2 = R(br.top - s.top), my = R((y1 + y2) / 2);
+    path('hh', rp([[R(ax), y1], [R(ax), my], [R(bx), my], [R(bx), y2]]));
   }
   if (lit.length) {
     const src = out.hidden ? document.querySelector('.console') : out;
-    const sr = src.getBoundingClientRect(), s = stage.getBoundingClientRect();
-    const ox = sr.left - s.left + sr.width / 2, oy = sr.bottom - s.top;
+    const sr = src.getBoundingClientRect();
+    const ox = R(sr.left - s.left + sr.width / 2), oy = R(sr.bottom - s.top);
+    const tops = lit.map(n => R(n.getBoundingClientRect().top - s.top));
+    const lane = Math.min(oy + 24, Math.min(...tops) - 12);
     lit.forEach(n => {
-      const [nx, , nr] = ctr(n), ty = nr.top - s.top + 2, my = (oy + ty) / 2;
-      const p = path('q', `M${ox} ${oy}C${ox} ${my},${nx} ${my},${nx} ${ty}`);
+      const [nx, , nr] = ctr(n), ty = R(nr.top - s.top + 2);
+      const p = path('q', rp([[ox, oy], [ox, lane], [R(nx), lane], [R(nx), ty]]));
       try { const L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; p.getBoundingClientRect(); p.style.transition = 'stroke-dashoffset .7s ease'; requestAnimationFrame(() => p.style.strokeDashoffset = 0); } catch (e) { }
-      dot(nx, ty);
+      dot(R(nx), ty);
     });
   }
 }
@@ -47,7 +66,7 @@ document.fonts && document.fonts.ready.then(redraw);
 addEventListener('load', redraw);
 
 /* ---------- search ---------- */
-const EXPLAIN = 'ترتيب محلي بالكلمات داخل متصفحك. لا يرسل سؤالك إلى أي خادم، ولا يتضمن هذا الرد شرحًا بالذكاء الاصطناعي.';
+const EXPLAIN = 'ترتيب محلي بالكلمات داخل متصفحك. لا يرسل سؤالك إلى أي خادم، ولا يتضمن هذا الرد شرحًا بالذكاء الاصطناعي. التطابق لفظي: قد تظهر أداة لمجرد تشابه كلمات مع سؤالك (مثل قوائم حظر تحمل كلمة «نطاق»)، فاقرأ وصف كل أداة قبل الاعتماد عليها.';
 function setLit(counts) {
   document.querySelectorAll('.node').forEach(n => { n.classList.remove('lit', 'dim'); const b = n.querySelector('.hit-badge'); b.hidden = true; });
   lit = [];
@@ -78,7 +97,7 @@ function card(r, top, terms) {
   if (hit.length) row.append(el('span', 'why', 'تطابق: ' + hit.join('، ')));
   const g = el('a', '', 'افتح الأداة ↗'); g.href = t.url; g.target = '_blank'; g.rel = 'noopener noreferrer'; g.dataset.osintTool = t.name; row.append(g);
   a.append(row);
-  const sc = el('span', 'score'); sc.title = 'قوة التطابق النسبية داخل هذه النتائج'; const i = document.createElement('i'); i.style.width = Math.max(8, Math.round(100 * r.score / top)) + '%'; sc.append(i); a.append(sc);
+  const sc = el('span', 'score'); sc.title = 'قوة التطابق اللفظي نسبةً لأعلى نتيجة، وليست احتمال صحة'; const i = document.createElement('i'); i.style.width = Math.max(8, Math.round(100 * r.score / top)) + '%'; sc.append(i); a.append(sc);
   return a;
 }
 function analyse(q, limit = 300) {
@@ -96,10 +115,10 @@ function render(q) {
   trace.replaceChildren(); reply.replaceChildren();
   trace.append(el('h2', '', 'مسار البحث'));
   const s1 = step([b('1. قراءة السؤال'), document.createTextNode(a.base.length ? ` ${a.base.length} كلمات مفهومة، و${a.exp.length} مرادفات من مفردات مهام الدليل.` : ' لم تُستخرج كلمات يعرفها الدليل.'), termsBox(a.base, a.exp)], !a.base.length);
-  const s2 = step([b('2. فحص الفهرس'), document.createTextNode(` ${tools.length} أداة موصوفة بالعربية؛ ${cands.length} منها تطابق كلمة على الأقل.`)], !cands.length);
+  const s2 = step([b('2. فحص الفهرس'), document.createTextNode(` ${tools.length} مدخلًا قابلًا للبحث (استُبعد ${(window.TOTAL_ENTRIES || tools.length) - tools.length} بلا رابط موثوق)؛ ${cands.length} منها يطابق كلمة على الأقل.`)], !cands.length);
   const confident = f.confident;
   const reasonBad = !f.known ? 'لا تحوي صياغتك مفردات يعرفها الدليل لمهام الصحفيين.' : 'أعلى تطابق ضعيف.';
-  const s3 = step([b('3. الحكم على الثقة'), document.createTextNode(confident ? ` كافية: أعلى درجة ${cands[0].score.toFixed(1)}.` : ' غير كافية. ' + reasonBad)], !confident);
+  const s3 = step([b('3. قوة التطابق'), document.createTextNode(confident ? ` كافية للترشيح. أعلى درجة لفظية ${cands[0].score.toFixed(1)}، وهي مقياس نسبي لترتيب النتائج وليست نسبة صحة.` : ' ضعيفة، فلا ترشيح. ' + reasonBad)], !confident);
   trace.append(s1, s2, s3);
   const shown = confident ? cands.slice(0, 5).filter(r => r.score >= cands[0].score * 0.3) : [];
   const counts = {};
