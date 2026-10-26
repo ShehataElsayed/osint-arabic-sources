@@ -201,3 +201,5 @@ html,body{overflow-x:clip}
 .sec + .sec{margin-top:clamp(36px,6vw,84px)}
 @media(max-width:860px){.pair,.pair.rev{grid-template-columns:minmax(0,1fr)}.pair .vid,.pair.rev .vid{order:2}.vid{max-width:420px}}
 .hero + .sec{margin-top:clamp(36px,6vw,84px)}
+.sec.wrap{padding-inline:20px}
+@media(max-width:560px){.sec.wrap{padding-inline:14px}}
