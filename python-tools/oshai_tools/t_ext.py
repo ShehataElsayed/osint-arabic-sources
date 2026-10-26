@@ -32,4 +32,6 @@ def olevba_tool(path):
         modules = [m[2] for m in p.extract_macros()] if has and not text else []
         status = "نص عادي: تقدير بالكلمات المفتاحية فقط" if text else ("وُجد كود ماكرو" if has else "لم يُعثر على ماكرو (لا يثبت أن الملف آمن)")
         return {"ok": True, "type": p.type, "macro_status": status, "modules": modules, "findings": findings, "note": "فحص ساكن؛ لم يُنفَّذ أي ماكرو. افتح الملف فقط في بيئة معزولة إن لزم."}
+    except getattr(olevba, "FileOpenError", ()) as e:
+        return {"ok": False, "error": "الملف ليس بصيغة Office أو OLE معروفة (doc/xls/ppt/docm/xlsm...)، فلم يُفحص.", "technical_detail": type(e).__name__ + ": " + str(e)[:160]}
     except Exception as e: return {"ok": False, "error": type(e).__name__ + ": " + str(e)[:160]}

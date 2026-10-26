@@ -153,3 +153,24 @@ class TAI(unittest.TestCase):
         c = "account,time,text\na1,2026-10-01T10:00:00,شركة المنتجات الغذائية تطلق حملة إعلانية ضخمة لمنتجها الجديد\na2,2026-10-01T10:04:00,أطلقت شركة الأغذية حملة دعائية كبيرة للترويج لمنتجها الحديث\na4,2026-10-01T10:20:00,الحكومة ترفع أسعار الوقود غدا\na5,2026-10-01T10:22:00,الحكومة تخفض أسعار الوقود غدا"
         r = o.run("narratives", csv=c, min_accounts=2); self.assertEqual([x["accounts"] for x in r["clusters"]], [["a1", "a2"]])
 if __name__ == "__main__": unittest.main()
+
+
+
+class TestOlevbaErrors(unittest.TestCase):
+    def test_non_office_gives_arabic_error_and_keeps_detail(self):
+        # generated benign fixture (ours): bytes that are not an Office file
+        with tempfile.TemporaryDirectory() as d:
+            f = os.path.join(d, "not_office.bin"); open(f, "wb").write(b"\xff\xd8\xff\xe0" + bytes(range(256)) * 8)
+            r = o.run("olevba", path=f)
+        self.assertFalse(r["ok"]); self.assertIn("Office", r["error"]); self.assertIn("FileOpenError", r["technical_detail"])
+
+    def test_generated_benign_docx_reports_no_macro(self):
+        # generated benign fixture (ours), not a real public file; proves the code path only, not macro detection
+        import zipfile
+        with tempfile.TemporaryDirectory() as d:
+            f = os.path.join(d, "plain.docx")
+            with zipfile.ZipFile(f, "w") as z:
+                z.writestr("[Content_Types].xml", '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>')
+                z.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>')
+            r = o.run("olevba", path=f)
+        self.assertTrue(r["ok"], r); self.assertIn("لم يُعثر", r["macro_status"])
