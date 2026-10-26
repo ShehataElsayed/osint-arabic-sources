@@ -15,6 +15,10 @@ def pj(o):
     return json.dumps(o, ensure_ascii=False, indent=1)
 
 
+def linkify(t):
+    return re.sub(r'(https?://[^\s،]+)', lambda m: '<a href="%s" rel="noopener noreferrer" style="display:block;direction:ltr;text-align:left;overflow-wrap:anywhere">%s</a>' % (m.group(1), m.group(1)), t)
+
+
 def runbox(rid):
     r = RUNS[rid]
     s = r['source']
@@ -23,7 +27,7 @@ def runbox(rid):
     real = 'ملفات حقيقية من المصدر مع نسخة معدّلة منا' if r.get('file_input') else ('النص المدخل مأخوذ من المصدر' if r['input_is_real_text'] else 'المدخل معدّل منا عمدًا')
     return ('<figure class="run"><figcaption><b>ناتج تشغيل فعلي</b> · الأداة <code>%s</code> · %s · المصدر: <a href="%s" rel="noopener noreferrer">%s (%s)</a></figcaption>'
             '<div class="io"><div><h4>المدخل</h4><pre dir="auto">%s</pre></div><div><h4>المخرج كما أعادته الأداة</h4><pre>%s</pre></div></div>'
-            '<p class="muted">%s</p></figure>') % (E(r['tool']), E(real), E(s['url']), E(s['title']), E(s['date']), E(pj(shown)), E(pj(r['output'])), E(r['input_note']))
+            '<p class="muted">%s</p></figure>') % (E(r['tool']), E(real), E(s['url']), E(s['title']), E(s['date']), E(pj(shown)), E(pj(r['output'])), linkify(E(r['input_note'])))
 
 
 def expand_runs(text):
@@ -125,7 +129,7 @@ def static_pages(ns):
 ABOUT = '''<p class="lead">دليل عربي للمصادر والأدوات المفتوحة، موجه للصحفيين الذين يحققون ويتحققون من المعلومات.</p>
 <h2>من يبنيه</h2>
 <p>يصمم المنصة ويطورها مهندس شحاته السيد، صحفي استقصائي يكتب في «صدى البلد» ويبني أدوات عربية للتحقق والتحقيق المفتوح المصدر. له مشروعات أخرى مفتوحة على جيت هب باسم <a href="https://github.com/ShehataElsayed" rel="noopener noreferrer">ShehataElsayed</a>، منها هذا الدليل ومشروع NewsRAG.</p>
-<p>الحساب الرسمي المعتمد للتواصل في الموقع هو صفحة المصمم على فيسبوك: <a href="https://www.facebook.com/share/19PTDvQ789/" rel="noopener noreferrer">فيسبوك ↗</a>. لا نعرض هنا بريدًا ولا هاتفًا ولا بيانات شركة لأننا لم نوثّقها بعد.</p>
+<p>رابط التواصل المتاح في الموقع هو صفحة المصمم على فيسبوك: <a href="https://www.facebook.com/share/19PTDvQ789/" rel="noopener noreferrer">فيسبوك ↗</a>. لا نعرض هنا بريدًا ولا هاتفًا ولا بيانات شركة لأننا لم نوثّقها بعد.</p>
 <h2>ماذا في المنصة</h2>
 <ul><li>خريطة من فروع الأدوات والمصادر المتاحة للعموم، لكل مدخل وصف عربي، وبحث بالمهمة يعمل في متصفحك.</li>
 <li>أدوات بايثون مفتوحة المصدر تعمل في المتصفح، موزعة على فئات.</li>
