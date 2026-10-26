@@ -1,18 +1,18 @@
 import test from 'node:test'; import assert from 'node:assert/strict';
-import { answer, denied, factCheck } from '../worker/rag-worker.js';
+import { answer, denied, factCheck } from '../worker/rag-lib.js';
 const f = async () => ({ ok: true, json: async () => ({ claims: [{ text: 'ادعاء', claimReview: [{ publisher: { name: 'ناشر' }, url: 'https://misbar.com/a', textualRating: 'مضلل', title: 't' }] }] }) });
 
 test('fact-check results are link_only', async () => { const r = await answer('خبز', { FACTCHECK_API_KEY: 'k' }, f); assert.equal(r.results.length, 1); assert.equal(r.results[0].fetch, 'link_only'); assert.ok(r.results.every(x => x.source === 'factcheck')); });
 test('no key -> no calls, flagged, empty', async () => { const r = await answer('خبز', {}, f); assert.equal(r.factcheck_enabled, false); assert.equal(r.results.length, 0); });
 test('deny-list', () => { assert.ok(denied('https://www.misbar.com/x')); assert.ok(denied('https://factuel.afp.com/x')); assert.ok(denied('not a url')); });
 test('factCheck sends key only to google endpoint', async () => { let u; await factCheck('q', 'KEY', async x => { u = x; return { ok: false }; }); assert.ok(u.startsWith('https://factchecktools.googleapis.com/')); });
-import { keywords } from '../worker/rag-worker.js';
+import { keywords } from '../worker/rag-lib.js';
 test('keywords drop question words', () => { assert.equal(keywords('من فاز بكأس العالم 2022؟'), 'فاز بكأس العالم 2022'); assert.equal(keywords('هل لم تفز الأرجنتين بكأس العالم 2022؟'), 'تفز الأرجنتين بكأس العالم 2022'); });
 
-import { compose } from '../worker/rag-worker.js';
+import { compose } from '../worker/rag-lib.js';
 test('compose: off without key, rejects links and unsupported verdicts', async () => { assert.equal(await compose('س', [], 'answer', {}), null); const env = { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' }; const mk = t => async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: t }] } }] }) }); assert.equal(await compose('س', [{ rating: 'مضلل', count: 1 }], 'answer', env, mk('الحكم السائد مضلل.')), 'الحكم السائد مضلل.'); assert.equal(await compose('س', [{ rating: 'مضلل', count: 1 }], 'answer', env, mk('الخبر كاذب')), null); assert.equal(await compose('س', [], 'answer', env, mk('انظر https://x.com')), null); });
 
-import { recommend } from '../worker/rag-worker.js';
+import { recommend } from '../worker/rag-lib.js';
 test('recommend: only candidate ids, no links, off without key', async () => {
   const cs = [{ id: 1, name: 'أداة أ', description: 'وصف' }, { id: 2, name: 'أداة ب', description: 'وصف' }];
   assert.equal(await recommend('س', cs, {}), null);
@@ -23,7 +23,7 @@ test('recommend: only candidate ids, no links, off without key', async () => {
   assert.deepEqual(await recommend('س', cs, env, mk({ picks: [{ id: 99, why: 'x', how: 'y' }] })), { error: 'filtered' });
 });
 
-import { plan, cleanPlan } from '../worker/rag-worker.js';
+import { plan, cleanPlan } from '../worker/rag-lib.js';
 test('plan: whitelisted kind and fields, no links, dates validated', async () => {
   assert.equal(cleanPlan({ kind: 'hack', fields: {} }), null);
   const c = cleanPlan({ kind: 'person', fields: { name: 'سمير', city: 'http://x.io', from: '2020-01-01', to: 'غدا', evil: 'x' }, note: 'فهمت' });
@@ -32,7 +32,7 @@ test('plan: whitelisted kind and fields, no links, dates validated', async () =>
   assert.deepEqual(await plan('نص', {}), { error: 'off' });
 });
 
-import { verifyModel, claimType } from '../worker/rag-worker.js';
+import { verifyModel, claimType } from '../worker/rag-lib.js';
 const mk = (drafts, critic) => { let i = 0; return async (u, o) => { const body = JSON.parse(o.body).contents[0].parts[0].text; const j = body.startsWith('أنت مدقق') ? critic : drafts[i++ % drafts.length]; return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify(j) }] } }] }) }; }; };
 const env = { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' };
 const D = (verdict, extra = {}) => ({ verdict, answer: 'جملة', time_sensitive: false, ...extra });
@@ -60,7 +60,7 @@ test('verify: no key, bad critic, links stripped, quota', async () => {
   assert.equal(claimType('قال الوزير'), 'attribution');
 });
 
-import { checkSource, safeSourceUrl } from '../worker/rag-worker.js';
+import { checkSource, safeSourceUrl } from '../worker/rag-lib.js';
 test('source check: url safety, existence, support, numbers', async () => {
   assert.equal(safeSourceUrl('http://a.com/x'), ''); assert.equal(safeSourceUrl('https://127.0.0.1/x'), ''); assert.equal(safeSourceUrl('https://x.afp.com/a'), ''); assert.equal(safeSourceUrl('https://localhost/x'), '');
   assert.ok(safeSourceUrl('https://example.com/a'));
@@ -75,7 +75,7 @@ test('source check: url safety, existence, support, numbers', async () => {
 
 test('verify: answer is returned even when gates fail (confidence is decided by the page)', async () => { const r = await verifyModel('سؤال', env, mk([D('supported'), D('refuted'), D('uncertain')], { contradiction: 0.1 })); assert.equal(r.decision, 'abstain'); assert.equal(r.answer, 'جملة'); assert.equal(r.validated_for_release, false); });
 
-import { tierOf } from '../worker/rag-worker.js';
+import { tierOf } from '../worker/rag-lib.js';
 test('tierOf classifies the domain only', () => { assert.equal(tierOf('www.who.int'), 'official'); assert.equal(tierOf('data.worldbank.org'), 'official'); assert.equal(tierOf('moh.gov.eg'), 'official'); assert.equal(tierOf('www.reuters.com'), 'news'); assert.equal(tierOf('blog.example.com'), 'unknown'); assert.equal(tierOf('fakewho.int.example.com'), 'unknown'); });
 
 test('source check: quote is a verbatim passage of the fetched page; dead links give no quote', async () => {
@@ -94,7 +94,7 @@ test('extraction: the picked passage is a verbatim candidate sentence; bad index
   assert.ok(s.cands.length >= 2 && s.cands.every(c => html.includes(c)));
 });
 
-import { registrable, rdapInfo, pageIdentity, reliabilityOf } from '../worker/rag-worker.js';
+import { registrable, rdapInfo, pageIdentity, reliabilityOf } from '../worker/rag-lib.js';
 test('identity: registrable domain, RDAP parsing without guessing, rating floors', async () => {
   assert.equal(registrable('www.almasryalyoum.com'), 'almasryalyoum.com'); assert.equal(registrable('www.cbe.org.eg'), 'cbe.org.eg'); assert.equal(registrable('a.b.bbc.co.uk'), 'bbc.co.uk');
   const j = { events: [{ eventAction: 'registration', eventDate: '2006-01-23T00:00:00Z' }], entities: [{ roles: ['registrar'], vcardArray: ['vcard', [['fn', {}, 'text', 'GoDaddy.com, LLC']]] }, { roles: ['registrant'], vcardArray: ['vcard', [['fn', {}, 'text', 'REDACTED FOR PRIVACY']]] }] };
@@ -106,7 +106,7 @@ test('identity: registrable domain, RDAP parsing without guessing, rating floors
   assert.equal(reliabilityOf('unknown', { age_years: 9 }, pg), 'medium'); assert.equal(reliabilityOf('unknown', { age_years: 1 }, pg), 'unknown'); assert.equal(reliabilityOf('unknown', null, null), 'unknown');
 });
 
-import { pickFromSitemap, repairSource } from '../worker/rag-worker.js';
+import { pickFromSitemap, repairSource } from '../worker/rag-lib.js';
 test('repair: candidates come from the same host sitemap and only count if they fetch', async () => {
   const locs = ['https://www.example.com/news/2022/11/cop27-loss-and-damage-fund-agreed', 'https://www.example.com/sports/football', 'https://other.com/cop27-loss-and-damage-fund'];
   assert.deepEqual(pickFromSitemap(locs, 'cop27 loss damage fund agreed', 'www.example.com'), ['https://www.example.com/news/2022/11/cop27-loss-and-damage-fund-agreed']);
@@ -118,7 +118,7 @@ test('repair: candidates come from the same host sitemap and only count if they 
   assert.equal(none, null);
 });
 
-import { exaSameDomain } from '../worker/rag-worker.js';
+import { exaSameDomain } from '../worker/rag-lib.js';
 test('repair: domain-restricted search runs only with a key, is cached, and fails quietly', async () => {
   assert.deepEqual(await exaSameDomain('a.com', 'x', {}, async () => { throw new Error('no'); }), []);
   let n = 0, body;
@@ -129,7 +129,7 @@ test('repair: domain-restricted search runs only with a key, is cached, and fail
   assert.deepEqual(await exaSameDomain('b.com', 'q', { EXA_API_KEY: 'k' }, async () => ({ ok: false })), []);
 });
 
-import { exaWeb } from '../worker/rag-worker.js';
+import { exaWeb } from '../worker/rag-lib.js';
 test('open-web search: blocked domains dropped, capped, quiet without key', async () => {
   assert.deepEqual(await exaWeb('q', {}, async () => { throw new Error('x'); }), []);
   const f = async () => ({ ok: true, json: async () => ({ results: [{ url: 'https://factuel.afp.com/a', title: 'a' }, { url: 'https://misbar.com/b', title: 'b' }, { url: 'https://www.who.int/c', title: 'c' }, { url: 'http://insecure.com/d', title: 'd' }, { url: 'https://un.org/e', title: 'e' }] }) });
@@ -137,7 +137,7 @@ test('open-web search: blocked domains dropped, capped, quiet without key', asyn
   assert.deepEqual(r.map(x => x.host), ['www.who.int', 'un.org']);
 });
 
-import { supportOf, stemAr } from '../worker/rag-worker.js';
+import { supportOf, stemAr } from '../worker/rag-lib.js';
 test('supportOf: negating page and distant numbers are not support; inflected forms overlap', () => {
   assert.equal(stemAr('والمدارس'), 'مدارس');
   const neg = supportOf('أعلنت الوزارة إغلاق المدارس في المحافظة', ['نفت الوزارة إغلاق المدارس في المحافظة وأكدت استمرار الدراسة'], []);
@@ -149,7 +149,7 @@ test('supportOf: negating page and distant numbers are not support; inflected fo
   assert.equal(ok.verified, true);
 });
 
-import { exaFetchText } from '../worker/rag-worker.js';
+import { exaFetchText } from '../worker/rag-lib.js';
 { // exaFetchText: off without key, returns server-fetched text with key
   assert.equal(await exaFetchText('https://example.com/a', {}, async () => { throw new Error('no call'); }), null);
   const f = async (u, o) => ({ ok: true, json: async () => ({ results: [{ text: 'نص الصفحة من وسيط البحث' }] }) });

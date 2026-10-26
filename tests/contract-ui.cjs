@@ -36,7 +36,7 @@ function scripted(draft, pages = { [OK_URL]: PAGE }) {
 }
 
 (async () => {
-  const { askAssistant } = await import('../worker/rag-worker.js');
+  const { askAssistant } = await import('../worker/rag-lib.js');
   const ENV = { OPENROUTER_API_KEY: 'k', OPENROUTER_MODEL: 'm' };
   const draftSupported = JSON.stringify({
     answer: 'تؤثر موجات الحر البحرية على الثروة السمكية [S1]. ارتفعت درجات الحرارة قياسيًا [S1].',

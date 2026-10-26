@@ -1,5 +1,5 @@
 import test from 'node:test'; import assert from 'node:assert/strict';
-import { askAssistant } from '../worker/rag-worker.js';
+import { askAssistant } from '../worker/rag-lib.js';
 
 const ENV = { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm' };
 const OK_URL = 'https://www.who.int/ar/news/item/01-01-2026-report';

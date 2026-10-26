@@ -1,6 +1,6 @@
 // Compares the previous page-support rule with the current one on self-authored Arabic pairs. Usage: node tests/grounding.eval.mjs
 import fs from 'node:fs';
-import { supportOf } from '../worker/rag-worker.js';
+import { supportOf } from '../worker/rag-lib.js';
 const { cases } = JSON.parse(fs.readFileSync(new URL('./data/grounding-cases.json', import.meta.url), 'utf8'));
 // Previous rule: unstemmed tokens, numbers matched anywhere in the page, no negation check.
 const nrm = s => String(s ?? '').toLowerCase().normalize('NFKC').replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();

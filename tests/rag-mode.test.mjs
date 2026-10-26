@@ -1,5 +1,5 @@
 import test from 'node:test'; import assert from 'node:assert/strict';
-import { cleanRagSources, chunkText, ragRetrieve, ragAsk, ragTokens } from '../worker/rag-worker.js';
+import { cleanRagSources, chunkText, ragRetrieve, ragAsk, ragTokens } from '../worker/rag-lib.js';
 
 const SRC = [
   { id: '1', title: 'بيان رسمي', publisher: 'جهة', url: 'https://example.org/a', published_at: '2026-09-10', text: 'بدأ برنامج تجريبي محدود في سبتمبر. لم يُعلن عن إطلاق عام للخدمة.' },

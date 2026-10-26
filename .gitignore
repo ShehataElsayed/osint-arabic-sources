@@ -3,3 +3,7 @@ node_modules/
 __pycache__/
 *.pyc
 test-output/
+
+# local dev secrets (never commit)
+.dev.vars
+worker/.dev.vars

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { sentSpans, passageWindows, supportOf, groundedOk, checkSource } from '../worker/rag-worker.js';
+import { sentSpans, passageWindows, supportOf, groundedOk, checkSource } from '../worker/rag-lib.js';
 
 test('sentSpans offsets are exact: text.slice(start, end) equals the span text', () => {
   const text = '  الجملة الأولى من النص هنا كاملة.  الجملة الثانية تليها مباشرة!\nجملة ثالثة في سطر جديد تماما؟';
@@ -62,10 +62,10 @@ test('checkSource end-to-end: split fact in a fetched page yields a joined candi
 });
 
 test('groundedWhy names the failing guard; best-sentence scoring rescues window dilution', async () => {
-  const { groundedWhy } = await import('../worker/rag-worker.js');
+  const { groundedWhy } = await import('../worker/rag-lib.js');
   const claim = 'بلغت نسبة الانخفاض في حركة السفن 60 بالمئة';
   const windowText = 'بلغت نسبة الانخفاض في حركة السفن العابرة للقناة 60 بالمئة مقارنة بالعام الماضي. وشهدت أسعار الشحن العالمية تقلبات واسعة مع تغير مسارات كثيرة للشركات الكبرى خلال الفترة نفسها من العام.';
-  const { ragTokens } = await import('../worker/rag-worker.js');
+  const { ragTokens } = await import('../worker/rag-lib.js');
   const cos = (a, b) => { const va = new Map(), vb = new Map(); ragTokens(a).forEach(x => va.set(x, (va.get(x) || 0) + 1)); ragTokens(b).forEach(x => vb.set(x, (vb.get(x) || 0) + 1)); let d = 0, na = 0, nb = 0; for (const [x, c] of va) { na += c * c; if (vb.has(x)) d += c * vb.get(x); } for (const c of vb.values()) nb += c * c; return na && nb ? d / Math.sqrt(na * nb) : 0; };
   const wholeCos = cos(claim, windowText);
   const bestSent = Math.max(...sentSpans(windowText).map(x => cos(claim, x.text)));
@@ -77,6 +77,6 @@ test('groundedWhy names the failing guard; best-sentence scoring rescues window 
 });
 
 test('groundedWhy available for diagnostics (smoke)', async () => {
-  const { groundedWhy } = await import('../worker/rag-worker.js');
+  const { groundedWhy } = await import('../worker/rag-lib.js');
   assert.equal(typeof groundedWhy, 'function');
 });

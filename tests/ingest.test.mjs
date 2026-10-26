@@ -1,5 +1,5 @@
 import test from 'node:test'; import assert from 'node:assert/strict';
-import { ingestUrl } from '../worker/rag-worker.js';
+import { ingestUrl } from '../worker/rag-lib.js';
 
 const HTML = '<html><head><title>عنوان الخبر</title><style>x{}</style></head><body><script>bad()</script><p>نص الخبر الكامل هنا مع تفاصيل كافية تتجاوز أربعين حرفًا بسهولة تامة للاختبار.</p></body></html>';
 const okHtml = (h = HTML) => async () => ({ ok: true, status: 200, headers: new Headers({ 'content-type': 'text/html; charset=utf-8' }), text: async () => h });
