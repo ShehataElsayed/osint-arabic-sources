@@ -3,7 +3,7 @@ import json,re,html,sys,shutil,urllib.parse
 root=Path(__file__).parent
 site=Path(sys.argv[1]) if len(sys.argv)>1 else root/'site'
 content=Path(sys.argv[2]) if len(sys.argv)>2 else root/'content'
-index=site/'index.html'
+index=site/'map.html'
 s=index.read_text()
 m=re.search(r'const DATA=(.*?);const LIBS=',s,re.S)
 if not m:raise SystemExit('Site dataset absent')
@@ -56,10 +56,16 @@ for i,top in enumerate(data['children']):
  parts.append('</main></div></html>');(site/'catalog'/f'category-{i+1:02}.html').write_text(''.join(parts))
 # Search data for the beta tool is regenerated with content edits.
 arr=[]
-def collect(n):
- if n.get('url') and not n.get('unverifiedLink') and not n.get('linkUnsafe') and n.get('arDescription'):arr.append({'name':n['name'],'description':n['arDescription'][:300],'url':n['url']})
- for ch in n.get('children',[]):collect(ch)
-collect(data)
+def collect(n,b=None,sub=None):
+ if n.get('url') and not n.get('unverifiedLink') and not n.get('linkUnsafe') and n.get('arDescription'):
+  row={'name':n['name'],'description':n['arDescription'][:300],'url':n['url']}
+  if b is not None:row['b']=b
+  if sub:row['s']=sub
+  arr.append(row)
+ for ch in n.get('children',[]):collect(ch,b,sub)
+for bi,top in enumerate(data['children']):
+ for ch in top.get('children',[]):
+  collect(ch,bi,(ch.get('ar') or ch['name']) if ch.get('children') else None)
 (site/'search-tools.json').write_text(json.dumps(arr,ensure_ascii=False,separators=(',',':')))
 print('articles',len(articles),'new tools',len(newtools),'edited descriptions',updated,'search tools',len(arr))
 
