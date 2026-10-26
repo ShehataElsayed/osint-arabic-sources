@@ -50,7 +50,7 @@ for i,top in enumerate(data['children']):
   if n.get('url'):group.append((n,path))
   for ch in n.get('children',[]):entries(ch,path+[n.get('ar') or n['name']])
  entries(top)
- title=top.get('ar') or top['name'];parts=['<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+html.escape(title)+'</title>'+css+'<div class="page"><header><a class="back" href="../index.html">العودة إلى الدليل</a><h1>'+html.escape(title)+'</h1></header><main data-pagefind-body>']
+ title=top.get('ar') or top['name'];parts=['<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>'+html.escape(title)+'</title>'+css+'<link rel="stylesheet" href="../identity.css"><div class="page catalog-page"><header><a class="back" href="../index.html">العودة إلى الدليل</a><h1>'+html.escape(title)+'</h1></header><main data-pagefind-body>']
  for j,(n,path) in enumerate(group):
   parts.append('<article class="card"><h2 data-pagefind-sub-result id="tool-'+str(j)+'">'+html.escape(n['name'])+'</h2><small>'+html.escape(' / '.join(path[1:]))+'</small><p>'+html.escape(n.get('arDescription','راجع المصدر الأولي.'))+'</p><a href="../index.html#tree">تفاصيل الأداة في الدليل</a></article>')
  parts.append('</main></div></html>');(site/'catalog'/f'category-{i+1:02}.html').write_text(''.join(parts))
