@@ -20,7 +20,7 @@ def mk_jpeg(path):
     open(path, "wb").write(b"\xff\xd8\xff\xe1" + struct.pack(">H", len(seg)+2) + seg + b"\xff\xd9")
 
 class T(unittest.TestCase):
-    def test_count(self): self.assertEqual(len(o.REGISTRY), 28); self.assertTrue(all(t["desc_ar"] for t in o.REGISTRY.values()))
+    def test_count(self): self.assertEqual(len(o.REGISTRY), 29); self.assertTrue(all(t["desc_ar"] for t in o.REGISTRY.values()))
     def test_claims(self):
         r = o.run("claims", text="قال الوزير إن التضخم ارتفع إلى 13.9% في 2026. الطقس جميل اليوم.")
         self.assertEqual(r["count"], 1); self.assertIn("نسبة", r["claims"][0]["signals"])
@@ -182,3 +182,47 @@ class TestOlevbaErrors(unittest.TestCase):
                 z.writestr("word/document.xml", '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>')
             r = o.run("olevba", path=f)
         self.assertTrue(r["ok"], r); self.assertIn("لم يُعثر", r["macro_status"])
+
+
+class TestPlanner(unittest.TestCase):
+    def test_quote_case_ranks_quote_tools_first(self):
+        r = o.run("planner", case="نشر موقع تقريرا ينسب تصريحا لوزير الصحة ومعي نص البيان الرسمي")
+        self.assertTrue(r["ok"]); st = r["الخطوات داخل المنصة بالترتيب (كلها تعمل في متصفحك)"]; self.assertEqual(st[0]["رابط"], "claims.html#quotecheck"); self.assertTrue(st[0]["الأداة"].startswith("1."))
+
+    def test_empty_and_gibberish(self):
+        self.assertFalse(o.run("planner", case="  ")["ok"])
+        r = o.run("planner", case="zzqx vvkj")
+        self.assertTrue(r["ok"]); self.assertIn("تنبيه", r)
+
+    def test_every_planned_tool_exists(self):
+        from oshai_tools.t_planner import TYPES
+        for k, (_, ids) in TYPES.items():
+            for t in ids: self.assertIn(t, o.REGISTRY)
+
+
+    def test_multi_type_case_plans_quote_then_image_and_labels_external(self):
+        r = o.run("planner", case="جريدة نشرت تصريحا لوزير ومعي نص البيان الرسمي وصورة متداولة")
+        K = "الخطوات داخل المنصة بالترتيب (كلها تعمل في متصفحك)"
+        tasks = [[v for k, v in x.items() if k.startswith("السبب")] for x in r[K]]
+        self.assertTrue(any("quotecheck" in x["رابط"] for x in r[K])); self.assertTrue(any("exif" in x["رابط"] for x in r[K]))
+        self.assertLess(min(i for i, x in enumerate(r[K]) if "quotecheck" in x["رابط"]), min(i for i, x in enumerate(r[K]) if "exif" in x["رابط"]))
+        ext = r["أدوات خارجية من الدليل (ليست داخل المنصة)"]
+        self.assertTrue(all(e["الرابط"].startswith("https://") and "خارجي" in e["تنبيه"] for e in ext))
+        self.assertNotIn("planner", str(r["الخطوات داخل المنصة بالترتيب (كلها تعمل في متصفحك)"]))
+
+
+class TestPlannerConditions(unittest.TestCase):
+    def test_numbers_step_omitted_without_digits(self):
+        r = o.run("planner", case="نشر موقع تقريرا ينسب تصريحا لوزير الصحة ومعي نص البيان الرسمي")
+        names = [s["الأداة"] for s in r["الخطوات داخل المنصة بالترتيب (كلها تعمل في متصفحك)"]]
+        self.assertFalse(any("مقارن الأرقام" in n for n in names))
+        self.assertIn("مقارن الأرقام", [x["الأداة"] for x in r["خطوات حُذفت لأن وصفك لا يتضمن شرطها"]])
+    def test_numbers_step_kept_with_digits(self):
+        r = o.run("planner", case="نشر موقع تقريرا ينسب لوزير الصحة تصريحا عن 25 بالمئة ومعي نص البيان الرسمي")
+        self.assertTrue(any("مقارن الأرقام" in s["الأداة"] for s in r["الخطوات داخل المنصة بالترتيب (كلها تعمل في متصفحك)"]))
+    def test_quote_tool_not_named_authenticity(self):
+        self.assertNotIn("أصالة", o.REGISTRY["quotecheck"]["name_ar"])
+    def test_unverified_external_not_promoted(self):
+        from oshai_tools import planner_catalog as pc
+        names = [t["name"] for v in pc.CATALOG.values() for t in v]
+        self.assertFalse(any("TinEye" in n or "MxToolbox" in n for n in names))
