@@ -11,17 +11,17 @@ const fs=require('fs');
   for(let i=0;i<50;i++){try{if((await fetch('http://127.0.0.1:8765/')).ok)break}catch{}await new Promise(r=>setTimeout(r,100));}
   browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',args:['--no-sandbox']});
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
-  // New homepage: connected branches, one tool-search entry, honest search states.
+  // Editorial homepage: actual local utilities, no catalog or prerecorded results.
   await page.goto('http://127.0.0.1:8765/');
-  assert.equal(await page.locator('main input:not([type=hidden])').count(),1,'homepage has the tool-search bar as its only input');
-  assert.equal(await page.locator('.node').count(),0,'home carries no branch catalog');
-  assert.equal(await page.locator('main video').count(),5,'home shows 5 real tool recordings');
+  assert.equal(await page.locator('main input[type=search]').count(),1);
+  assert.equal(await page.locator('[data-panel]').count(),5);
+  assert.equal(await page.locator('main video').count(),0);
   assert.ok(await page.locator('footer a[href*="facebook"]').count()>0);
-  await page.getByRole('searchbox',{name:'اكتب مهمتك'}).fill('أريد تتبع سفينة');
-  await page.locator('#out:not([hidden])').waitFor();
-  assert.ok((await page.locator('#out').innerText()).includes('Ship AIS'),'real ranked result shown');
-  assert.ok((await page.locator('#out').innerText()).includes('لا يرسل سؤالك'),'local-only/no-AI disclosure shown');
-  assert.ok((await page.locator('#reply a[href^="branches.html?q="]').count())>=1,'result links to the branches page');
+  await page.getByRole('searchbox',{name:'صف مهمة البحث'}).fill('التحقق من صورة منشورة');
+  await page.waitForFunction(()=>document.querySelector('#out')?.innerText.includes('InVID'));
+  assert.ok((await page.locator('#out').innerText()).includes('InVID'));
+  assert.ok((await page.locator('.searchnote').innerText()).includes('لا يُرسل'));
+  assert.ok((await page.locator('#out a[href*="branches.html?q="]').count())>=1);
   await page.goto('http://127.0.0.1:8765/branches.html');
   assert.equal(await page.locator('.node').count(),33,'33 branch nodes on the branches page');
   await page.getByRole('searchbox',{name:'اكتب مهمتك'}).fill('أريد تتبع سفينة');
