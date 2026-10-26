@@ -5,6 +5,10 @@ export const DENY_FULL_TEXT = ['afp.com', 'factuel.afp.com', 'misbar.com', 'araf
 const cors = o => ({ 'access-control-allow-origin': o === ALLOWED_ORIGIN ? o : ALLOWED_ORIGIN, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type', vary: 'origin' });
 const json = (b, s, o) => new Response(JSON.stringify(b), { status: s, headers: { 'content-type': 'application/json; charset=utf-8', ...cors(o) } });
 export const denied = url => { try { const h = new URL(url).hostname; return DENY_FULL_TEXT.some(d => h.includes(d)); } catch { return true; } };
+// Wikipedia/Wikimedia are excluded at the owner's request (docs/rag-backend-contract.md): never
+// discovered, opened, ingested or cited - even when Exa/GDELT return them or a redirect lands there.
+const WIKI_HOST = /(^|\.)wikipedia\.org$|(^|\.)wikimedia\.org$|(^|\.)wikidata\.org$|(^|\.)wiktionary\.org$|(^|\.)mediawiki\.org$/i;
+export const wikiHost = url => { try { return WIKI_HOST.test(new URL(String(url)).hostname); } catch { return false; } };
 
 const QSTOP = new Set(['هل','ما','ماذا','من','متى','اين','كيف','لماذا','كم','هي','هو','ان','إن','أن','في','على','الى','إلى','عن','مع','لم','لن','لا','ليس','قال','تم','كان','كانت','هذا','هذه','ذلك','التي','الذي','و','او','أو','ثم','قد','مليون','اليوم','عام']);
 export const keywords = q => { const w = String(q).replace(/[؟?!.,،:;"()]/g, ' ').split(/\s+/).filter(t => t.length > 1 && !QSTOP.has(t)); return (w.length ? w : [String(q)]).slice(0, 6).join(' '); };
@@ -357,14 +361,15 @@ export function supportOf(claimText, sents, nums) {
   return { cands: scored.slice(0, 10).map(c => c.x.slice(0, 500)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
 }
 export async function checkSource(src, claimText, nums, f = fetch, env = {}, altText = '') {
-  const url = safeSourceUrl(src?.url); const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' };
+  const preUrl = safeSourceUrl(src?.url); if (preUrl && wikiHost(preUrl)) { const out0 = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' }; return out0; }
+  const url = preUrl; const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' };
   if (!url) return out;
   out.host = new URL(url).hostname; out.tier = tierOf(out.host);
   let rawText = '';
   try {
     const r = await f(url, { headers: { accept: 'text/html,text/plain', 'user-agent': 'Mozilla/5.0 (compatible; osint-guide-check)' }, redirect: 'follow', signal: AbortSignal.timeout(6000) });
     const ct = r.headers?.get?.('content-type') || 'text/html';
-    if (r.ok && /text\/(html|plain)/i.test(ct)) rawText = await r.text();
+    if (r.ok && /text\/(html|plain)/i.test(ct) && !wikiHost(r.url || url)) rawText = await r.text();
   } catch { /* unreachable: try the search-proxy fallback */ }
   if (!rawText) { const ext = await exaFetchText(url, env, f); if (ext) { rawText = ext; out.via = 'exa'; } }
   if (rawText) {
@@ -433,7 +438,7 @@ export async function exaWeb(query, env, f = fetch, n = 4) {
   let out = [];
   try {
     const r = await f('https://api.exa.ai/search', { method: 'POST', headers: { 'content-type': 'application/json', 'x-api-key': env.EXA_API_KEY }, body: JSON.stringify({ query: q, numResults: n + 3, type: 'auto' }), signal: AbortSignal.timeout(6000) });
-    if (r.ok) { const d = await r.json(); out = (d.results || []).filter(x => safeSourceUrl(x.url) && !denied(x.url)).slice(0, n).map(x => ({ title: cleanText(x.title || '', 120), url: x.url, host: new URL(x.url).hostname })); }
+    if (r.ok) { const d = await r.json(); out = (d.results || []).filter(x => safeSourceUrl(x.url) && !denied(x.url) && !wikiHost(x.url)).slice(0, n).map(x => ({ title: cleanText(x.title || '', 120), url: x.url, host: new URL(x.url).hostname })); }
   } catch { /* quota or network: stay quiet */ }
   searchCache.set(key, out);
   return out;
@@ -455,18 +460,6 @@ export async function exaFetchText(url, env, f = fetch) {
 // as a free service rate-limited to one request every 5 seconds — one low-volume call per question, errors
 // swallowed so discovery degrades silently. Articles are discovery leads only: they enter the same
 // open-and-check pipeline as model-named sources and can support claims and citation markers.
-// Free reference discovery: Arabic Wikipedia search API. No key; Wikimedia allows low-volume automated
-// queries with a descriptive User-Agent. Articles enter the same open-and-check pipeline as everything else.
-export async function wikipediaArticles(query, f = fetch, n = 2) {
-  const q = String(query || '').trim().slice(0, 120); if (!q) return [];
-  try {
-    const u = `https://ar.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&format=json&srlimit=${Math.min(5, n)}`;
-    const r = await f(u, { headers: { 'user-agent': 'osint-guide-ask/1.0 (journalism research assistant)' }, signal: AbortSignal.timeout(6000) });
-    if (!r.ok) return [];
-    const hits = (await r.json()).query?.search || [];
-    return hits.map(h => ({ title: cleanText(h.title || '', 140), url: 'https://ar.wikipedia.org/wiki/' + encodeURIComponent(String(h.title || '').replace(/ /g, '_')), host: 'ar.wikipedia.org' })).filter(h => h.title).slice(0, n);
-  } catch { return []; }
-}
 export async function gdeltArticles(query, f = fetch, n = 6) {
   const q = String(query || '').trim().slice(0, 120); if (!q) return [];
   try {
@@ -475,7 +468,7 @@ export async function gdeltArticles(query, f = fetch, n = 6) {
     if (!r.ok) return [];
     const arts = (await r.json()).articles || [];
     return arts.map(a => { let host = ''; try { host = new URL(a.url).hostname; } catch { return null; } return { title: cleanText(a.title || '', 140), url: a.url, host }; })
-      .filter(a => a && a.url && a.host && safeSourceUrl(a.url) && !denied(a.url)).slice(0, n);
+      .filter(a => a && a.url && a.host && safeSourceUrl(a.url) && !denied(a.url) && !wikiHost(a.url)).slice(0, n);
   } catch { return []; }
 }
 export async function repairSource(src, claimText, nums, f = fetch, env = {}) {
@@ -586,10 +579,8 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (room) {
     const seen = new Set(checked.filter(x => x.exists).map(x => registrable(x.host)));
     const picks = [];
-    const wikiQs = [...new Set([keywords(q), ...claims.slice(0, 1)])];
-    const wiki = (await Promise.all(wikiQs.map(wq => wikipediaArticles(wq, f, 2)))).flat();
     const exaPool = env?.EXA_API_KEY ? [...(await exaWeb(keywords(q), env, f, room + 2)), ...(claims[0] ? await exaWeb(claims[0], env, f, 2) : [])] : [];
-    const pool = [...wiki, ...exaPool, ...(await gdeltArticles(keywords(q), f, room + 4))];
+    const pool = [...exaPool, ...(await gdeltArticles(keywords(q), f, room + 4))];
     for (const a of pool) {
       const dom = registrable(a.host);
       if (seen.has(dom) || have.has(a.url)) continue;
@@ -799,7 +790,7 @@ export async function askEvidenceFirst(question, candidates, env, f = fetch) {
   // 2) Discovery from the open web only — no model-named URLs. One page per registrable domain.
   const found = [], seenDom = new Set(), seenUrl = new Set();
   for (const qy of uniqQ) {
-    const batch = [...(await exaWeb(qy, env, f, 3)), ...(await wikipediaArticles(qy, f, 1)), ...(found.length < 4 ? await gdeltArticles(qy, f, 2) : [])];
+    const batch = [...(await exaWeb(qy, env, f, 3)), ...(found.length < 4 ? await gdeltArticles(qy, f, 2) : [])];
     for (const a of batch) {
       const dom = registrable(a.host);
       if (seenDom.has(dom) || seenUrl.has(a.url)) continue;
@@ -1158,13 +1149,13 @@ const decodeEnt = t => String(t).replace(/&#(\d+);/g, (_, d) => String.fromCodeP
 export async function ingestUrl(url, f = fetch, env = {}) {
   let cur = cleanIngestUrl(url);
   if (!cur) return { error: 'url' };
-  if (denied(cur)) return { error: 'denied' };
+  if (denied(cur) || wikiHost(cur)) return { error: 'denied' };
   try {
     for (let hop = 0; hop <= 3; hop++) {
       const r = await f(cur, { redirect: 'manual', signal: AbortSignal.timeout(12000), headers: { 'user-agent': 'Mozilla/5.0 (compatible; NewsRAG/0.5; +open-sources-guide)' } });
       if (r.status >= 300 && r.status < 400) {
         const loc = cleanIngestUrl(new URL(r.headers.get('location') || '', cur).href);
-        if (!loc || denied(loc)) return { error: 'url' };
+        if (!loc || denied(loc) || wikiHost(loc)) return { error: 'url' };
         cur = loc; continue;
       }
       if (!r.ok) return { error: 'fetch' };
