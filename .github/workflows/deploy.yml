@@ -38,6 +38,7 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
+      - run: pip install -r python-tools/requirements.txt
       - run: python3 -m unittest discover -s python-tools/tests
       - run: npm run check:js
       - run: npx playwright install --with-deps chromium
