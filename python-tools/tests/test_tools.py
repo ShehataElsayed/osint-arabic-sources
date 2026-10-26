@@ -156,6 +156,14 @@ if __name__ == "__main__": unittest.main()
 
 
 
+try:
+    import oletools.olevba  # noqa: F401
+    _HAS_OLE = True
+except ImportError:
+    _HAS_OLE = False
+
+
+@unittest.skipUnless(_HAS_OLE, "oletools not installed")
 class TestOlevbaErrors(unittest.TestCase):
     def test_non_office_gives_arabic_error_and_keeps_detail(self):
         # generated benign fixture (ours): bytes that are not an Office file
