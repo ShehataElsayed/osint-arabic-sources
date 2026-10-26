@@ -115,7 +115,7 @@ function render(q) {
   trace.replaceChildren(); reply.replaceChildren();
   trace.append(el('h2', '', 'مسار البحث'));
   const s1 = step([b('1. قراءة السؤال'), document.createTextNode(a.base.length ? ` ${a.base.length} كلمات مفهومة، و${a.exp.length} مرادفات من مفردات مهام الدليل.` : ' لم تُستخرج كلمات يعرفها الدليل.'), termsBox(a.base, a.exp)], !a.base.length);
-  const s2 = step([b('2. فحص الفهرس'), document.createTextNode(` ${tools.length} مدخلًا قابلًا للبحث (استُبعد ${(window.TOTAL_ENTRIES || tools.length) - tools.length} بلا رابط موثوق)؛ ${cands.length} منها يطابق كلمة على الأقل.`)], !cands.length);
+  const s2 = step([b('2. فحص الفهرس'), document.createTextNode(` ${tools.length} مدخلًا متاحًا في الفهرس؛ ${cands.length} منها يطابق كلمة على الأقل.`)], !cands.length);
   const confident = f.confident;
   const reasonBad = !f.known ? 'لا تحوي صياغتك مفردات يعرفها الدليل لمهام الصحفيين.' : 'أعلى تطابق ضعيف.';
   const s3 = step([b('3. قوة التطابق'), document.createTextNode(confident ? ` كافية للترشيح. أعلى درجة لفظية ${cands[0].score.toFixed(1)}، وهي مقياس نسبي لترتيب النتائج وليست نسبة صحة.` : ' ضعيفة، فلا ترشيح. ' + reasonBad)], !confident);
