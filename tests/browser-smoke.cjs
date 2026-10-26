@@ -9,7 +9,27 @@ const fs=require('fs');
   for(let i=0;i<50;i++){try{if((await fetch('http://127.0.0.1:8765/')).ok)break}catch{}await new Promise(r=>setTimeout(r,100));}
   browser=await chromium.launch({executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',args:['--no-sandbox']});
   const page=await browser.newPage({viewport:{width:1440,height:1000}});
+  // New homepage: connected branches, one tool-search entry, honest search states.
   await page.goto('http://127.0.0.1:8765/');
+  assert.equal(await page.locator('main input:not([type=hidden])').count(),1,'homepage has the tool-search bar as its only input');
+  assert.equal(await page.locator('.node').count(),33,'33 branch nodes');
+  assert.ok(await page.locator('footer a[href*="facebook"]').count()>0);
+  await page.getByRole('searchbox',{name:'اكتب مهمتك'}).fill('أريد تتبع سفينة');
+  await page.locator('#out:not([hidden])').waitFor();
+  assert.ok((await page.locator('#out').innerText()).includes('Ship AIS'),'real ranked result shown');
+  assert.ok((await page.locator('#out').innerText()).includes('لا يرسل سؤالك'),'local-only/no-AI disclosure shown');
+  assert.ok(await page.locator('.node.lit').count()>=1,'matching branches lit');
+  await page.getByRole('searchbox',{name:'اكتب مهمتك'}).fill('zzzz qqqq');
+  await page.waitForFunction(()=>document.querySelector('#reply')?.innerText.includes('لا أجد أداة'));
+  assert.equal(await page.locator('.node.lit').count(),0,'abstention lights nothing');
+  const hrefs=await page.locator('.node').evaluateAll(a=>a.map(x=>x.getAttribute('href')));
+  for(const h of hrefs.slice(0,33)){const r=await fetch('http://127.0.0.1:8765/'+h);assert.ok(r.ok,h)}
+  await page.goto('http://127.0.0.1:8765/branches/domain-name.html');
+  assert.ok(await page.locator('.tool').count()>100,'branch page lists its tools');
+  await page.fill('#filter','whois');
+  assert.ok(await page.locator('.tool:not([hidden])').count()>0&&await page.locator('.tool:not([hidden])').count()<await page.locator('.tool').count(),'branch filter works');
+  // Full classic map with Pagefind and the original nav
+  await page.goto('http://127.0.0.1:8765/map.html');
   await page.locator('a.taskcard',{hasText:'مساعد NewsRAG'}).waitFor();
   assert.equal(await page.locator('nav.shellnav > a, nav.shellnav > details').count(),4,'four primary nav sections after hiding Yemen');
   assert.equal(await page.locator('header.top a[href*="facebook"]').count(),0,'facebook is in the footer, not the header');
@@ -93,10 +113,10 @@ const fs=require('fs');
   const saved=JSON.parse(fs.readFileSync('test-output/verification.json','utf8'));
   assert.equal(saved.format,'osint-verification-v2');assert.equal(saved.cases[0].title,'اختبار حفظ محلي');
   await page.setViewportSize({width:390,height:844});
-  for(const file of ['index.html','assistant.html','verification.html']){
+  for(const file of ['index.html','map.html','branches/domain-name.html','assistant.html','verification.html']){
    await page.goto('http://127.0.0.1:8765/'+file);
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),file+' overflow');
-   await page.screenshot({path:'test-output/'+file.replace('.html','')+'-mobile.png'});
+   await page.screenshot({path:'test-output/'+file.replace('.html','').replace('/','-')+'-mobile.png'});
   }
   // mobile hero text on assistant page must be fully readable, not line-clamped
   await page.goto('http://127.0.0.1:8765/assistant.html?local=1');
