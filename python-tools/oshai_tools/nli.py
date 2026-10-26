@@ -3,6 +3,8 @@ import os, numpy as np
 _S = {}
 def _dir(): return os.environ.get("OSHAI_NLI_DIR", os.path.expanduser("~/models/nli"))
 def available():
+    from . import bridge
+    if bridge.active(): return "nli" in bridge.ENABLED
     try:
         import onnxruntime, tokenizers  # noqa
     except Exception: return False
@@ -16,6 +18,12 @@ def _load():
     return _S
 def predict(pairs):
     """pairs: [(premise, hypothesis)] -> [{entailment, neutral, contradiction}]"""
+    from . import bridge
+    if bridge.active():
+        ids = [bridge.encode_pair("nli", a, b) for a, b in pairs]; C = bridge.CACHE["nli"]
+        miss = list(dict.fromkeys(k for k in ids if k not in C))
+        if miss: raise bridge.NeedModel("nli", miss)
+        return [C[k] for k in ids]
     S = _load(); out = []
     for i in range(0, len(pairs), 2):
         enc = S["t"].encode_batch(pairs[i:i+2])

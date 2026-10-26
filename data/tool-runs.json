@@ -1,0 +1,211 @@
+{
+ "captured": "2026-10-26",
+ "runs": [
+  {
+   "id": "numdiff-grain",
+   "tool": "numdiff",
+   "source": {
+    "title": "Grain Trail: Tracking Russia’s Ghost Ships With Satellite Imagery",
+    "by": "Bellingcat",
+    "date": "2023-05-11",
+    "url": "https://www.bellingcat.com/news/2023/05/11/grain-trail-tracking-russias-ghost-ships-with-satellite-imagery/"
+   },
+   "input": {
+    "claim": "Bellingcat identified at least 179 days in the first 12 months of the invasion when ships were present at the terminal.",
+    "source": "In total, there are 148 days that ships appear to have been present at the terminal, based on Planet imagery alone.\n\nBellingcat has also been able to identify a further 31 days when ships were present at the terminal."
+   },
+   "output": {
+    "ok": true,
+    "verdict": "تعارض محتمل",
+    "matched": [],
+    "conflicting": [
+     {
+      "claim": "179",
+      "closest_in_source": 148.0,
+      "diff_pct": 20.9
+     }
+    ],
+    "absent_from_source": [
+     "12"
+    ]
+   },
+   "input_note": "المصدر مقتطف حرفي من التقرير. الادعاء جملة كتبناها نحن تلخّص مجموع الرقمين في التقرير.",
+   "input_is_real_text": true
+  },
+  {
+   "id": "quotecheck-werfalli",
+   "tool": "quotecheck",
+   "source": {
+    "title": "How a Werfalli Execution Site Was Geolocated",
+    "by": "Bellingcat",
+    "date": "2017-10-03",
+    "url": "https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/"
+   },
+   "input": {
+    "article": "The report says: \"The video was filmed from north to south, very likely on July 18, 2017\".",
+    "sources": "In August 2017, the International Criminal Court (ICC) issued its first ever arrest warrant solely based on social media evidence.\n---\nThe video which prompted the ICC arrest warrant was uploaded on July 23, 2017. The video has been deleted since, though an archived version exists.\n---\nThe video was filmed from north to south, very likely on July 17, 2017, approximately at 6:37 am."
+   },
+   "output": {
+    "ok": true,
+    "quotes": 1,
+    "results": [
+     {
+      "quote": "The video was filmed from north to south, very likely on July 18, 2017",
+      "status": "altered",
+      "status_ar": "اقتباس معدَّل عن أقرب جملة",
+      "similarity": 0.93,
+      "doc": 3,
+      "source_sentence": "The video was filmed from north to south, very likely on July 17, 2017, approximately at 6:37 am.",
+      "words_in_quote_not_in_source": [
+       "18"
+      ],
+      "words_in_source_not_in_quote": [
+       "17"
+      ],
+      "numbers_changed": [
+       "17",
+       "18"
+      ]
+     }
+    ],
+    "note": "المطابقة على النص بعد تطبيع العربية والأرقام؛ الترجمة وإعادة الصياغة لن تُلتقط."
+   },
+   "input_note": "المصادر مقتطفات حرفية من التقرير. الاقتباس هو الجملة الأصلية بعد أن غيّرنا التاريخ من 17 إلى 18 عمدًا لنرى هل تكتشفه الأداة.",
+   "input_is_real_text": false
+  },
+  {
+   "id": "ask-werfalli",
+   "tool": "ask",
+   "source": {
+    "title": "How a Werfalli Execution Site Was Geolocated",
+    "by": "Bellingcat",
+    "date": "2017-10-03",
+    "url": "https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/"
+   },
+   "input": {
+    "question": "When was the video filmed?",
+    "docs": "In August 2017, the International Criminal Court (ICC) issued its first ever arrest warrant solely based on social media evidence.\n---\nThe video which prompted the ICC arrest warrant was uploaded on July 23, 2017. The video has been deleted since, though an archived version exists.\n---\nThe video was filmed from north to south, very likely on July 17, 2017, approximately at 6:37 am."
+   },
+   "output": {
+    "ok": true,
+    "mode": "bm25",
+    "passages": [
+     {
+      "doc": 3,
+      "sentence_no": 1,
+      "text": "The video was filmed from north to south, very likely on July 17, 2017, approximately at 6:37 am.",
+      "score": 1.5
+     },
+     {
+      "doc": 2,
+      "sentence_no": 2,
+      "text": "The video has been deleted since, though an archived version exists.",
+      "score": 0.41
+     },
+     {
+      "doc": 2,
+      "sentence_no": 1,
+      "text": "The video which prompted the ICC arrest warrant was uploaded on July 23, 2017.",
+      "score": 0.38
+     }
+    ],
+    "answerable": true,
+    "note": "مقاطع مرشحة للقراءة وليست إجابة أو تحققًا."
+   },
+   "input_note": "السؤال كتبناه نحن، والوثائق مقتطفات حرفية من التقرير.",
+   "input_is_real_text": true
+  },
+  {
+   "id": "ask-werfalli-ar",
+   "tool": "ask",
+   "source": {
+    "title": "How a Werfalli Execution Site Was Geolocated",
+    "by": "Bellingcat",
+    "date": "2017-10-03",
+    "url": "https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/"
+   },
+   "input": {
+    "question": "متى صُوّر الفيديو؟",
+    "docs": "In August 2017, the International Criminal Court (ICC) issued its first ever arrest warrant solely based on social media evidence.\n---\nThe video which prompted the ICC arrest warrant was uploaded on July 23, 2017. The video has been deleted since, though an archived version exists.\n---\nThe video was filmed from north to south, very likely on July 17, 2017, approximately at 6:37 am."
+   },
+   "output": {
+    "ok": true,
+    "mode": "bm25",
+    "passages": [],
+    "answerable": false,
+    "note": "لا مقاطع مطابقة: لا تُجب من خارج الوثائق."
+   },
+   "input_note": "السؤال نفسه بالعربية على الوثائق الإنجليزية نفسها: يبيّن حد البحث اللفظي.",
+   "input_is_real_text": true
+  },
+  {
+   "id": "hijri-werfalli",
+   "tool": "hijri",
+   "source": {
+    "title": "How a Werfalli Execution Site Was Geolocated",
+    "by": "Bellingcat",
+    "date": "2017-10-03",
+    "url": "https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/"
+   },
+   "input": {
+    "date": "2017-07-17"
+   },
+   "output": {
+    "ok": true,
+    "gregorian": "2017-07-17",
+    "hijri": "22 شوال 1438",
+    "weekday": "الإثنين",
+    "note": "تقويم جدولي: قد يختلف يومًا عن الرؤية الرسمية."
+   },
+   "input_note": "التاريخ الذي حدده التقرير لتصوير الفيديو.",
+   "input_is_real_text": true
+  },
+  {
+   "id": "urlclean-grain",
+   "tool": "urlclean",
+   "source": {
+    "title": "Grain Trail: Tracking Russia’s Ghost Ships With Satellite Imagery",
+    "by": "Bellingcat",
+    "date": "2023-05-11",
+    "url": "https://www.bellingcat.com/news/2023/05/11/grain-trail-tracking-russias-ghost-ships-with-satellite-imagery/"
+   },
+   "input": {
+    "url": "https://www.bellingcat.com/news/2023/05/11/grain-trail-tracking-russias-ghost-ships-with-satellite-imagery/?utm_source=newsletter&fbclid=IwAR0x"
+   },
+   "output": {
+    "ok": true,
+    "clean": "https://www.bellingcat.com/news/2023/05/11/grain-trail-tracking-russias-ghost-ships-with-satellite-imagery/",
+    "removed": 2,
+    "wayback_save": "https://web.archive.org/save/https://www.bellingcat.com/news/2023/05/11/grain-trail-tracking-russias-ghost-ships-with-satellite-imagery/",
+    "wayback_view": "https://web.archive.org/web/2/https://www.bellingcat.com/news/2023/05/11/grain-trail-tracking-russias-ghost-ships-with-satellite-imagery/",
+    "archive_today": "https://archive.ph/?run=1&url=https%3A%2F%2Fwww.bellingcat.com%2Fnews%2F2023%2F05%2F11%2Fgrain-trail-tracking-russias-ghost-ships-with-satellite-imagery%2F"
+   },
+   "input_note": "رابط التقرير الحقيقي بعد أن أضفنا إليه معاملي تتبع نموذجيين بأنفسنا.",
+   "input_is_real_text": false
+  },
+  {
+   "id": "evidence-werfalli",
+   "tool": "evidence",
+   "source": {
+    "title": "How a Werfalli Execution Site Was Geolocated",
+    "by": "Bellingcat",
+    "date": "2017-10-03",
+    "url": "https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/"
+   },
+   "input": {
+    "file": "werfalli-excerpt.txt",
+    "file_text": "In August 2017, the International Criminal Court (ICC) issued its first ever arrest warrant solely based on social media evidence.\n---\nThe video which prompted the ICC arrest warrant was uploaded on July 23, 2017. The video has been deleted since, though an archived version exists.\n---\nThe video was filmed from north to south, very likely on July 17, 2017, approximately at 6:37 am.",
+    "note": "Bellingcat Werfalli, مقتطفات حرفية"
+   },
+   "output": {
+    "ok": true,
+    "file": "werfalli-excerpt.txt",
+    "size": 384,
+    "sha256": "d9c5b1b4b91297c163f1a158672412e9cccb9b8c98cb8b5296609fc734a4781e",
+    "note": "Bellingcat Werfalli, مقتطفات حرفية"
+   },
+   "input_note": "الملف يحوي المقتطفات الحرفية الثلاثة مفصولة بسطر ---. البصمة قابلة لإعادة الحساب على النص نفسه.",
+   "input_is_real_text": true
+  }
+ ]
+}

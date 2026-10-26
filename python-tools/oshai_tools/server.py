@@ -17,6 +17,8 @@ class H(BaseHTTPRequestHandler):
             return self._send(200, open(fp, "rb").read(), ct)
         if self.path == "/api/tools":
             return self._send(200, json.dumps([{k: v for k, v in t.items() if k != "run"} for t in REGISTRY.values()] , ensure_ascii=False))
+        if self.path == "/api/categories":
+            from . import taxonomy; return self._send(200, json.dumps(taxonomy.manifest(REGISTRY, lambda t: True), ensure_ascii=False))
         if self.path == "/api/status": return self._send(200, json.dumps({"ai_providers": ai.providers(), "local_models": {"e5": embed.available(), "nli": nli.available()}}))
         self._send(404, '{"ok":false}')
     def do_POST(self):

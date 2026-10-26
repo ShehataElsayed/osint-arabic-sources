@@ -4,6 +4,8 @@ import os, numpy as np
 _S = {}
 def _dir(): return os.environ.get("OSHAI_E5_DIR", os.path.expanduser("~/models/e5"))
 def available():
+    from . import bridge
+    if bridge.active(): return "e5" in bridge.ENABLED
     try:
         import onnxruntime, tokenizers  # noqa
     except Exception: return False
@@ -17,6 +19,12 @@ def _load():
         _S["t"] = t; _S["in"] = {i.name for i in _S["s"].get_inputs()}
     return _S
 def embed(texts, kind="passage", bs=16):
+    from . import bridge
+    if bridge.active():
+        ids = [tuple(bridge.tok("e5").encode(f"{kind}: {x}", 256)) for x in texts]; C = bridge.CACHE["e5"]
+        miss = list(dict.fromkeys(k for k in ids if k not in C))
+        if miss: raise bridge.NeedModel("e5", miss)
+        return np.vstack([C[k] for k in ids])
     S = _load(); out = []
     for i in range(0, len(texts), bs):
         enc = S["t"].encode_batch([f"{kind}: {x}" for x in texts[i:i+bs]])
