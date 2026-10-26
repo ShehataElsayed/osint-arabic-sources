@@ -200,3 +200,4 @@ html,body{overflow-x:clip}
 .stagenames .n{color:var(--lime);font-weight:900;font-size:12px}
 .sec + .sec{margin-top:clamp(36px,6vw,84px)}
 @media(max-width:860px){.pair,.pair.rev{grid-template-columns:minmax(0,1fr)}.pair .vid,.pair.rev .vid{order:2}.vid{max-width:420px}}
+.hero + .sec{margin-top:clamp(36px,6vw,84px)}

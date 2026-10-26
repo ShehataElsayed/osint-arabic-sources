@@ -1,0 +1,32 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#0a0b0a">
+<meta name="description" content="خريطة الفروع المترابطة في دليل المصادر المفتوحة: __N_BRANCH__ فرعًا في __N_CLUSTERS__ مسارات، لكل فرع صفحة مستقلة بأدواته.">
+<title>الفروع المترابطة | دليل المصادر المفتوحة للصحفيين العرب</title>
+<style>@font-face{font-family:Cairo;src:url("./Cairo.ttf") format("truetype");font-weight:200 1000;font-display:swap}</style>
+<link rel="stylesheet" href="./platform.css"></head><body>
+<a class="skip" href="#main">تخطَّ إلى المحتوى</a>
+__HEADER__
+<main id="main">
+<div class="stage" id="stage"><svg class="lines" id="lines" aria-hidden="true" focusable="false"></svg>
+<section class="hero wrap" aria-labelledby="h1">
+<span class="badge"><i></i>OSINT / منصة الصحفي العربي</span>
+<h1 id="h1">الفروع <em>المترابطة</em></h1>
+<p class="lead">__N_CLUSTERS__ مسارات تحقيقية و__N_BRANCH__ فرعًا، وكل فرع يفتح في صفحة مستقلة بأدواته. اكتب ما تريد إنجازه فتضيء الخريطة الفروع الأقرب لوصفك.</p>
+<form class="console" id="search" role="search" aria-label="بحث في أدوات الدليل" onsubmit="return false">
+<div class="field"><span class="prompt" aria-hidden="true">›</span><label class="sr" for="q">اكتب مهمتك</label>
+<input id="q" type="search" dir="auto" maxlength="300" autocomplete="off" enterkeyhint="search" placeholder="مثال: أريد تتبع سفينة ومعرفة مسارها" aria-controls="out"><kbd aria-hidden="true">/</kbd></div>
+<p class="hint" id="hint">يعمل البحث داخل متصفحك على فهرس الدليل نفسه. لا يُرسل سؤالك إلى أي خادم.</p>
+<div class="examples" id="chips" aria-label="أسئلة جاهزة"></div>
+</form>
+<div class="out" id="out" role="region" aria-label="نتيجة البحث" aria-live="polite" hidden>
+<ol class="trace" id="trace" aria-label="مسار البحث"></ol>
+<div class="reply" id="reply"></div>
+</div>
+</section>
+<section class="sec wrap" id="branches" aria-labelledby="hb"><span id="tree"></span>
+<div class="sec-head"><h2 id="hb">خريطة الفروع</h2><p>شكل كل بطاقة مرسوم من بنية فرعها: نقطة لكل قسم، ومساحتها بعدد أدواته.</p></div>
+<div class="stats"><span><b>__N_BRANCH__</b>فرعًا</span><span><b>__N_SUB__</b>قسمًا</span><span><b>__N_TOOLS__</b>مدخلًا</span><span><b>__N_UNIQUE__</b>رابطًا فريدًا</span></div>
+<div class="map" id="map">__BRANCH_MAP__</div></section>
+</div>
+</main>__FOOTER__
+<script>window.BRANCHES=__BRANCH_META__;window.TOTAL_ENTRIES=__N_TOOLS__;window.EXAMPLES=__EXAMPLES_JSON__;</script>
+<script type="module" src="./home.js"></script><script defer src="./analytics.js"></script></body></html>

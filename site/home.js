@@ -25,6 +25,7 @@ function rp(pts, r) { /* orthogonal polyline with rounded corners */
 }
 const R = Math.round;
 function draw() {
+  if (!stage || !svg) return;
   svg.replaceChildren();
   const hubs = [...document.querySelectorAll('.hub')], s = stage.getBoundingClientRect();
   document.querySelectorAll('.cluster').forEach(c => {
@@ -61,7 +62,7 @@ function draw() {
 }
 let raf = 0; const redraw = () => { cancelAnimationFrame(raf); raf = requestAnimationFrame(draw); };
 addEventListener('resize', redraw);
-if ('ResizeObserver' in window) new ResizeObserver(redraw).observe(stage);
+if ('ResizeObserver' in window) new ResizeObserver(redraw).observe(stage || document.body);
 document.fonts && document.fonts.ready.then(redraw);
 addEventListener('load', redraw);
 
@@ -130,7 +131,7 @@ function render(q) {
     reply.append(el('p', 'lead2', `أقرب ${shown.length} ${shown.length === 1 ? 'أداة' : 'أدوات'} في الدليل لمهمتك:`));
     const box = el('div', 'results'); shown.forEach(r => box.append(card(r, cands[0].score, a.termObjs))); reply.append(box);
     if (cands.length > shown.length) reply.append(el('p', 'fine', `و${cands.length - shown.length} نتائج أضعف تطابقًا لم تُعرض هنا.`));
-    const nav = el('p', 'fine'); const l = el('a', '', 'انظر الفروع المضيئة في الخريطة ↓'); l.href = '#branches'; nav.append(l); reply.append(nav);
+    const nav = el('p', 'fine'); const l = el('a', '', stage ? 'انظر الفروع المضيئة في الخريطة ↓' : 'افتح خريطة الفروع ←'); l.href = stage ? '#branches' : 'branches.html?q=' + encodeURIComponent(input.value.trim()); nav.append(l); reply.append(nav);
   } else {
     reply.append(el('p', 'lead2', 'لا أجد أداة مناسبة لهذا الطلب بثقة كافية.'));
     reply.append(el('p', 'stateline', 'جرّب وصف المهمة بكلمات أخرى: نطاق، صورة، سفينة، شركة، حساب، رقم هاتف، تسريب، أرشيف. أو تصفّح الفروع أدناه.'));
@@ -140,7 +141,9 @@ function render(q) {
     }
   }
   reply.append(el('p', 'fine', EXPLAIN));
-  setLit(counts); redraw();
+  setLit(counts); const Q0 = new URLSearchParams(location.search).get('q');
+if (Q0 && Q0.trim()) ready.then(() => ask(Q0.trim().slice(0, 300)));
+redraw();
 }
 function idle() { out.hidden = true; setLit({}); redraw(); }
 let timer = 0;
@@ -160,4 +163,6 @@ document.addEventListener('keydown', e => { if (e.key === '/' && !/INPUT|TEXTARE
 function ask(q) { input.value = q; input.dispatchEvent(new Event('input')); scrollTo({ top: 0 }); input.focus({ preventScroll: true }); }
 const chips = $('chips');
 (window.EXAMPLES || []).forEach(q => { const c = el('button', 'chip', q); c.type = 'button'; c.onclick = () => ask(q); chips.append(c); });
+const Q0 = new URLSearchParams(location.search).get('q');
+if (Q0 && Q0.trim()) ready.then(() => ask(Q0.trim().slice(0, 300)));
 redraw();

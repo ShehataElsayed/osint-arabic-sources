@@ -6,11 +6,10 @@
 <a class="skip" href="#main">تخطَّ إلى المحتوى</a>
 __HEADER__
 <main id="main">
-<div class="stage" id="stage"><svg class="lines" id="lines" aria-hidden="true" focusable="false"></svg>
 <section class="hero wrap" aria-labelledby="h1">
 <span class="badge"><i></i>OSINT / منصة الصحفي العربي</span>
 <h1 id="h1">ابدأ بمهمتك. <em>نرشّح لك الفرع</em> والأداة.</h1>
-<p class="lead">__N_TOOLS__ مدخلًا (__N_UNIQUE__ رابطًا فريدًا) لأدوات ومصادر متاحة للعموم، مرتبة في __N_BRANCH__ فرعًا مترابطًا بوصف عربي لكل أداة. اكتب ما تريد إنجازه، فيرتّب لك الدليل الأدوات الأقرب لوصفك ويضيء فروعها.</p>
+<p class="lead">__N_TOOLS__ مدخلًا (__N_UNIQUE__ رابطًا فريدًا) لأدوات ومصادر متاحة للعموم، مرتبة في __N_BRANCH__ فرعًا مترابطًا بوصف عربي لكل أداة. اكتب ما تريد إنجازه، فيرتّب لك الدليل الأدوات الأقرب لوصفك.</p>
 <form class="console" id="search" role="search" aria-label="بحث في أدوات الدليل" onsubmit="return false">
 <div class="field"><span class="prompt" aria-hidden="true">›</span><label class="sr" for="q">اكتب مهمتك</label>
 <input id="q" type="search" dir="auto" maxlength="300" autocomplete="off" enterkeyhint="search" placeholder="مثال: أريد تتبع سفينة ومعرفة مسارها" aria-controls="out"><kbd aria-hidden="true">/</kbd></div>
@@ -24,10 +23,9 @@ __HEADER__
 </section>
 <section class="sec wrap" id="branches" aria-labelledby="hb"><div class="pair"><div class="txt"><small class="eyebrow">القسم 01 من 05</small><h2 id="hb">فروع مترابطة بدل قائمة طويلة</h2><p>يقسم الدليل مدخلاته إلى <b>__N_CLUSTERS__</b> مسارات تحقيقية. كل مسار يضم فروعًا، وكل فرع يفتح في صفحة مستقلة بأدواته وأقسامه ومربع لتصفيتها.</p>
 <div class="stats"><span><b>__N_BRANCH__</b>فرعًا</span><span><b>__N_SUB__</b>قسمًا</span><span><b>__N_TOOLS__</b>مدخلًا</span><span><b>__N_UNIQUE__</b>رابطًا فريدًا</span></div>
-<p class="muted">الخريطة أدناه ترسم كل فرع من بنيته: نقطة لكل قسم، ومساحتها بحسب عدد أدواته.</p></div><figure class="vid"><video controls preload="none" playsinline width="800" height="1000" poster="./media/branches-nav.jpg" aria-label="تسجيل شاشة: فتح فرع تحديد المواقع والخرائط وتصفية أدواته"><source src="./media/branches-nav.mp4" type="video/mp4"></video>
-<figcaption><b>ما يظهر في التسجيل</b><span>فتح فرع «تحديد المواقع والخرائط» من الخريطة ثم تصفية أدواته بكلمة «قمر».</span><small>الصفحة المسجلة: صفحة الفرع في هذا الدليل. تسجيل فعلي بلا تعديل.</small></figcaption></figure></div><div class="map-wrap"><span id="tree"></span><div class="map" id="map">__BRANCH_MAP__</div></div></section>
-</div>
-<section class="sec wrap" id="search-real" aria-labelledby="h3"><div class="pair rev"><div class="txt"><small class="eyebrow">القسم 02 من 05</small><h2 id="h3">البحث بالمهمة</h2><p>اكتب ما تريد إنجازه بكلماتك، فيرتّب الدليل الأدوات الأقرب لوصفك ويضيء فروعها في الخريطة. يعمل البحث داخل متصفحك على فهرس الدليل نفسه، ولا يُرسل سؤالك إلى خادم.</p>
+</div><figure class="vid"><video controls preload="none" playsinline width="800" height="1000" poster="./media/branches-nav.jpg" aria-label="تسجيل شاشة: فتح فرع تحديد المواقع والخرائط وتصفية أدواته"><source src="./media/branches-nav.mp4" type="video/mp4"></video>
+<figcaption><b>ما يظهر في التسجيل</b><span>فتح صفحة الفروع ثم فرع «تحديد المواقع والخرائط» وتصفية أدواته بكلمة «قمر».</span><small>الصفحة المسجلة: صفحة الفرع في هذا الدليل. تسجيل فعلي بلا تعديل.</small></figcaption></figure></div><p class="row"><a class="btn" href="branches.html">استعرض الفروع</a></p></section>
+<section class="sec wrap" id="search-real" aria-labelledby="h3"><div class="pair rev"><div class="txt"><small class="eyebrow">القسم 02 من 05</small><h2 id="h3">البحث بالمهمة</h2><p>اكتب ما تريد إنجازه بكلماتك، فيرتّب الدليل الأدوات الأقرب لوصفك ويذكر فرع كل أداة. يعمل البحث داخل متصفحك على فهرس الدليل نفسه، ولا يُرسل سؤالك إلى خادم.</p>
 <p class="muted">الترتيب لفظي: يعتمد على تطابق الكلمات، ويعرض «قوة التطابق» وليس احتمال صحة. قد يرشّح أداة بسبب كلمة مشتركة فقط، وعند ضعف التطابق يمتنع عن الترشيح بدل أن يخمّن.</p>
 <p><a class="btn" href="#q" onclick="document.getElementById('q').focus();">جرّب شريط البحث</a></p></div><figure class="vid"><video controls preload="none" playsinline width="800" height="1000" poster="./media/task-search.jpg" aria-label="تسجيل شاشة: كتابة «أريد تتبع سفينة ومعرفة مسارها» وظهور أقرب ثلاث أدوات"><source src="./media/task-search.mp4" type="video/mp4"></video>
 <figcaption><b>ما يظهر في التسجيل</b><span>كتابة السؤال «أريد تتبع سفينة ومعرفة مسارها» في الشريط، ثم ظهور مسار البحث وأقرب ثلاث أدوات.</span><small>تسجيل فعلي لشريط البحث في الصفحة الرئيسية بلا تعديل في النتيجة.</small></figcaption></figure></div></section>
