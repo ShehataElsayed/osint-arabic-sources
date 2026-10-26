@@ -190,3 +190,24 @@ import { exaFetchText } from '../worker/rag-lib.js';
   assert.ok(withAlt.quote.includes('50'), 'English quote picked');
   assert.equal(withAlt.numbers_ok, true, 'digits guard passes on the original passage');
 }
+
+test('wikipedia excluded everywhere (owner request 2026-10-26): discovery, open, ingest', async () => {
+  const { wikiHost, exaWeb, checkSource, ingestUrl, gdeltArticles } = await import('../worker/rag-lib.js');
+  assert.equal(wikiHost('https://ar.wikipedia.org/wiki/%D8%B0%D9%87%D8%A8'), true);
+  assert.equal(wikiHost('https://en.m.wikipedia.org/wiki/Gold'), true);
+  assert.equal(wikiHost('https://commons.wikimedia.org/wiki/F'), true);
+  assert.equal(wikiHost('https://www.reuters.com/world/'), false);
+  const fx = async (u) => u.includes('api.exa.ai/search')
+    ? { ok: true, json: async () => ({ results: [{ title: 'w', url: 'https://ar.wikipedia.org/wiki/x' }, { title: 'r', url: 'https://www.reuters.com/a' }] }) }
+    : u.includes('gdeltproject.org')
+      ? { ok: true, json: async () => ({ articles: [{ title: 'w', url: 'https://ar.wikipedia.org/wiki/x' }, { title: 'g', url: 'https://www.aljazeera.net/b' }] }) }
+      : { ok: true, headers: new Map([['content-type', 'text/html']]), url: u, text: async () => '<title>t</title><p>' + 'ذهب '.repeat(80) + '</p>' };
+  const web = await exaWeb('ذهب', { EXA_API_KEY: 'k' }, fx, 4);
+  assert.deepEqual(web.map(x => x.host), ['www.reuters.com']);
+  const gd = await gdeltArticles('ذهب', fx, 4);
+  assert.deepEqual(gd.map(x => x.host), ['www.aljazeera.net']);
+  const cs = await checkSource({ name: 'w', url: 'https://ar.wikipedia.org/wiki/x' }, 'ذهب', [], fx, {});
+  assert.equal(cs.exists, false);
+  const ing = await ingestUrl('https://ar.wikipedia.org/wiki/x', fx, {});
+  assert.equal(ing.error, 'denied');
+});
