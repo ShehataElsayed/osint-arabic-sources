@@ -160,16 +160,4 @@ document.addEventListener('keydown', e => { if (e.key === '/' && !/INPUT|TEXTARE
 function ask(q) { input.value = q; input.dispatchEvent(new Event('input')); scrollTo({ top: 0 }); input.focus({ preventScroll: true }); }
 const chips = $('chips');
 (window.EXAMPLES || []).forEach(q => { const c = el('button', 'chip', q); c.type = 'button'; c.onclick = () => ask(q); chips.append(c); });
-ready.then(() => {
-  const g = $('exgrid'); g.replaceChildren();
-  (window.EXAMPLES || []).forEach(q => {
-    const a = analyse(q, 6), cands = a.found.candidates, card_ = el('article', 'ex');
-    card_.append(el('q', '', q));
-    if (a.found.confident) {
-      const ol = el('ol'); cands.slice(0, 3).forEach(r => { const li = el('li'); const n = el('span', '', r.t.name); n.dir = 'auto'; li.append(n); const br = r.t.b !== undefined && B[r.t.b]; if (br) li.append(el('small', '', br.t)); ol.append(li); }); card_.append(ol);
-    } else card_.append(el('p', 'stateline', 'امتنع المحرك عن الترشيح لضعف الأدلة في هذه الصياغة.'));
-    const bt = el('button', 'btn ghost', 'شغّلها في الشريط'); bt.type = 'button'; bt.onclick = () => ask(q); card_.append(bt);
-    g.append(card_);
-  });
-}).catch(() => { $('exgrid').replaceChildren(el('p', 'muted', 'تعذّر تحميل فهرس الأمثلة.')); });
 redraw();

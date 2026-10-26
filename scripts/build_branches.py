@@ -253,6 +253,7 @@ for ci, (num, q, name, blurb, members) in enumerate(clusters):
 
 STAGES = [('التحضير والأمان', 'احمِ نفسك ومصادرك قبل أول بحث.'), ('الهدف والفرضيات', 'حوّل الفكرة إلى فرضيات قابلة للفحص.'), ('جمع المصادر', 'ابدأ بمحركات البحث ثم وسّع الدائرة.'),
           ('الحفظ والتوثيق', 'أرشف الرابط ولقطة الشاشة وتاريخ الوصول.'), ('التحليل والربط', 'خط زمني وعلاقات وجداول نظيفة.'), ('التحقق المتقاطع', 'مصدران مستقلان على الأقل لكل معلومة.'), ('النشر الآمن', 'انشر ما ثبت، وأعلن حدود ما لم يثبت.')]
+stage_names = ''.join(f'<li><span class="n">{k + 1:02d}</span>{E(a)}</li>' for k, (a, b) in enumerate(STAGES))
 stages_html = ''.join(f'<li><span class="n">{k + 1:02d}</span><b>{E(a)}</b><p>{E(b)}</p></li>' for k, (a, b) in enumerate(STAGES))
 
 FEATURES = [
@@ -329,7 +330,7 @@ case2 = ('<article class="case"><h3>تحديد موقع مقطع إعدام نس
 real_route = ('<div class="case" style="margin-top:26px"><h3>حالة حقيقية تمر بفرعين</h3>'
   '<p>في تقرير بيلينغكات عن تحديد موقع مقطع الورفلي (3 أكتوبر 2017) اجتمع فرعان من هذا الدليل: <a href="branches/' + slugs['Geolocation Tools / Maps'] + '.html">تحديد المواقع والخرائط</a> لقراءة صور الأقمار الصناعية وظلال الشمس، و<a href="branches/' + slugs['Archives'] + '.html">الأرشيف</a> لأن المقطع حُذف من فيسبوك وبقيت نسخة مؤرشفة منه. الأدوات في الدليل: <bdi dir="ltr">Google Earth</bdi>، <bdi dir="ltr">SunCalc</bdi>، <bdi dir="ltr">Wayback Machine</bdi>، <bdi dir="ltr">archive.today</bdi>. التفاصيل والتشغيلات في القسم الخامس، والتقرير الأصلي <a href="https://www.bellingcat.com/news/middle-east/2017/10/03/how-an-execution-site-was-geolocated/" rel="noopener noreferrer">هنا ↗</a>.</p></div>')
 tpl = (SITE / 'index.html').read_text()
-home = (tpl.replace('__HEADER__', site_header('./', 'الفروع').replace('aria-current="page"', '')).replace('__FOOTER__', footer('./')).replace('__BRANCH_MAP__', ''.join(map_html)).replace('__STAGES__', stages_html)
+home = (tpl.replace('__HEADER__', site_header('./', 'الفروع').replace('aria-current="page"', '')).replace('__FOOTER__', footer('./')).replace('__BRANCH_MAP__', ''.join(map_html)).replace('__STAGES__', stages_html).replace('__STAGE_NAMES__', stage_names)
         .replace('__CATS__', cats_html).replace('__OTHERS__', others_html).replace('__VERIFY_LINKS__', verify_html).replace('__CASES__', case1 + case2)
         .replace('__N_TOOLS_PY__', str(n_py)).replace('__N_TOOLS_RUN__', str(n_run))
         .replace('__ROUTE__', route_html).replace('__REAL_ROUTE__', real_route).replace('__N_BRANCH__', str(len(tops))).replace('__N_SUB__', str(total_sub)).replace('__N_UNIQUE__', str(n_unique)).replace('__N_TOOLS__', str(total_tools))
