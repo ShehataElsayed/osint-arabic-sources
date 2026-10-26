@@ -1,0 +1,6 @@
+# Exact pins verified on a fresh venv, Linux, Python 3.10 (2026-10-26). Optional: only for model tools.
+numpy==2.2.6
+onnxruntime==1.23.2
+tokenizers==0.23.3
+# Optional, only for the imghash tool
+Pillow==11.3.0
