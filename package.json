@@ -7,7 +7,8 @@
     "test": "python3 -m unittest discover -s tests -v && node --test tests/rag-core.test.mjs tests/rag-worker.test.mjs tests/rag-mode.test.mjs tests/ingest.test.mjs tests/assistant-report.test.mjs tests/tool-search.test.mjs tests/ask-mode.test.mjs tests/ask-evidence.test.mjs tests/grounding-transfers.test.mjs tests/passage-windows.test.mjs tests/deploy-assets.test.mjs",
     "check:js": "node --check worker/rag-worker.js && find site -name '*.js' -exec node --check {} \\;",
     "test:browser": "node tests/browser-smoke.cjs",
-    "test:contract": "node tests/browser-smoke.cjs && node tests/contract-ui.cjs && node tests/data-lab-runtime.cjs && node tests/data-lab-edge.cjs"
+    "test:contract": "node tests/browser-smoke.cjs && node tests/contract-ui.cjs && node tests/data-lab-runtime.cjs && node tests/data-lab-edge.cjs",
+    "test:local-state": "node tests/local-tool-state.cjs"
   },
   "devDependencies": {
     "pagefind": "1.5.2",

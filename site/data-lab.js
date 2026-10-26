@@ -5,7 +5,19 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
   const file = $('#file'), drop = $('#drop'), filemeta = $('#filemeta'), preview = $('#preview'),
         previewwrap = $('#previewwrap'), sql = $('#sql'), run = $('#run'), copy = $('#copy'),
         status = $('#status'), result = $('#result'), resultwrap = $('#resultwrap'), resultmeta = $('#resultmeta');
-  let db = null, conn = null, rawFile = null, lastTSV = '';
+  let db = null, conn = null, rawFile = null, lastTSV = '', busy = false, cleanup = Promise.resolve();
+  function clearResult() { resultwrap.hidden = true; result.innerHTML = ''; resultmeta.textContent = ''; copy.hidden = true; lastTSV = ''; }
+  function releaseDB() {
+    const oldConn = conn, oldDB = db; conn = null; db = null;
+    cleanup = cleanup.then(async () => {
+      if (oldConn) { try { await oldConn.close(); } catch {} }
+      if (oldDB) { try { await oldDB.terminate(); } catch {} }
+    });
+  }
+  function clearFile() {
+    rawFile = null; releaseDB(); clearResult();
+    previewwrap.hidden = true; preview.innerHTML = ''; filemeta.textContent = ''; run.disabled = true;
+  }
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
   function renderTable(el, cols, rows, cap) {
@@ -14,10 +26,12 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
     el.innerHTML = h + '</tbody>';
   }
   function setFile(f) {
-    if (!f) return;
+    if (busy) { status.textContent = 'انتظر اكتمال الاستعلام قبل تغيير الملف.'; return; }
+    clearFile();
+    if (!f) { status.textContent = 'اختر ملفًا أولًا.'; return; }
     if (!/\.(csv|tsv|txt|json)$/i.test(f.name) && !/csv|json|text/.test(f.type)) { status.textContent = 'صيغة غير مدعومة؛ اختر CSV أو TSV أو JSON.'; return; }
     if (f.size > 100 * 1024 * 1024) { status.textContent = 'الملف أكبر من ١٠٠ ميغابايت؛ حدّ الأداة التجريبية ١٠٠ ميغابايت حفاظًا على ذاكرة جهازك.'; return; }
-    rawFile = f; conn = null;
+    rawFile = f; run.disabled = false;
     filemeta.textContent = 'الملف: ' + f.name + ' — ' + (f.size / 1024).toFixed(1) + ' كيلوبايت. اضغط «شغّل الاستعلام» لتحميل المحرك وقراءة الملف.';
     previewwrap.hidden = true; resultwrap.hidden = true; copy.hidden = true; status.textContent = '';
   }
@@ -26,6 +40,7 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
   drop.addEventListener('drop', e => { e.preventDefault(); setFile(e.dataTransfer.files[0]); });
 
   async function ensureDB() {
+    await cleanup;
     if (db) return;
     status.textContent = 'يُحمَّل محرك الاستعلام لأول مرة (نحو ٤٠ ميغابايت من خادم الدليل نفسه)...';
     const worker = new Worker('./duckdb/duckdb-browser-mvp.worker.js');
@@ -62,8 +77,9 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
     filemeta.textContent = 'الملف: ' + rawFile.name + ' — الأعمدة: ' + names.length + '، الصفوف: ' + cnt.toArray()[0].n + '. المعاينة أدناه (أول ٨ صفوف).';
   }
   run.addEventListener('click', async () => {
+    if (busy) return;
     if (!rawFile) { status.textContent = 'اختر ملفًا أولًا.'; return; }
-    run.disabled = true; copy.hidden = true;
+    busy = true; run.disabled = true; file.disabled = true; sql.disabled = true; clearResult();
     try {
       await loadData();
       status.textContent = 'ينفّذ الاستعلام محليًا...';
@@ -76,7 +92,7 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
       lastTSV = [cols.join('\t')].concat(rows.map(r => r.map(v => String(v == null ? '' : v).replace(/[\t\n]/g, ' ')).join('\t'))).join('\n');
       copy.hidden = false; status.textContent = 'اكتمل الاستعلام محليًا على جهازك.';
     } catch (e) {
-      resultwrap.hidden = true; copy.hidden = true; // never leave a stale result under a failed query
+      clearResult(); releaseDB(); previewwrap.hidden = true; // failed imports/queries never reuse incomplete state
       const q = sql.value;
       const em = e && e.message ? e.message : 'خطأ غير معروف';
       if (/https?:\/\/|\b(INSTALL|LOAD|ATTACH|COPY|EXPORT)\b/i.test(q)) {
@@ -88,9 +104,11 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
       } else {
         status.textContent = 'تعذّر التنفيذ: ' + em;
       }
-    } finally { run.disabled = false; }
+    } finally { busy = false; file.disabled = false; sql.disabled = false; run.disabled = !rawFile; }
   });
+  sql.addEventListener('input', () => { clearResult(); if (rawFile && !busy) status.textContent = 'تغير الاستعلام؛ شغّله لعرض نتيجة محدثة.'; });
   copy.addEventListener('click', async () => {
+    if (busy || resultwrap.hidden || !lastTSV) return;
     try { await navigator.clipboard.writeText(lastTSV); status.textContent = 'نُسخت النتيجة بصيغة TSV.'; }
     catch { status.textContent = 'تعذّر النسخ التلقائي؛ حدّد الجدول وانسخه يدويًا.'; }
   });
