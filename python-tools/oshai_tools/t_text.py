@@ -151,7 +151,7 @@ def quotecheck(article, sources):
     sents = []
     for di, d in enumerate([x for x in re.split(r'\n-{3,}\n', sources) if x.strip()], 1):
         for s in sentences(d): sents.append((di, s))
-    tok = lambda x: re.findall(r'[\u0600-\u06FFA-Za-z0-9.]+', x)
+    tok = lambda x: re.findall(r'\d+(?:\.\d+)*|[\u0600-\u06FFA-Za-z]+', x.lower().replace('\u2019', "'"))
     flat = {i: " ".join(tok(normalize_ar(to_ascii_digits(s)))) for i, (_, s) in enumerate(sents)}
     res = []
     for q in qs:

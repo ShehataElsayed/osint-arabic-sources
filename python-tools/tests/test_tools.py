@@ -115,6 +115,8 @@ class T(unittest.TestCase):
     def test_bad_numeric_param_is_error_not_crash(self): self.assertFalse(o.run('coord', csv='account,time,text\na,2026-10-01T10:00:00,نص طويل بما يكفي هنا للاختبار\nb,2026-10-01T10:01:00,نص طويل بما يكفي هنا للاختبار', min_accounts='x')['ok'])
     def test_unknown(self): self.assertFalse(o.run("nope")["ok"]); self.assertFalse(o.run("tone")["ok"])
 class TQ(unittest.TestCase):
+    def test_quotecheck_punctuation_case_not_altered(self):
+        self.assertEqual(o.run('quotecheck', article='«the conflict continues, and it stays.»', sources='The conflict continues, and it stays well above target.')['results'][0]['status'], 'exact')
     def test_quotecheck_exact_altered_missing(self):
         src = "قال الوزير: «العجز بلغ 225 ألف جنيه خلال الربع الثالث». وأضاف أن الحكومة ستراجع الإنفاق."
         art = 'نقلت الصحيفة «العجز بلغ 225 ألف جنيه خلال الربع الثالث» ثم «العجز بلغ 900 ألف جنيه خلال الربع الثالث» ثم «لن نغير أي سياسة في المستقبل القريب أبدا».'

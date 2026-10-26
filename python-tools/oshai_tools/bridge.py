@@ -10,9 +10,12 @@ ENABLED = set(); CACHE = {"e5": {}, "nli": {}}; _TOK = {}; HID = 384
 def enable(model, tokenizer_path): ENABLED.add(model); _TOK[model] = Unigram(tokenizer_path)
 _ACTIVE = False
 def active(): return _ACTIVE
-def tok(model): return _TOK[model]
+def tok(model):
+    if model not in _TOK:
+        import gc; _TOK.clear(); gc.collect(); _TOK[model] = Unigram(_PATH[model])  # one tokenizer in memory at a time
+    return _TOK[model]
 def encode_pair(model, a, b, max_len=256):
-    t = _TOK[model]; A = t.encode_raw(a); B = t.encode_raw(b); room = max_len - 3
+    t = tok(model); A = t.encode_raw(a); B = t.encode_raw(b); room = max_len - 3
     while len(A) + len(B) > room:
         if len(A) >= len(B): A = A[:-1]
         else: B = B[:-1]

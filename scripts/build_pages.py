@@ -39,7 +39,7 @@ CAT_HERO = {
     'workflows': 'اسأل مستنداتك واجمع عدة أدوات في ملف تحقيق.',
     'ai': 'نماذج محلية لا تتوفر في المتصفح في هذه النسخة.',
 }
-CAT_RUNS = {'claims': ['numdiff-grain', 'quotecheck-werfalli'], 'entities': ['hijri-werfalli'], 'links': ['urlclean-grain', 'evidence-werfalli'],
+CAT_RUNS = {'claims': ['quotecheck-ecb', 'numdiff-ecb', 'numdiff-grain', 'quotecheck-werfalli'], 'entities': ['hijri-werfalli'], 'links': ['urlclean-grain', 'evidence-werfalli'],
             'media': [], 'data': [], 'workflows': ['ask-werfalli', 'ask-werfalli-ar'], 'ai': []}
 CAT_NOTE = {'media': 'لا نعرض هنا تشغيلًا حقيقيًا: أدوات هذه الفئة تحتاج ملفًا ترفعه أنت، ولم نجد ملفًا عامًا نعيد نشره بحقوق واضحة.',
             'data': 'لا نعرض هنا تشغيلًا حقيقيًا بعد: لم نجمع بيانات عامة مناسبة لهذه الأدوات. لا نعرض أرقامًا مصطنعة على أنها واقع.',

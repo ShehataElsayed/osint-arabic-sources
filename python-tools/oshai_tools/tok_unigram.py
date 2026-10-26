@@ -10,6 +10,7 @@ class Unigram:
         pp = t["post_processor"]; st = pp["special_tokens"]; single = [x["SpecialToken"]["id"] for x in pp["single"] if "SpecialToken" in x]
         self.cls, self.sep = st[single[0]]["ids"][0], st[single[-1]]["ids"][0]
         self.pad = {a["content"]: a["id"] for a in t["added_tokens"]}.get("<pad>", 1)
+        del t, m
     def _norm(self, s):
         s = unicodedata.normalize("NFKC", s); s = re.sub(r"[\x00-\x08\x0b-\x1f\x7f]", "", s)
         return re.sub(r"\s+", " ", s).strip()

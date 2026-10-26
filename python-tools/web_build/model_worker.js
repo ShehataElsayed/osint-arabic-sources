@@ -4,9 +4,9 @@ const MF={e5:{model:'Xenova/multilingual-e5-small/resolve/761b726dd34fb83930e26a
  nli:{model:'Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7/resolve/0864ced79bf1ef851bfaf9dd9de0aa54d735d9d0/onnx/model_int8.onnx',msha:'0e00534691cac71d2a9a0319bce19df9d7c6f003acea00bef9967560584c1a77',tok:'Xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7/resolve/0864ced79bf1ef851bfaf9dd9de0aa54d735d9d0/tokenizer.json',tsha:'e23095eb61ba944c7be3a5d3e8ec19e37ce7ced0daa03550bde03e83c21b3f8a',tt:false}};
 let SESS=null,SESSNAME=null;const TOKOK={};
 async function sha(b){const h=await crypto.subtle.digest('SHA-256',b);return [...new Uint8Array(h)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-async function dl(path,want,label){const r=await fetch(MB+'/'+path);if(!r.ok)throw new Error('تعذر تنزيل '+label);const len=+r.headers.get('content-length')||0;const rd=r.body.getReader();const parts=[];let got=0;
- for(;;){const {done,value}=await rd.read();if(done)break;parts.push(value);got+=value.length;postMessage({progress:'جارٍ تنزيل '+label+': '+Math.round(got/1e6)+(len?' / '+Math.round(len/1e6):'')+' ميجابايت'})}
- const buf=new Uint8Array(got);let o=0;for(const p of parts){buf.set(p,o);o+=p.length}
+async function dl(path,want,label){const r=await fetch(MB+'/'+path);if(!r.ok)throw new Error('تعذر تنزيل '+label);const len=+r.headers.get('content-length')||0;const rd=r.body.getReader();let buf=len?new Uint8Array(len):null;const parts=[];let got=0;
+ for(;;){const {done,value}=await rd.read();if(done)break;if(buf)buf.set(value,got);else parts.push(value);got+=value.length;postMessage({progress:'جارٍ تنزيل '+label+': '+Math.round(got/1e6)+(len?' / '+Math.round(len/1e6):'')+' ميجابايت'})}
+ if(!buf){buf=new Uint8Array(got);let o=0;for(const p of parts){buf.set(p,o);o+=p.length}}
  if(await sha(buf)!==want)throw new Error('فشل التحقق من سلامة '+label+' (SHA-256)');return buf}
 async function ensureTok(py,name){const m=MF[name];if(!TOKOK[name]){const tk=await dl(m.tok,m.tsha,'مُرمِّز '+name);try{py.FS.mkdir('/tmp/tok')}catch(_){}py.FS.writeFile('/tmp/tok/'+name+'.json',tk);py.runPython('import oshai_tools.bridge as _b\n_b.enable("'+name+'","/tmp/tok/'+name+'.json")');TOKOK[name]=1}}
 async function ensure(py,name){if(SESSNAME===name)return;if(SESS){await SESS.release();SESS=null;SESSNAME=null}
