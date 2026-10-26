@@ -24,7 +24,7 @@ async function ask(q) {
   $('greet').hidden = true; const body = startTurn($('thread'), q);
   const all = await load(), found = search(getIndex(all), q), cands = found.confident ? found.candidates : []; last = { q, cands };
   body.replaceChildren(); const title = el('h3', null, 'answer-title'); body.append(title);
-  if (!cands.length) { await typeInto(title, 'لا أجد أداة مناسبة لهذا الطلب في الدليل بثقة كافية. جرّب وصف المهمة بكلمات أخرى (مثل: صورة، سفينة، نطاق، تسريب)، أو تصفّح خريطة الأدوات.'); return; }
+  if (!cands.length) { await typeInto(title, 'لا أجد أداة مناسبة لهذا الطلب في الدليل بثقة كافية. جرّب وصف المهمة بكلمات أخرى (مثل: صورة، أرشيف خبر، سجلات شركات)، أو تصفّح خريطة الأدوات.'); return; }
   let picks = null, web = [];
   if (EXTERNAL_AI && BACKEND_URL) {
     try { const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'recommend', query: q, candidates: cands.map(x => ({ id: x.id, name: x.t.name, description: x.t.description })) }) }); if (r.ok) { const j = await r.json(); picks = j.picks; web = Array.isArray(j.web) ? j.web : []; } } catch { /* keyword fallback */ }

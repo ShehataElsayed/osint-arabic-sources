@@ -20,5 +20,22 @@ def build():
         shutil.copy2(ROOT/notice,DEST/notice)
     subprocess.run([sys.executable,str(ROOT/'scripts/build_content.py'),str(DEST),str(ROOT/'content')],check=True)
     subprocess.run([sys.executable,str(ROOT/'scripts/build_branches.py'),str(DEST)],check=True)
+    # Apply the shared editorial language last, across generated and source pages.
+    import os, re
+    for page in DEST.rglob('*.html'):
+        if page == DEST/'index.html':
+            continue
+        text=page.read_text()
+        relative=os.path.relpath(DEST/'editorial.css',page.parent).replace(os.sep,'/')
+        link='<link rel="stylesheet" href="'+relative+'">'
+        if 'editorial.css' in text:
+            continue
+        if '</head>' in text:
+            text=text.replace('</head>',link+'</head>',1)
+        elif '</body>' in text:
+            text=text.replace('</body>',link+'</body>',1)
+        else:
+            text=text+link
+        page.write_text(text)
     return DEST
 if __name__=='__main__':print(build())

@@ -295,7 +295,7 @@ route_html = ''.join(
     f'<li><a class="rb" href="branches/{slugs[bt["name"]]}.html"><small class="eyebrow">{k + 1:02d} / {E(title(bt))}</small><strong>{E(label)}</strong></a>'
     f'<ul>{"".join("<li dir=auto>" + E(f["name"]) + "</li>" for f in found)}</ul></li>' for k, (bi, bt, label, found) in enumerate(route_items))
 
-EXAMPLES = ['أين أجد سجلات الشركات والملكية؟', 'أريد تتبع سفينة', 'حساب باسم مستخدم عبر المنصات', 'أرشيف نسخة قديمة من صفحة محذوفة']
+EXAMPLES = ['أين أجد سجلات الشركات والملكية؟', 'التحقق من صورة منشورة', 'أرشيف نسخة قديمة من خبر', 'فحص البيانات الوصفية لصورة']
 
 import build_pages
 n_run, n_py = build_pages.build_all(globals())
