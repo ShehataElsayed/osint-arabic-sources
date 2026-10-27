@@ -1,0 +1,9 @@
+# Browser image recompression comparison
+
+A limited original implementation, not a port of Forensically, not an AI detector, and not an authenticity verdict. Original source workflow inspected at https://29a.ch/photo-forensics/ . Author's explanation warns that ELA can mislead and is a magnifying aid only. No original code, assets or design copied. The author's licensing discussion at https://29a.ch/2015/08/16/forensically-photo-forensics-for-the-web does not establish open-source reuse permission.
+
+The browser decodes a local JPEG/PNG, composites alpha on white, re-encodes JPEG at the selected quality and computes absolute RGB channel differences in a dedicated worker. Display gain clips channels at255; metrics use unclipped differences. No resize, metadata, clone detection, provenance authentication or learned model. Browsers/codecs/color management affect results. PNG comparison is experimental JPEG recompression, not original quality inference. Compression differences cannot prove editing or AI generation.
+
+JPEG/PNG only,20MB encoded,4096pixels per dimension and8MP decoded; input decoding still needs memory. No upload, remote image input, analytics, persistent storage, automatic AI fallback or external dependency. Cancellation stops the worker and discards stale pending output. JSON report contains method/settings/dimensions/metrics/limitations, never source filename or pixels.
+
+Tests use known pixel-array arithmetic and an explicitly synthetic generated image through actual browser JPEG decoding/encoding and worker execution. They check change/clear/error invalidation, no outbound requests, report fields and320/390/1280layouts. They are not forensic accuracy or benchmark evidence. Existing catalog remains external for all other Forensically functions. AI-assisted contextual review remains separate and not enabled here.

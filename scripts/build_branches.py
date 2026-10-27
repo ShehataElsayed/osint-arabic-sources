@@ -166,6 +166,8 @@ def tool_card(n, i, path):
         tags += '<span class="tag warn">وجهة غير آمنة، الرابط معطّل</span>'
     sub = f'<small class="path">{E(" › ".join(path))}</small>' if path else ''
     act = (f'<a class="go" href="{E(n["url"])}" target="_blank" rel="noopener noreferrer" data-osint-tool="{E(n["name"])}">افتح الأداة <span aria-hidden="true">↗</span></a>' if ok else '')
+    if n.get('url') == 'https://29a.ch/photo-forensics/':
+        act += '<a class="go" href="../image-difference.html">احسب فرق إعادة الضغط داخل المنصة</a><small>بديل محدود أصلي، لا يحكم بالتزييف ولا يضم كل وظائف الأداة.</small>'
     return (f'<article class="tool" data-q="{E((n["name"] + " " + desc + " " + " ".join(path)).lower())}" data-name="{E(n["name"])}" data-url="{E(n.get("url") if ok else "")}" data-desc="{E(desc[:220])}">'
             f'<span class="bar" aria-hidden="true"></span><div class="tool-top"><small class="no">{i:03d}</small>{sub}</div>'
             f'<h3 dir="auto">{E(n["name"])}</h3><p dir="auto">{E(desc)}</p><div class="tags">{tags}</div><div class="acts">{act}</div></article>')

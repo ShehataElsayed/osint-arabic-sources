@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {jpegDifference} from '../site/image-difference-core.js';
+test('identical pixels zero; alpha ignored in opaque difference',()=>{const x=new Uint8ClampedArray([10,20,30,5]);const r=jpegDifference(x,x);assert.deepEqual([...r.output],[0,0,0,255]);assert.equal(r.mean,0);assert.equal(r.histogram[0],1)});
+test('known channel difference, saturation and histogram',()=>{const r=jpegDifference(new Uint8ClampedArray([10,100,255,255]),new Uint8ClampedArray([0,80,255,255]),20);assert.deepEqual([...r.output],[200,255,0,255]);assert.equal(r.mean,10);assert.equal(r.max,20);assert.equal(r.histogram[20],1)});
+test('bad inputs reject',()=>{assert.throws(()=>jpegDifference(new Uint8ClampedArray(4),new Uint8ClampedArray(8)));assert.throws(()=>jpegDifference(new Uint8ClampedArray(4),new Uint8ClampedArray(4),NaN))});
