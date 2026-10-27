@@ -74,6 +74,6 @@ for page in site.rglob('*.html'):
  if page.name in ('admin.html','data-lab.html'): continue  # admin: encrypted gate untracked; data-lab: CSP script-src 'self' keeps workbench self-contained
  text=page.read_text()
  script=('<script defer src="'+('../'*(len(page.relative_to(site).parts)-1))+'analytics.js"></script>')
- if 'analytics.js' not in text:
+ if 'analytics.js' not in text and page.name != 'image-difference.html':
   text=text.replace('</body>',script+'</body>') if '</body>' in text else text.replace('</html>',script+'</html>')
   page.write_text(text)

@@ -1,0 +1,27 @@
+name: Validate local image workbench
+on:
+  pull_request:
+    paths: ['site/**', 'scripts/**', 'tests/**', 'package*.json', '.github/workflows/local-tools.yml']
+  push:
+    branches: [work/catalog-local-execution]
+permissions:
+  contents: read
+jobs:
+  image-workbench:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      - run: npm run check:js
+      - run: npx playwright install --with-deps chromium
+      - run: CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:image-difference
+      - run: CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:browser
