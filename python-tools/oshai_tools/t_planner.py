@@ -63,6 +63,14 @@ def evidence_for(tid, case):
         m = re.search(r"https?://\S+|www\.\S+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+\b", case, re.I)
         return ("في وصفك: " + m.group(0)[:60]) if m else ""
     return ""
+def _all(*alts): return "".join("(?=.*(?:%s))" % a for a in alts)
+# Added only when the model did not already rank the type; marked in the output as a text rule, not the model.
+EXPLICIT_MORE = {
+ "redact": _all("حجب|احجب|أحجب|نحجب|اخف|أخف|نخف|إخفاء|اخفاء", "بيانات|أسماء|اسماء|أرقام|ارقام|تليفون|هاتف|هواتف|موبايل|شهود|شاهد|هوية|ايميل|إيميل|بريد"),
+ "quote": _all("قال|قالت|قالوا|صرح|صرّح|تصريح|نسب|اقتباس", "بيان|نص |نصه|مؤتمر|رسمي|تقرير|غير كده|مختلف|مصدر"),
+ "case": _all("ربط|اربط|أربط|نربط|نرتب|أرتب|ارتب", "ادعاء|دليل|أدل|ادل|مستند"),
+}
+MIN_TOP = 0.20  # below this, with no text rule matching, the planner abstains (estimated from our own cases; not validated)
 EXPLICIT = {"image": r"صور[ةه]|الصور|لقط[ةه]|فيديو|مقطع مصور", "headers": r"ترويس|header", "numbers": r"[0-9\u0660-\u0669][0-9\u0660-\u0669.,]*\s*(%|بالمئة|بالمائة|مليون|مليار|ألف|الف)", "document": r"ملف (وورد|ورد|إكسل|اكسل|أوفيس|اوفيس)|docx|xlsx|ماكرو"}
 def feats(text):
     text = re.sub(r"(?:https?://|www\.)\S+", " رابطمكتوب ", text)
@@ -120,6 +128,9 @@ def planner_tool(case):
     p, used = scores(planner_model.MODEL, case[:3000])
     order = [c for c in sorted(p, key=p.get, reverse=True) if p[c] >= 0.15][:3] or sorted(p, key=p.get, reverse=True)[:1]
     rule_added = [c for c, rx in EXPLICIT.items() if c not in order and re.search(rx, case, re.I)]
+    rule_added += [c for c, rx in EXPLICIT_MORE.items() if c not in order and c not in rule_added and re.search(rx, case, re.I | re.S)]
+    if max(p.values()) < MIN_TOP and not rule_added:
+        return {"ok": False, "fallback": True, "error": "وصفك لا يشير لنوع مهمة يعرفه المخطط (صورة، رابط، اقتباس، أرقام، بريد، ملف أوفيس، بيانات شخصية...). اذكر ما بين يديك وما تريد معرفته، أو استخدم البحث بالكلمات."}
     order = order + rule_added
     out = {"ok": True}
     if p[order[0]] < 0.45:
