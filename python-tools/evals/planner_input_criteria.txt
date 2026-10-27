@@ -1,0 +1,15 @@
+Frozen before the change (2026-10-27). Diagnostic, same author as the training data; NOT independent validation.
+Unit: deployed path o.run("planner"). A case passes if every GOLD tool id is among the executed steps (_plan steps), not merely omitted.
+Set A (known live failures + paraphrases, 10 cases) - dev set, the change is designed from these classes.
+Set B (12 fresh cases, written before the change, never looked at while designing) - held-out within same author.
+Set N (8 off-topic / no-intent cases): must NOT gain any rule-added type; rule-added count must be 0.
+Set R (regression): the 20 cases in planner_realistic.py + 12 in planner_fresh.py: set of executed tools for each case under the change must be a SUPERSET of the baseline, except rule-added additions. Any dropped baseline tool = regression.
+Accept the change only if: B gold coverage improves over baseline, no B/R regressions (dropped baseline tools = 0), N rule-added = 0. Otherwise report negative.
+
+CORRECTION (2026-10-27, after the fact): Set B was NOT held-out. The baseline B results (including its two misses) were printed before the rules were designed and informed them. B gains are partly fitted. The 0.20 abstain threshold is a provisional same-author calibration, not a confidence.
+Pass definition: a case passes only if every GOLD tool id (the specific capability the described task needs) is among the EXECUTED steps. Other steps being present does not count; omitted-with-reason does not count.
+
+Set C (written and frozen before the run, 2026-10-27, counterexamples, NOT used to design anything):
+ C1 short valid journalism inputs (8): gold tools must be executed steps; a refusal (ok:false) counts as a failure.
+ C2 off-topic texts that contain known domain words (8): pass = refuses (ok:false) OR returns no step for a tool outside the text's meaning; reported per case. I expect some failures and will not tune to fix them.
+No tuning on C after the run.

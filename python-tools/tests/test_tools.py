@@ -192,7 +192,7 @@ class TestPlanner(unittest.TestCase):
     def test_empty_and_gibberish(self):
         self.assertFalse(o.run("planner", case="  ")["ok"])
         r = o.run("planner", case="zzqx vvkj")
-        self.assertTrue(r["ok"]); self.assertIn("تنبيه", r)
+        self.assertFalse(r["ok"]); self.assertIn("error", r)
 
     def test_every_planned_tool_exists(self):
         from oshai_tools.t_planner import TYPES
@@ -209,6 +209,23 @@ class TestPlanner(unittest.TestCase):
         ext = r["أدوات خارجية من الدليل (ليست داخل المنصة)"]
         self.assertTrue(all(e["الرابط"].startswith("https://") and "خارجي" in e["تنبيه"] for e in ext))
         self.assertNotIn("planner", str(r["الخطوات داخل المنصة بالترتيب (كلها تعمل في متصفحك)"]))
+
+
+class TestPlannerInputHandling(unittest.TestCase):
+    K = "الخطوات داخل المنصة بالترتيب (كلها تعمل في متصفحك)"
+    def links(self, c): return [x["رابط"].split("#")[1] for x in o.run("planner", case=c)[self.K]]
+    def test_colloquial_redact_with_clitic(self):
+        self.assertIn("redact", self.links("أحجبها قبل ما أنشر المحضر لأن فيه أرقام تليفونات الشهود"))
+    def test_colloquial_quote_vs_number(self):
+        l = self.links("المتحدث قال إن الإنفاق زاد 12 بالمئة والتقرير بيقول غير كده"); self.assertIn("quotecheck", l); self.assertIn("numdiff", l)
+    def test_claim_linking_gets_case_tools(self):
+        self.assertIn("evidence", self.links("عندي ادعاءات كتير وعايز أربط كل ادعاء بدليله وأسجل المستندات"))
+    def test_offtopic_abstains_without_steps(self):
+        for c in ("إزاي أعمل كشري", "اكتبلي قصيدة عن النيل", "السلام عليكم", "zzqx vvkj"):
+            r = o.run("planner", case=c); self.assertFalse(r["ok"]); self.assertTrue(r.get("fallback")); self.assertNotIn(self.K, r)
+    def test_rule_added_types_are_labelled(self):
+        r = o.run("planner", case="لازم نحجب البيانات الشخصية في المستند قبل النشر")
+        self.assertTrue(r["ok"])
 
 
 class TestPlannerConditions(unittest.TestCase):
