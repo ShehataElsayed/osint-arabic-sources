@@ -13,7 +13,7 @@ async function fetchCaptures(url){
   const r=await fetch(api);
   if(!r.ok)throw new Error('استجابة الأرشيف: '+r.status);
   const j=await r.json();
-  estimated=j.estimated_nr_results;
+  if(offset===0)estimated=j.estimated_nr_results;
   const items=j.response_items||[];
   if(!items.length)break;
   for(const it of items)all.push(it);
@@ -27,7 +27,7 @@ function render(){
  const years={};for(const x of c){const y=x.tstamp.slice(0,4);years[y]=(years[y]||0)+1}
  const ys=Object.keys(years).sort();
  let changes=0;for(let i=1;i<c.length;i++)if(c[i].digest&&c[i-1].digest&&c[i].digest!==c[i-1].digest)changes++;
- const cells=[[result.estimated??c.length,'تقدير إجمالي اللقطات'],[c.length,'لقطات مجلوبة (حد '+MAXC+')'],[c.length?fmtTs(c[0].tstamp).slice(0,10):'—','أقدم لقطة مجلوبة'],[c.length?fmtTs(c[c.length-1].tstamp).slice(0,10):'—','أحدث لقطة مجلوبة'],[changes,'نقطة تغير محتوى بين المجلوبة']];
+ const cells=[[result.estimatedTotal??c.length,'تقدير إجمالي اللقطات'],[c.length,'لقطات مجلوبة (حد '+MAXC+')'],[c.length?fmtTs(c[0].tstamp).slice(0,10):'—','أقدم لقطة مجلوبة'],[c.length?fmtTs(c[c.length-1].tstamp).slice(0,10):'—','أحدث لقطة مجلوبة'],[changes,'نقطة تغير محتوى بين المجلوبة']];
  for(const[v,l]of cells){const d=el('div',undefined,'aw-stat');d.append(el('b',String(v)),el('span',l));sb.append(d)}
  // year chart
  const ch=$('chart');ch.replaceChildren();
