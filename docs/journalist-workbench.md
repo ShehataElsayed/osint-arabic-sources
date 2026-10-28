@@ -13,6 +13,6 @@ User pivot 28 October 2026: build all ten without AI now, defer AI. This page co
 - Domain: actual URL parser and source-backed manually compiled dossier. No live WHOIS/DNS lookup.
 - Planner: fixed editable material-type plans with local tool routing and evidence notes. No autonomous research.
 
-Immutable source snapshots and exact quote offsets remain with records. JSON import rejects mismatched quotes, malformed schema and unknown tool IDs. Plain-text export and JSON backup available. No automatic persistence: download before closing. Local case text never uploaded. Package dependencies self-hosted.
+Immutable source snapshots and exact quote offsets remain with records. JSON import rejects mismatched quotes, malformed schema and unknown tool IDs. Plain-text export and JSON backup available. Per-tab input drafts stay in page memory while switching tools. No automatic persistence: download before closing. Local case text never uploaded. Package dependencies self-hosted.
 
 Tests: node --test tests/journalist-core.test.mjs; node tests/journalist-workbench.cjs (CHROME_PATH may override browser). Synthetic test fixtures are not news or verified sources.
