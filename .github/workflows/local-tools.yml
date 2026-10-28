@@ -62,3 +62,6 @@ jobs:
 
       - name: Archive response case provenance and stale request guard
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/archive-case-portability.cjs
+
+      - name: Video frame review case portability
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/video-case-portability.cjs

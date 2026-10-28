@@ -1,0 +1,7 @@
+import{validateCase}from'../journalist-core.js';
+export function videoCase(record,context,reviews,base={format:'journalist-workbench-v1',title:'مراجعة لقطات فيديو',sources:[],records:[]}){
+ if(!record?.sha256||!record.frames?.length)throw Error('استخرج اللقطات أولًا');const out=validateCase(base),raw=JSON.stringify(record,null,2),anchors=[];
+ for(let start=0;start<raw.length;start+=30000){const text=raw.slice(start,start+30000),s={id:'VIDEO-'+crypto.randomUUID(),title:(context.title||record.name)+'، سجل استخراج جزء '+(start/30000+1),url:context.url||'',text};out.sources.push(s);anchors.push({sourceId:s.id,start:0,end:text.length,quote:text})}
+ if(anchors.length>20)throw Error('سجل الاستخراج أكبر من سعة اقتباسات السجل؛ استخدم التصدير الأصلي');
+ for(const [index,frame]of record.frames.entries()){const review=reviews[index]||{review:'unreviewed',note:''};out.records.push({id:crypto.randomUUID(),tool:'video',title:'لقطة '+(index+1)+' عند '+frame.browserPositionSeconds+' ثانية تقريبية',note:'موضع تقريبي من بداية الملف، ليس تاريخ تصوير ولا دقة جنائية بالإطار. سجل الاستخراج ليس دليل أصالة. أصل الفيديو وصور اللقطات ليست مضمنة؛ احتفظ بها وبصمتها.\nملاحظات عامة: '+(context.note||'')+'\nملاحظات اللقطة: '+review.note,review:review.review,anchors:structuredClone(anchors),videoFrame:{sourceSHA256:record.sha256,...structuredClone(frame),ocr:record.ocrIndex?.frames?.[index]||null}})}return validateCase(out);
+}
