@@ -1,8 +1,15 @@
+import {validateCase} from '../journalist-core.js';
+import {timelineCase,validateEvents} from './timeline-case-core.js';
 import{dateCandidates,validDate}from'../journalist-core.js';
 import{findConflicts,findGaps}from'./timeline-review-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
-let events=[];
+let events=[],baseCase,caseInvalid=false,caseGeneration=0;
+$('src').oninput=$('source-title').oninput=$('source-url').oninput=()=>{$('cands').replaceChildren();say('تغير مصدر الإدخال؛ أُلغيت المرشحات القديمة. الأحداث المضافة تحتفظ بمصادرها الأصلية.');};
+$('case-file').onchange=async()=>{const g=++caseGeneration;caseInvalid=true;baseCase=undefined;try{const f=$('case-file').files[0];if(!f){caseInvalid=false;$('case-status').textContent='قضية جديدة';return}if(f.size>5000000)throw Error('حد القضية5ميجابايت');const v=validateCase(JSON.parse(await f.text()));if(g!==caseGeneration)return;baseCase=v;caseInvalid=false;$('case-status').textContent='قضية مفتوحة محليًا: '+v.title}catch(e){if(g===caseGeneration)$('case-status').textContent='لم تُفتح القضية: '+e.message}};
+$('case-export').onclick=()=>{try{if(caseInvalid)throw Error('القضية غير صالحة أو لم يكتمل فتحها');download('journalist-timeline-case.json',timelineCase(events,baseCase));$('case-status').textContent='نُزلت نسخة جديدة؛ لم يتغير الأصل أو حالات المراجعة السابقة.'}catch(e){$('case-status').textContent='لم تُصدر القضية: '+e.message}};
+function download(name,data){const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);}
+
 function renderReview(){
  const box=$('review');if(!box)return;box.replaceChildren();
  const conflicts=findConflicts(events),gaps=findGaps(events);
@@ -20,7 +27,7 @@ function renderReview(){
   card.append(el('p','فجوة زمنية: '+g.days+' يومًا بين '+g.from+' و '+g.to+' - تحقق من أحداث غير موثقة بينهما.','tl-flag'));
   card.append(el('p','قبل: '+g.fromText));card.append(el('p','بعد: '+g.toText));
   box.append(card)}}
-function renderAxis(){
+function renderAxis(){$('case-export').disabled=!events.length;
  const ax=$('axis');ax.replaceChildren();$('detail').hidden=true;renderReview();
  const dated=events.filter(e=>e.date).sort((a,b)=>a.date.localeCompare(b.date));
  const undated=events.filter(e=>!e.date);
@@ -32,12 +39,12 @@ function renderAxis(){
    const b=el('button','احسم التاريخ',);b.onclick=()=>{if(!validDate(d.value)){say('أدخل يومًا صالحًا بصيغة YYYY-MM-DD');return}e.date=d.value;renderAxis();say('حُسم التاريخ وأضيف إلى المحور.')};
    const del=el('button','احذف');del.onclick=()=>{events=events.filter(x=>x!==e);renderAxis()};
    c.append(d,b,del);uw.append(c)}}
- if(!dated.length){ax.append(el('p','لا أحداث مؤكدة التاريخ بعد. راجع المرشحات أو أضف حدثًا يدويًا.','hint'));$('export').disabled=!events.length;return}
+ if(!dated.length){ax.append(el('p','لا أحداث بتاريخ مدخل بعد. راجع المرشحات أو أضف حدثًا يدويًا.','hint'));$('export').disabled=!events.length;return}
  const W=900,H=170,PAD=60,min=dated[0].date,max=dated[dated.length-1].date;
  const span=Math.max(1,Date.parse(max)-Date.parse(min));
  const x=d=>PAD+(1-(Date.parse(d)-Date.parse(min))/span)*(W-2*PAD);
  const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');
- svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('role','img');svg.setAttribute('aria-label','محور زمني للأحداث المؤكدة');
+ svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('role','img');svg.setAttribute('aria-label','محور زمني للتواريخ المدخلة');
  const line=document.createElementNS(ns,'line');
  for(const[k,v]of Object.entries({x1:PAD,x2:W-PAD,y1:96,y2:96,stroke:'#d42c22','stroke-width':2}))line.setAttribute(k,v);
  svg.append(line);
@@ -72,18 +79,20 @@ function showDetail(e){const d=$('detail');d.hidden=false;d.replaceChildren();
  const nt=el('input');nt.type='text';nt.value=e.text;nt.maxLength=500;nt.setAttribute('aria-label','تعديل وصف الحدث');
  const save=el('button','احفظ التعديل');save.onclick=()=>{if(nd.value&&!validDate(nd.value)){say('التاريخ المعدل غير صالح');return}e.date=nd.value;e.text=nt.value.trim()||e.text;renderAxis();showDetail(e);say('حُفظ التعديل محليًا.')};
  const del=el('button','احذف الحدث');del.onclick=()=>{events=events.filter(x=>x!==e);renderAxis();say('حُذف الحدث من هذه الجلسة.')};
- d.append(nd,nt,save,del)}
-$('detect').onclick=()=>{const text=$('src').value.trim();if(!text){say('الصق نصًا أولًا.');return}
+ const review=document.createElement('select');review.setAttribute('aria-label','مراجعة الحدث');for(const[v,t]of[['unreviewed','لم أراجع'],['accepted','راجعت وقبلت السجل'],['rejected','رفضت السجل']]){const o=el('option',t);o.value=v;review.append(o)}review.value=e.review||'unreviewed';review.onchange=()=>e.review=review.value;
+ const note=el('textarea');note.setAttribute('aria-label','ملاحظات الحدث');note.placeholder='مصدر الحسم وحدود المراجعة';note.maxLength=5000;note.value=e.note||'';note.oninput=()=>e.note=note.value;
+ d.append(nd,nt,save,del,review,note)}
+$('detect').onclick=()=>{const text=$('src').value;if(!text){say('الصق نصًا أولًا.');return}
  let cands;try{cands=dateCandidates(text)}catch(e){say(e.message);return}
  if(cands.length>150){say('أكثر من 150 مقطعًا؛ قسّم النص إلى جزء أصغر.');return}
- const box=$('cands');box.replaceChildren();
+ const source={id:crypto.randomUUID(),text,title:$('source-title').value||'مصدر الخط الزمني',url:$('source-url').value};const box=$('cands');box.replaceChildren();
  if(!cands.length){say('لم يُرصد نمط تاريخ معروف. يمكنك إضافة حدث يدويًا أدناه.');return}
  for(const x of cands){const c=el('div',undefined,'tl-cand');
   c.append(el('blockquote',x.quote),el('p','التاريخ كما ورد: '+x.date+' · '+x.ambiguity,'hint'));
   const d=el('input');d.type='text';d.dir='ltr';d.value=x.sortDate;d.placeholder='YYYY-MM-DD';d.setAttribute('aria-label','تاريخ ISO مؤكد');
   const ev=el('input');ev.type='text';ev.maxLength=500;ev.placeholder='الحدث كما فهمته، مع النفي ونسبة القول';ev.setAttribute('aria-label','وصف الحدث');
   const b=el('button','أضف للخط');b.onclick=()=>{if(d.value&&!validDate(d.value)){say('التاريخ ليس يومًا صالحًا بصيغة YYYY-MM-DD');return}
-   events.push({date:d.value,text:ev.value.trim()||x.quote.slice(0,120),quote:x.quote,raw:x.date});
+   events.push({date:d.value,text:ev.value.trim()||x.quote.slice(0,120),quote:x.quote,raw:x.date,source,anchor:{start:x.start,end:x.end},review:'unreviewed',note:''});
    c.remove();renderAxis();say('أضيف الحدث. '+(events.length)+' حدثًا في هذه الجلسة.')};
   c.append(d,ev,b);box.append(c)}
  say(cands.length+' مرشحًا للمراجعة. لا تحويل آلي للتواريخ النسبية.')};
@@ -94,10 +103,9 @@ $('m-add').onclick=()=>{const d=$('m-date').value.trim(),t=$('m-event').value.tr
 $('export').onclick=()=>{if(!events.length)return;
  const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify({format:'timeline-events-v1',events,limitations:'Dates are human-confirmed entries; relative expressions left unresolved by choice. No automatic date conversion.',reviewState:'manual-review-required'},null,2)],{type:'application/json'}));
  a.href=u;a.download='timeline-events.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
-$('import').onchange=async()=>{const f=$('import').files[0];if(!f)return;
- try{const raw=JSON.parse(await f.text());
-  if(raw.format!=='timeline-events-v1'||!Array.isArray(raw.events)||raw.events.length>500)throw Error('ملف أحداث غير صالح');
-  for(const e of raw.events){if(typeof e.text!=='string'||e.text.length>500||(e.date&&!validDate(e.date)))throw Error('حدث غير صالح في الملف')}
-  events=raw.events.map(e=>({date:e.date||'',text:e.text,quote:e.quote||'',raw:e.raw||''}));
-  renderAxis();say('استُعيد '+events.length+' حدثًا من الملف.')}catch(e){say('تعذر الاستيراد: '+e.message)}};
+let importGeneration=0;
+$('import').onchange=async()=>{const generation=++importGeneration;const f=$('import').files[0];if(!f)return;
+ try{if(f.size>5000000)throw Error('حد الملف5ميجابايت');const raw=JSON.parse(await f.text());
+  const checked=validateEvents(raw);if(generation!==importGeneration)return;events=checked;
+  renderAxis();say('استُعيد '+events.length+' حدثًا من الملف.')}catch(e){if(generation!==importGeneration)return;say('تعذر الاستيراد: '+e.message)}};
 renderAxis();
