@@ -47,3 +47,6 @@ jobs:
 
       - name: Entities shared-case portability
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/entities-case-portability.cjs
+
+      - name: Standalone case review fidelity
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/case-review-page.cjs
