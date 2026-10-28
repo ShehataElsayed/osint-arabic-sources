@@ -28,7 +28,9 @@
     let worker;
     try {
       worker = await Tesseract.createWorker(lang.value.split('+'), Tesseract.OEM.DEFAULT, {
-        langPath: './tessdata', gzip: true,
+        workerPath: './journalist-media/ocr/worker.min.js',
+        corePath: './journalist-media/ocr/',
+        langPath: './tessdata', gzip: true, workerBlobURL: false,
         logger: m => { if (m.status) status.textContent = m.status + (m.progress ? ' — ' + Math.round(m.progress * 100) + '%' : ''); }
       });
       const result = await worker.recognize(imgURL);
