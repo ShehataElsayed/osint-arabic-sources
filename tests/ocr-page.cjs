@@ -13,6 +13,11 @@ assert.ok(text.includes('الوزارة'),'Arabic text extracted: '+text.slice(0
 assert.ok(text.includes('Journalist source'),'English text extracted');
 // known synthetic misread documented: ١٢ read as ١١7 on this fixture
 assert.ok(/١[١٢]7?/.test(text),'number region present (synthetic misread tolerated)');
+// review aid: panel appears after extraction; flags never auto-correct the text
+assert.ok(!(await p.locator('#review').isHidden()),'review section shown');
+const rv=await p.locator('#review-list').textContent();
+assert.ok(rv.includes('مراجعة')||rv.includes('رموز'),'review guidance rendered');
+if(/[٠-٩][0-9]|[0-9][٠-٩]/.test(text))assert.ok(await p.locator('#review-list .flag-card').count()>0,'mixed-numeral token flagged for review');
 assert.ok(external.every(u=>false),'all OCR assets self-hosted; third-party requests: '+external.join(','));
 await p.screenshot({path:'test-output/ocr-page-desktop.png',fullPage:true});
 for(const width of [390,320]){await p.setViewportSize({width,height:900});await p.waitForTimeout(300);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal scroll at '+width);await p.screenshot({path:`test-output/ocr-page-${width}.png`,fullPage:true})}

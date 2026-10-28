@@ -1,3 +1,4 @@
+import{numberChanges}from'./versions-numbers-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
 const MAXL=800;
@@ -71,6 +72,22 @@ $('compare').onclick=()=>{
    renderChunks(body,wd.pre,'pre');body.append(el('span','تعديل','vd-tag'));body.append(el('br'));renderChunks(body,wd.post,'post')}
   row.append(la,lb,body);frag.append(row)}
  list.append(frag);
+ // number-change panel (original spec: surface changed numbers, before/after)
+ const nc=numberChanges(ops,A,B),nbox=$('numchg');nbox.replaceChildren();
+ if(nc.changes.length||nc.onlyAdded||nc.onlyRemoved){
+  nbox.hidden=false;
+  nbox.append(el('h3','تغيّر الأرقام بين النسختين'));
+  nbox.append(el('p','مطابقة رموز رقمية على مستوى السطور المعدلة؛ كل تغيير قرينة مراجعة يدوية وليس تحققًا من صحة الرقم.','hint'));
+  for(const c of nc.changes){
+   const card=el('div',undefined,'vn-card');
+   card.append(el('p',`سطر ${c.aLine} ← سطر ${c.bLine}`,'vn-lns'));
+   card.append(el('p','حُذف: '+(c.removed.join('، ')||'—')+' | أُضيف: '+(c.added.join('، ')||'—'),'vn-nums'));
+   const old=el('div',undefined,'vn-old');old.textContent=c.oldText;
+   const nw=el('div',undefined,'vn-new');nw.textContent=c.newText;
+   card.append(old,nw);nbox.append(card)}
+  if(nc.onlyRemoved||nc.onlyAdded)nbox.append(el('p',`أرقام ضمن سطور محذوفة بالكامل: ${nc.onlyRemoved} — أرقام ضمن سطور مضافة بالكامل: ${nc.onlyAdded}`,'vn-extra'));
+  if(nc.truncated)nbox.append(el('p','قُصر العرض عند أول ٥٠ تغييرًا رقميًا.','vn-extra'))}
+ else nbox.hidden=true;
  $('result').hidden=false;
  last={format:'versions-diff-v1',options:{ignoreWhitespace:ign},stats:{...st,similarityPct:sim},limits:'Line-based comparison; moved paragraphs appear as delete+add. Word highlights are approximate token matches.',
   ops:ops.map(o=>({type:o.t,a:o.a!==undefined?A[o.a]:undefined,b:o.b!==undefined?B[o.b]:undefined,aLine:o.a!==undefined?o.a+1:undefined,bLine:o.b!==undefined?o.b+1:undefined}))};

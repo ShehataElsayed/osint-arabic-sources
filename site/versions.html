@@ -1,5 +1,13 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="description" content="مقارنة نسخ محلية: الصق نسختين من بيان أو مقال أو وثيقة، وقارنهما سطرًا بسطر مع إبراز الكلمات المعدلة داخل السطر الواحد، وإحصاءات التغيير، وتنزيل النتيجة JSON. كل المعالجة على جهازك."><title>مقارنة النسخ | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
 <link rel="stylesheet" href="./shell.css"><style>
+.vn-card{background:#faf9f7;color:#191c20;border:1px solid #eee7e1;border-radius:12px;padding:10px 14px;margin:10px 0}
+.vn-lns{font-weight:700;margin:0 0 4px}
+.vn-nums{margin:0 0 6px;color:#7a3b06}
+.vn-old{text-decoration:line-through;opacity:.75}
+.vn-new{margin-top:2px}
+.vn-extra{margin:10px 0 0;font-size:13px;opacity:.85}
+#numchg h3{margin:18px 0 6px}
+
 .vd-grid{display:grid;gap:14px;grid-template-columns:1fr 1fr}
 @media(max-width:700px){.vd-grid{grid-template-columns:1fr}}
 .vd-grid textarea{width:100%;min-height:150px}
@@ -35,7 +43,7 @@
 <section class="box" id="result" hidden>
 <h2>نتيجة المقارنة</h2>
 <div class="vd-stats" id="stats"></div>
-<div class="vd-list" id="diff"></div>
-</section>
+<div class="vd-list" id="diff" data-x="1"></div>
+<div id="numchg" hidden></div></section>
 <section class="box"><h2>حدود مهمة</h2><p>المقارنة سطرية: الفقرة المنقولة من مكان إلى آخر تظهر حذفًا وإضافة، لا «نقلًا». السطر المعدّل يُبرز كلماته المتغيرة بمطابقة تقريبية قد لا تلتقط كل إعادة صياغة. الحد الأقصى 800 سطر لكل نسخة و60 ألف حرف؛ للوثائق الأطول قسّمها. لا تُقارن الأداة مصادر على الويب ولا تتصل بالأرشيف؛ أنت من يجلب النصوص من مصادرها الموثوقة.</p></section>
 </main><footer><strong>صممت بواسطة مهندس شحاته السيد</strong><span>أداة تجريبية تعمل محليًا؛ النتيجة تحتاج مراجعة بشرية</span><a class="fb" href="https://www.facebook.com/share/19PTDvQ789/" target="_blank" rel="noopener noreferrer">فيسبوك ↗</a></footer></div><script type="module" src="./journalist-media/versions-page.js"></script><script src="./shell.js" defer></script></body></html>
