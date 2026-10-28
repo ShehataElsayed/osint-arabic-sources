@@ -1,0 +1,40 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="description" content="خط زمني تفاعلي محلي: رصد التواريخ الصريحة والنسبية في نصك، تحرير الأحداث، عرضها على محور زمني مرسوم على جهازك، وتنزيلها JSON. لا رفع ولا تحويل تلقائي للتواريخ النسبية."><title>الخط الزمني التفاعلي | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
+<link rel="stylesheet" href="./shell.css"><style>
+.tl-src textarea{width:100%;min-height:130px}
+.tl-cands{display:grid;gap:12px;margin-top:14px}
+.tl-cand{background:#faf9f7;border:1px solid #eee7e1;border-radius:12px;padding:14px}
+.tl-cand blockquote{margin:0 0 8px;font-size:14px;color:#191c20}
+.tl-cand .hint{font-size:12.5px;color:#7d6a5f}
+.tl-cand input,.tl-manual input{margin:4px 0}
+.tl-axis-wrap{overflow-x:auto;margin-top:18px;background:#faf9f7;border:1px solid #eee7e1;border-radius:12px;padding:10px}
+.tl-axis svg{display:block;min-width:640px;width:100%}
+.tl-mark{cursor:pointer}
+.tl-mark circle{fill:#d42c22}
+.tl-mark text{font:700 12px Cairo,Tahoma,sans-serif;fill:#191c20;direction:ltr}
+.tl-tick{font:700 11px Cairo,Tahoma,sans-serif;fill:#5b5f66}
+.tl-detail{background:#fff;border:1px solid #e4e0da;border-radius:12px;padding:14px;margin-top:12px}
+.tl-detail blockquote{margin:6px 0;font-size:13.5px;color:#5b5f66}
+.tl-undated{margin-top:14px}
+.tl-undated .tl-cand{border-style:dashed}
+.tl-dateval{direction:ltr;unicode-bidi:isolate;white-space:nowrap;display:inline-block}
+</style><link rel="stylesheet" href="./identity.css"></head><body><a class="skip-link" href="#main">تخطَّ إلى المحتوى</a><div class="app"><header class="top"><div class="brand"><img alt="شعار OS" src="./brand/oshai-mark.svg"><div><a class="brand-home" href="./index.html" aria-label="افتح الصفحة الرئيسية">دليل المصادر المفتوحة للصحفيين العرب</a><small>أدوات ومنهجيات ومكتبات للبحث الصحفي</small></div></div><nav class="topnav shellnav" aria-label="التنقل الرئيسي"><a href="./index.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M6 10v10h4v-6h4v6h4V10"/></svg></span>ابدأ</a><details data-active="1"><summary><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6M10 7v6"/></svg></span>الأدوات</summary><div class="menu"><a href="./index.html#tree">خريطة الأدوات</a><a href="./map.html#python">مكتبات بايثون</a><a href="./map.html#ai">أدوات الذكاء الاصطناعي</a><a href="./commands.html">الأوامر الاستقصائية</a><a href="./smart-search.html">بحث ذكي تجريبي</a><a href="./ocr.html">استخراج نص من صورة</a><a href="./image-analysis.html">فحص بيانات الصورة</a><a href="./domain-dossier.html">ملف النطاق</a><a href="./video-frames.html">لقطات الفيديو</a><a href="./timeline.html" aria-current="page">الخط الزمني</a><a href="./data-lab.html">مختبر البيانات</a></div></details><details><summary><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg></span>التحقق</summary><div class="menu"><a href="./verification.html">مسارات التحقق</a><a href="./assistant.html">مساعد NewsRAG</a></div></details><a href="./methodology.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5c3-2 5-1 8 1 3-2 5-3 8-1v14c-3-2-5-1-8 1-3-2-5-3-8-1V5ZM12 6v14"/></svg></span>المنهجية</a></nav></header><span id="main"></span><main>
+<section class="hero"><span class="badge">محلي بالكامل · لا يُرفع النص</span><h1>الخط الزمني التفاعلي</h1><p>الصق نص المصدر: ترصد الأداة أنماط التاريخ الصريحة والعبارات النسبية، وتراجع أنت كل حدث وتحدد تاريخه المؤكد يدويًا، ثم يُرسم الخط على محور زمني متناسب على جهازك. التواريخ النسبية مثل «أمس» لا تُحوَّل تلقائيًا؛ تبقى في مسار «غير محسوم» حتى تحسمها بنفسك من مرجعها. نزّل الأحداث JSON أو استعدها لاحقًا.</p></section>
+<section class="box tl-src">
+<label for="src">نص المصدر</label>
+<textarea id="src" maxlength="30000" placeholder="الصق النص الذي يتضمن تواريخ أو عبارات زمنية"></textarea>
+<div class="row"><button id="detect">ارصد التواريخ للمراجعة</button><button id="export" disabled>نزّل الأحداث JSON</button><label class="btn" for="import">استعد أحداث JSON</label><input id="import" type="file" accept="application/json,.json" hidden></div>
+<p id="status" role="status"></p>
+<div class="tl-cands" id="cands"></div>
+</section>
+<section class="box tl-manual">
+<h2>حدث يدوي</h2>
+<div class="row"><label>تاريخ ISO مؤكد (YYYY-MM-DD) أو اتركه فارغًا<input id="m-date" type="text" dir="ltr" placeholder="2026-01-31"></label><label>الحدث ومصدره<input id="m-event" type="text" maxlength="500"></label><button id="m-add">أضف الحدث</button></div>
+</section>
+<section class="box">
+<h2>المحور الزمني</h2>
+<div class="tl-axis-wrap" id="axis-wrap"><div class="tl-axis" id="axis"></div></div>
+<div class="tl-detail" id="detail" hidden></div>
+<div class="tl-undated" id="undated"></div>
+</section>
+<section class="box"><h2>حدود مهمة</h2><p>رصد التواريخ نمطي سطحي: قد يفوت صيغًا غير معتادة ويلتقط تاريخ النشر لا تاريخ الحدث. لا تحويل آلي للعبارات النسبية ولا ترتيب لتاريخ ملتبس؛ الحسم لك من مصدر الحدث. الترتيب على المحور يعتمد فقط على التواريخ المؤكدة التي أدخلتها أو قبلتها.</p></section>
+</main><footer><strong>صممت بواسطة مهندس شحاته السيد</strong><span>أداة تجريبية تعمل محليًا؛ النتيجة تحتاج مراجعة بشرية</span><a class="fb" href="https://www.facebook.com/share/19PTDvQ789/" target="_blank" rel="noopener noreferrer">فيسبوك ↗</a></footer></div><script type="module" src="./journalist-media/timeline-page.js"></script><script src="./shell.js" defer></script></body></html>
