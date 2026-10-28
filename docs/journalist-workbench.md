@@ -15,4 +15,4 @@ User pivot 28 October 2026: build all ten without AI now, defer AI. This page co
 
 Immutable source snapshots and exact quote offsets remain with records. JSON import rejects mismatched quotes, malformed schema and unknown tool IDs. Plain-text export and JSON backup available. Per-tab input drafts stay in page memory while switching tools. No automatic persistence: download before closing. Local case text never uploaded. Package dependencies self-hosted.
 
-Tests: node --test tests/journalist-core.test.mjs tests/image-analysis.test.mjs; node tests/journalist-workbench.cjs (CHROME_PATH may override browser). Synthetic test fixtures are not news or verified sources.
+Standalone page: site/image-analysis.html presents the same image analysis on the platform shell (own page per tool, no case-workbench chrome), no analytics on that page, zero default network. Tests: node --test tests/journalist-core.test.mjs tests/image-analysis.test.mjs; node tests/image-page.cjs; node tests/journalist-workbench.cjs (CHROME_PATH may override browser). Synthetic test fixtures are not news or verified sources.

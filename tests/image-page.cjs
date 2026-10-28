@@ -1,0 +1,31 @@
+const{chromium}=require('playwright'),{spawn}=require('child_process'),assert=require('assert/strict'),fs=require('fs');(async()=>{fs.mkdirSync('test-output',{recursive:true});const server=spawn('python3',['-m','http.server','8799','--bind','127.0.0.1','--directory',process.env.TEST_SITE||'site'],{stdio:'ignore'});let b;try{b=await chromium.launch({executablePath:process.env.CHROME_PATH||'/usr/bin/google-chrome',args:['--no-sandbox']});const p=await b.newPage({viewport:{width:1280,height:1000}}),external=[],errors=[];p.on('request',r=>{if(/^https?:/.test(r.url())&&!r.url().startsWith('http://127.0.0.1:8799'))external.push(r.url())});p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());
+await p.goto('http://127.0.0.1:8799/image-analysis.html');
+assert.ok((await p.title()).includes('فحص بيانات الصورة'));
+assert.ok(await p.locator('header.top .brand-home').isVisible());
+await p.setInputFiles('#file','tests/fixtures/journalist-photo-exif.jpg');
+await p.waitForFunction(()=>!document.querySelector('#run').disabled);
+assert.deepEqual(external,[],'no requests on file pick');
+await p.click('#run');
+await p.waitForFunction(()=>!document.querySelector('#run').disabled,{timeout:60000});
+const summary=await p.locator('#ia-summary').textContent();
+assert.ok(summary.includes('1000×600')&&summary.includes('SHA-256'));
+const meta=await p.locator('#analysis .analysis-meta pre').textContent();
+assert.ok(meta.includes('TestCam')&&meta.includes('UnitTestEditor'));
+assert.equal(await p.locator('.analysis-figures canvas').count(),2,'ELA + noise views');
+assert.ok((await p.locator('.analysis-gps').textContent()).includes('30.044444'));
+assert.deepEqual(external,[],'no network after local analysis: '+external.join(','));
+await p.route('https://nominatim.openstreetmap.org/**',r=>r.fulfill({json:{display_name:'حي اصطناعي، القاهرة، مصر'}}));
+await p.getByRole('button',{name:/Nominatim/}).click();
+await p.waitForFunction(()=>document.querySelector('.analysis-gps pre').textContent.includes('حي اصطناعي'));
+await p.unroute('https://nominatim.openstreetmap.org/**');
+assert.ok(external.every(u=>u.startsWith('https://nominatim.openstreetmap.org/reverse')),'only explicit nominatim: '+external.join(','));
+await p.fill('#pivot-url','https://example.org/published/photo.jpg');
+assert.equal(await p.locator('.analysis-pivots .actions a').count(),3);
+assert.ok((await p.locator('.analysis-pivots .actions a').nth(1).getAttribute('href')).startsWith('https://tineye.com/search?url='));
+await p.screenshot({path:'test-output/image-page-desktop.png',fullPage:true});
+for(const width of [390,320]){await p.setViewportSize({width,height:900});await p.waitForTimeout(300);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal scroll at '+width);await p.screenshot({path:`test-output/image-page-${width}.png`,fullPage:true})}
+// corrupt input rejected without navigation away
+await p.setInputFiles('#file',{name:'bad.png',mimeType:'image/png',buffer:Buffer.from('broken')});
+await p.waitForFunction(()=>document.querySelector('#status').textContent.includes('تعذر'));
+assert.deepEqual(errors,[]);
+console.log(JSON.stringify({pass:true,views:2,externalOnlyNominatim:true,responsive:[1280,390,320]}))}finally{if(b)await b.close();server.kill()}})().catch(e=>{console.error(e);process.exitCode=1})
