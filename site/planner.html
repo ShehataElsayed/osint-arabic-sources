@@ -1,0 +1,37 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="description" content="مصمم مسار التحقق: صف قضيتك والمواد التي معك، فتقترح قواعد محلية شفافة تركيبة أدوات من الدليل مع خطوات الاستخدام والمدخلات والنتيجة المتوقعة وشروط التوقف. المطابقة قاعدية على كلماتك، وليست فهمًا آليا؛ كل المعالجة على جهازك."><title>مصمم مسار التحقق | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
+<link rel="stylesheet" href="./shell.css"><style>
+.pl-src textarea{width:100%;min-height:120px}
+.pl-mats{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.pl-mat{display:inline-flex;align-items:center;gap:6px;background:#faf9f7;border:1px solid #eee7e1;border-radius:999px;padding:6px 12px;font-size:13.5px;color:#191c20;cursor:pointer}
+.pl-steps{display:grid;gap:12px;margin-top:14px}
+.pl-card{background:#faf9f7;border:1px solid #eee7e1;border-radius:12px;padding:14px;color:#191c20}
+.pl-card h3{margin:0 0 6px;font-size:1.02rem}
+.pl-card p{margin:6px 0;font-size:14px;line-height:1.9}
+.pl-card ol{margin:6px 0;padding-inline-start:22px;font-size:14px;color:#191c20}
+.pl-ev{color:#7a4b00;background:#fff3e0;border:1px solid #f0dfc2;border-radius:10px;padding:6px 10px;font-size:13px}
+.pl-stop{color:#8f1d15;font-weight:700}
+.pl-open{display:inline-block;margin-top:8px;background:#fff;color:#8f1d15;border:1px solid #d42c22;border-radius:10px;padding:7px 16px;text-decoration:none;font-weight:700;font-size:13.5px}
+.pl-open:hover{background:#f9e9e7}
+.pl-ext{display:grid;gap:10px;margin-top:10px}
+.pl-ext-card{background:#fff;border:1px solid #eee7e1;border-radius:12px;padding:12px 14px}
+.pl-ext-card a{color:#1a6b22;font-weight:700}
+.pl-ext-desc{font-size:13.5px;color:#5b5f66;margin:6px 0 0;direction:ltr;text-align:right;unicode-bidi:isolate}
+.pl-opsec{font-size:12.5px;color:#8f1d15;margin-top:6px;direction:ltr;text-align:right;unicode-bidi:isolate}
+.pl-notes{margin-top:16px;border-top:1px dashed #eee7e1;padding-top:10px}
+.pl-notes p{font-size:13.5px;color:#5b5f66;margin:6px 0}
+.pl-empty{color:#8f1d15;font-weight:700}
+</style><link rel="stylesheet" href="./identity.css"></head><body><a class="skip-link" href="#main">تخطَّ إلى المحتوى</a><div class="app"><header class="top"><div class="brand"><img alt="شعار OS" src="./brand/oshai-mark.svg"><div><a class="brand-home" href="./index.html" aria-label="افتح الصفحة الرئيسية">دليل المصادر المفتوحة للصحفيين العرب</a><small>أدوات ومنهجيات ومكتبات للبحث الصحفي</small></div></div><nav class="topnav shellnav" aria-label="التنقل الرئيسي"><a href="./index.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M6 10v10h4v-6h4v6h4V10"/></svg></span>ابدأ</a><details data-active="1"><summary><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6M10 7v6"/></svg></span>الأدوات</summary><div class="menu"><a href="./index.html#tree">خريطة الأدوات</a><a href="./map.html#python">مكتبات بايثون</a><a href="./map.html#ai">أدوات الذكاء الاصطناعي</a><a href="./commands.html">الأوامر الاستقصائية</a><a href="./smart-search.html">بحث ذكي تجريبي</a><a href="./ocr.html">استخراج نص من صورة</a><a href="./image-analysis.html">فحص بيانات الصورة</a><a href="./domain-dossier.html">ملف النطاق</a><a href="./video-frames.html">لقطات الفيديو</a><a href="./timeline.html">الخط الزمني</a><a href="./versions.html">مقارنة النسخ</a><a href="./claims.html">رصد الادعاءات</a><a href="./entities.html">رصد الكيانات</a><a href="./archive.html">أرشيف الويب</a><a href="./planner.html" aria-current="page">مسار التحقق</a><a href="./data-lab.html">مختبر البيانات</a></div></details><details><summary><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg></span>التحقق</summary><div class="menu"><a href="./verification.html">مسارات التحقق</a><a href="./assistant.html">مساعد NewsRAG</a></div></details><a href="./methodology.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5c3-2 5-1 8 1 3-2 5-3 8-1v14c-3-2-5-1-8 1-3-2-5-3-8-1V5ZM12 6v14"/></svg></span>المنهجية</a></nav></header><span id="main"></span><main>
+<section class="hero"><span class="badge">محلي بالكامل · مطابقة قواعد شفافة</span><h1>مصمم مسار التحقق</h1><p>صف قضيتك والمواد التي معك، فتقترح الأداة تركيبة من أدوات الدليل بقواعد مطابقة معلنة: كل اقتراح يعرض الإشارات التي طابقت من كلماتك، وخطوات الاستخدام، والمدخلات، والنتيجة المتوقعة، وشرط التوقف. المطابقة قاعدية على كلماتك وليست فهمًا آليًا للقضية؛ راجع المسار وعدّله بخبرتك. الترجمة وأدوات الذكاء الاصطناعي خارج الاقتراح حاليًا بقرار مؤجل من المستخدم.</p></section>
+<section class="box pl-src">
+<label for="case">وصف القضية والمادة التي معك</label>
+<textarea id="case" maxlength="5000" placeholder="مثال: وصلني فيديو وصور منشورة على موقع مجهول، وأريد التحقق من أصلها وتواريخ نشرها"></textarea>
+<h3 style="font-size:1rem;margin:14px 0 4px">المواد المتاحة لديك</h3>
+<div class="pl-mats" id="materials"></div>
+<div class="row" style="margin-top:12px"><button id="run">اقترح مسار التحقق</button><button id="copy" disabled>انسخ المسار</button><button id="export" disabled>نزّل المسار نصيًا</button></div>
+<p id="status" role="status"></p>
+</section>
+<section class="box" id="result" hidden>
+<h2>المسار المقترح</h2>
+<div id="plan"></div>
+</section>
+<section class="box"><h2>حدود مهمة</h2><p>الاقتراح مطابقة قواعد موثقة على كلماتك وموادك المعلنة: قد يفوت أدوات مناسبة لم تذكر إشاراتها، وقد يرشح أداة لمجرد ورود كلمة. ليس فهمًا آليًا ولا بحثًا منفذًا ولا حكمًا على القضية. الأدوات الخارجية روابط تغادر المنصة وتحكمها سياسات مواقعها؛ راجع تنبيه الخصوصية مع كل رابط. وصفك وموادك لا يغادران جهازك.</p></section></main><footer><strong>صممت بواسطة مهندس شحاته السيد</strong><span>أداة تجريبية تعمل محليًا؛ النتيجة تحتاج مراجعة بشرية</span><a class="fb" href="https://www.facebook.com/share/19PTDvQ789/" target="_blank" rel="noopener noreferrer">فيسبوك ↗</a></footer></div><script type="module" src="./journalist-media/planner-page.js"></script><script src="./shell.js" defer></script></body></html>
