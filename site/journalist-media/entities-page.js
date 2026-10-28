@@ -1,25 +1,26 @@
+import {sentences,validateCase} from '../journalist-core.js';
+import {entitiesCase} from './entities-case-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
 const STOP=new Set(('في من إلى على عن أن إن كان كانت هذا هذه ذلك تلك مع أو ثم قد لا لم لن ما هو هي التي الذي الذين وا ب ك ل منذ حتى بعد قبل عند بين تحت فوق أمام خلال ضد لدى عبر نحو حول كل بعض أي أيضًا حيث عندما إذا لو كما بل لكن يوم اليوم قال قالت أعلن أعلنت أكد أكدت ذكر ذكرت وقال وقالت وأضاف وأضافت إضافة إلى طبقا وفقا بحسب').split(' '));
 const MAXD=20;
+let baseCase,caseInvalid=false,caseGeneration=0;
 let corpus=null,entities=[],edges=[],clusters=[],decisions=[],sel=null,graphSel=null;
 function tok(s){return s.split(/\s+/).filter(Boolean)}
 function cleanToken(w){return w.replace(/^[،؛:.!؟?«»"“”()\-—]+|[،؛:.!؟?«»"“”()\-—]+$/g,'')}
-function splitDocs(t){return t.replace(/\r/g,'').split(/^===\s*$/m).map(x=>x.trim()).filter(Boolean)}
-function sentencesOf(doc){const out=[];let off=0;
- for(const part of doc.split(/\n+/)){let base=doc.indexOf(part,off);off=base+part.length;
-  let sOff=0;for(const s of part.split(/(?<=[.؟!…؛])\s+/)){const t=s.trim();if(t.length>1){const st=part.indexOf(s,sOff);sOff=st+s.length;out.push({text:t,start:base+st})}}}
- return out}
+function splitDocs(t){return t.split(/^===\s*$/m).filter(x=>x.trim())}
+function sentencesOf(doc){return sentences(doc).map(s=>({...s,text:s.quote}))}
+function positionedWords(sn){return [...sn.text.matchAll(/\S+/g)].map(m=>{const clean=cleanToken(m[0]);const left=m[0].indexOf(clean);return{word:clean,start:sn.start+m.index+left,end:sn.start+m.index+left+clean.length}})}
 function extract(docs){
  const grams=new Map();
- docs.forEach((d,di)=>{d.sents.forEach((sn,si)=>{const words=tok(sn.text).map(cleanToken);
+ docs.forEach((d,di)=>{d.sents.forEach((sn,si)=>{const positions=positionedWords(sn),words=positions.map(w=>w.word);
   for(let n=3;n>=2;n--)for(let i=0;i+n<=words.length;i++){const g=words.slice(i,i+n);
    if(g.some(w=>!w||/^[0-9٠-٩]+$/.test(w)))continue;
    if(STOP.has(g[0])||STOP.has(g[g.length-1]))continue;
    if(g.every(w=>STOP.has(w)||w.length<2))continue;
    const key=g.join(' ');
    if(!grams.has(key))grams.set(key,[]);
-   grams.get(key).push({doc:di,sent:si,offset:sn.start+sn.text.indexOf(g.join(' '))})}})});
+   grams.get(key).push({doc:di,sent:si,offset:positions[i].start,mentionEnd:positions[i+n-1].end})}})});
  let list=[...grams.entries()].filter(([,m])=>m.length>=2);
  // suppress shorter grams fully covered by a longer kept gram with the same count
  list.sort((a,b)=>b[0].split(' ').length-a[0].split(' ').length||b[1].length-a[1].length);
@@ -67,6 +68,7 @@ function selectEntity(key){
  $('toolbar').hidden=false;
  const selx=$('merge-target');selx.replaceChildren();
  for(const o of entities.filter(x=>!x.dismissed&&x.key!==key)){const op=document.createElement('option');op.value=o.key;op.textContent=o.key;selx.append(op)}
+ if(!selx.options.length){const o=el('option','لا صيغة أخرى للدمج');o.value='';selx.append(o)}selx.disabled=!selx.value;$('merge').disabled=!selx.value;
  renderList();renderGraph()}
 function renderGraph(){
  const g=$('graph');g.replaceChildren();$('edge-detail').hidden=true;
@@ -103,9 +105,7 @@ function showEdge(ed){
  for(const l of ed.locs.slice(0,10)){const sn=corpus.docs[l.doc].sents[l.sent];
   d.append(el('blockquote','وثيقة '+(l.doc+1)+': '+sn.text))}}
 $('merge').onclick=()=>{const t=$('merge-target').value;if(!sel||!t)return;
- const ex=clusters.find(c=>c.members.includes(sel)||c.members.includes(t));
- if(ex){for(const k of[sel,t])if(!ex.members.includes(k))ex.members.push(k)}
- else clusters.push({members:[sel,t]});
+ const matching=clusters.filter(c=>c.members.includes(sel)||c.members.includes(t));const members=[...new Set([sel,t,...matching.flatMap(c=>c.members)])];clusters=clusters.filter(c=>!matching.includes(c));clusters.push({members});
  decisions.push({action:'merge',a:sel,b:t,by:'user'});
  say('دُمجت «'+sel+'» مع «'+t+'» كهوية واحدة بقرارك. سُجل في التصدير.');selectEntity(sel)};
 $('ambiguity').onclick=()=>{const e=entities.find(x=>x.key===sel);if(!e)return;
@@ -118,24 +118,28 @@ $('dismiss').onclick=()=>{const e=entities.find(x=>x.key===sel);if(!e)return;
  buildEdges();renderList();renderGraph();
  say('استُبعد «'+e.key+'». القرار موثق في التصدير.')};
 $('extract').onclick=()=>{
- const text=$('src').value.trim();
+ const text=$('src').value;
  if(!text){say('الصق نصًا أولًا.');return}
  const docs=splitDocs(text);
  if(docs.length>MAXD){say('الحد الأقصى '+MAXD+' وثيقة.');return}
- corpus={docs:docs.map(d=>({text:d,sents:sentencesOf(d)}))};
+ corpus={text,docs:docs.map((d,i)=>({text:d,sents:sentencesOf(d),title:($('source-title').value||'مصدر رصد الكيانات')+' - وثيقة '+(i+1),url:$('source-url').value}))};
  const raw=extract(corpus.docs);
  entities=raw.map(r=>({key:r.key,mentions:r.mentions,ambiguous:false,dismissed:false}));
  clusters=[];decisions=[];sel=null;
  buildEdges();renderList();renderGraph();
  $('result').hidden=false;
- $('export').disabled=!entities.length;
+ $('export').disabled=!entities.length;$('case-export').disabled=!entities.length;
  say(entities.length+' مرشحًا سطحيًا من '+docs.length+' وثيقة. الهوية غير محسومة افتراضيًا؛ راجع وادمج أو افصل أو استبعد.')};
-$('export').onclick=()=>{if(!entities.length)return;
- const out={format:'entities-review-v1',
+function data(){return {format:'entities-review-v1',
   limits:'Surface-form recurrence, not NER. Same spelling may be different people; different spellings may be one person. Sentence co-occurrence is a lead, not a relationship. Identity decisions are the reviewer\u2019s.',
-  documents:corpus.docs.map((d,i)=>({index:i+1,sentences:d.sents.length})),
-  entities:entities.map(e=>({surface:e.key,status:e.dismissed?'dismissed':'review',identity:e.ambiguous?'unresolved-ambiguous':'unresolved',mentions:e.mentions.map(m=>({doc:m.doc+1,sentence:m.sent+1,offset:m.offset,quote:corpus.docs[m.doc].sents[m.sent].text}))})),
+  sourceText:corpus.text,documents:corpus.docs.map((d,i)=>({index:i+1,sentences:d.sents.length,text:d.text,title:d.title,url:d.url})),
+  entities:entities.map(e=>({surface:e.key,status:e.dismissed?'dismissed':'review',identity:e.ambiguous?'unresolved-ambiguous':'unresolved',mentions:e.mentions.map(m=>({doc:m.doc+1,sentence:m.sent+1,offset:m.offset,mentionEnd:m.mentionEnd,mentionQuote:corpus.docs[m.doc].text.slice(m.offset,m.mentionEnd),start:corpus.docs[m.doc].sents[m.sent].start,end:corpus.docs[m.doc].sents[m.sent].end,quote:corpus.docs[m.doc].sents[m.sent].text}))})),
   clusters,decisions,
-  cooccurrence:edges.map(e=>({a:e.a,b:e.b,sentences:e.locs.length,locs:e.locs.map(l=>({doc:l.doc+1,sentence:l.sent+1}))}))};
- const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
- a.href=u;a.download='entities-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
+  cooccurrence:edges.map(e=>({a:e.a,b:e.b,sentences:e.locs.length,locs:e.locs.map(l=>({doc:l.doc+1,sentence:l.sent+1}))}))};}
+$('export').onclick=()=>{if(entities.length)download('entities-review.json',data())};
+function download(name,out){const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));
+ a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
+
+for(const id of ['src','source-title','source-url'])$(id).oninput=()=>{corpus=null;entities=[];edges=[];clusters=[];decisions=[];sel=null;$('result').hidden=true;$('export').disabled=true;$('case-export').disabled=true;say('تغير المصدر؛ أُلغيت المرشحات والقرارات السابقة. أعد الاستخراج.');};
+$('case-file').onchange=async()=>{const g=++caseGeneration;caseInvalid=true;baseCase=undefined;try{const f=$('case-file').files[0];if(!f){caseInvalid=false;$('case-status').textContent='قضية جديدة';return}if(f.size>5000000)throw Error('حد القضية5ميجابايت');const v=validateCase(JSON.parse(await f.text()));if(g!==caseGeneration)return;baseCase=v;caseInvalid=false;$('case-status').textContent='قضية مفتوحة محليًا: '+v.title}catch(e){if(g===caseGeneration)$('case-status').textContent='لم تُفتح القضية: '+e.message}};
+$('case-export').onclick=()=>{try{if(caseInvalid)throw Error('القضية غير صالحة أو لم يكتمل فتحها');if(!corpus)throw Error('استخرج أولًا');download('journalist-entities-case.json',entitiesCase(data(),baseCase));$('case-status').textContent='نُزلت نسخة جديدة؛ الأصل وحالات المراجعة السابقة لم تتغير.'}catch(e){$('case-status').textContent='لم تُصدر القضية: '+e.message+'؛ تصدير الرصد الأصلي ما زال متاحًا.'}};

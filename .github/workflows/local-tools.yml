@@ -44,3 +44,6 @@ jobs:
 
       - name: Timeline shared-case portability
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/timeline-case-portability.cjs
+
+      - name: Entities shared-case portability
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/entities-case-portability.cjs
