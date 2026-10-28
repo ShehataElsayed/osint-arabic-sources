@@ -68,6 +68,7 @@ function selectEntity(key){
  $('toolbar').hidden=false;
  const selx=$('merge-target');selx.replaceChildren();
  for(const o of entities.filter(x=>!x.dismissed&&x.key!==key)){const op=document.createElement('option');op.value=o.key;op.textContent=o.key;selx.append(op)}
+ if(!selx.options.length){const o=el('option','لا صيغة أخرى للدمج');o.value='';selx.append(o)}selx.disabled=!selx.value;$('merge').disabled=!selx.value;
  renderList();renderGraph()}
 function renderGraph(){
  const g=$('graph');g.replaceChildren();$('edge-detail').hidden=true;
