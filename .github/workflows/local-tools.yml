@@ -35,3 +35,6 @@ jobs:
 
       - name: Domain shared-case portability
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/domain-case-portability.cjs
+
+      - name: Source-linked claims case portability
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/claims-case-portability.cjs

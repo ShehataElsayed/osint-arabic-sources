@@ -1,3 +1,5 @@
+import {sentences,validateCase} from '../journalist-core.js';
+import {claimsCase} from './claims-case-core.js';
 import{missingEvidence}from'./claims-review-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
@@ -28,9 +30,12 @@ function context(s){
  const first=s.trim().split(/\s+/)[0]||'';
  if(DIRECT.some(d=>s.trim().startsWith(d))||/^لا\s/.test(s.trim()))out.push('توجيه أو أمر');
  return out}
-function splitSentences(t){
- return t.replace(/\r/g,'').split(/\n+/).flatMap(p=>p.split(/(?<=[.؟!…؛])\s+/)).map(x=>x.trim()).filter(x=>x.length>1)}
-let last=null,view=[];
+let last=null,view=[],baseCase,caseInvalid=false,caseGeneration=0;
+function invalidate(){last=null;view=[];$('result').hidden=true;$('export').disabled=true;$('case-export').disabled=true;say('تغير المصدر؛ أُلغيت النتائج السابقة. أعد الترشيح قبل التنزيل.');}
+for(const id of ['src','source-title','source-url'])$(id).oninput=invalidate;
+$('case-file').onchange=async()=>{const generation=++caseGeneration;caseInvalid=true;baseCase=undefined;try{const f=$('case-file').files[0];if(!f){caseInvalid=false;return}if(f.size>5000000)throw Error('حد القضية5ميجابايت');const checked=validateCase(JSON.parse(await f.text()));if(generation!==caseGeneration)return;baseCase=checked;caseInvalid=false;$('case-status').textContent='قضية مفتوحة محليًا: '+baseCase.title;}catch(e){if(generation!==caseGeneration)return;$('case-status').textContent='لم تُفتح القضية: '+e.message;}};
+$('case-export').onclick=()=>{try{if(caseInvalid)throw Error('القضية غير صالحة أو لم يكتمل فتحها');if(!last)throw Error('رشّح النص أولًا');const out=claimsCase(last,baseCase);download('journalist-claims-case.json',out);$('case-status').textContent='نُزلت نسخة جديدة. الأصل وحالات المراجعة السابقة لم تتغير.'}catch(e){$('case-status').textContent='لم تُصدر القضية: '+e.message+'؛ قائمة المراجعة الأصلية ما زالت متاحة.'}};
+function download(name,data){const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);}
 function render(){
  const showPlain=$('show-plain').checked;
  const box=$('claims');box.replaceChildren();
@@ -49,16 +54,20 @@ function render(){
    ml.append(el('b','الدليل الناقص: '));
    for(const m of c.missing)ml.append(el('span',m,'cl-chip cl-miss'));
    card.append(ml)}
+  if(c.candidate){
+   const review=document.createElement('select');review.setAttribute('aria-label','مراجعة المرشح '+(c.index+1));for(const[v,t]of[['unreviewed','لم أراجع'],['accepted','راجعت وقبلت السجل'],['rejected','رفضت السجل']]){const o=el('option',t);o.value=v;review.append(o)}review.value=c.review;review.onchange=()=>{c.review=review.value;c.reviewState=review.value==='unreviewed'?'unchecked':review.value};
+   const note=el('textarea');note.placeholder='الدليل ورابطه ونسبة القول وحدود المراجعة';note.maxLength=5000;note.setAttribute('aria-label','ملاحظات المرشح '+(c.index+1));note.value=c.note;note.oninput=()=>c.note=note.value;card.append(review,note);
+  }
   box.append(card);shown++}
  return shown}
 $('detect').onclick=()=>{
- const text=$('src').value.trim();
+ const text=$('src').value;
  if(!text){say('الصق نصًا أولًا.');return}
- const sents=splitSentences(text);
+ const spans=sentences(text);const sents=spans.map(s=>s.quote);
  if(sents.length>MAXS){say('النص يتجاوز '+MAXS+' جملة؛ قسّمه إلى جزء أصغر.');return}
  const items=sents.map((s,i)=>{const sig=signals(s),ctx=context(s);
   const candidate=sig.length>0&&!ctx.includes('رأي معلن')&&!ctx.includes('توجيه أو أمر');
-  return{index:i,sentence:s,signals:sig,context:ctx,candidate,missing:candidate?missingEvidence({signals:sig,context:ctx}):[]}});
+  return{index:i,sentence:s,start:spans[i].start,end:spans[i].end,review:'unreviewed',reviewState:'unchecked',note:'',signals:sig,context:ctx,candidate,missing:candidate?missingEvidence({signals:sig,context:ctx}):[]}});
  const cand=items.filter(x=>x.candidate).length;
  const opin=items.filter(x=>x.context.includes('رأي معلن')).length;
  const dir=items.filter(x=>x.context.includes('توجيه أو أمر')).length;
@@ -68,11 +77,10 @@ $('detect').onclick=()=>{
  for(const g of Object.keys(bySig))cells.push([bySig[g],'إشارة: '+g]);
  for(const[v,l]of cells){const d=el('div',undefined,'cl-stat');d.append(el('b',String(v)),el('span',l));sb.append(d)}
  view=items;
- last={format:'claims-review-v1',limits:'Pattern heuristics surface review candidates; they do not establish checkability or truth. Sentences preserved verbatim from source.',items:items.filter(x=>x.candidate).map(x=>({sentence:x.sentence,signals:x.signals,context:x.context,reviewState:'unchecked',missingEvidence:x.missing}))};
- $('result').hidden=false;$('export').disabled=!cand;
+ last={format:'claims-review-v1',source:{text,title:$('source-title').value,url:$('source-url').value},limits:'Pattern heuristics surface review candidates; they do not establish checkability or truth. Sentences preserved verbatim from source.',items:items.filter(x=>x.candidate)};
+ for(const item of last.items)item.missingEvidence=item.missing;
+ $('result').hidden=false;$('export').disabled=!cand;$('case-export').disabled=!cand;
  const shown=render();
  say('رُشح '+cand+' ادعاءً من '+sents.length+' جملة. تُعرض '+shown+' بطاقة؛ الجمل محفوظة حرفيًا كما وردت.')};
 $('show-plain').onchange=()=>{if(last)render()};
-$('export').onclick=()=>{if(!last)return;
- const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(last,null,2)],{type:'application/json'}));
- a.href=u;a.download='claims-review.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
+$('export').onclick=()=>{if(last)download('claims-review.json',last)};
