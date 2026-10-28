@@ -1,3 +1,5 @@
+import {validateCase} from '../journalist-core.js';
+import {versionsCase} from './versions-case-core.js';
 import{numberChanges}from'./versions-numbers-core.js';
 import{claimChanges}from'./versions-claims-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
@@ -45,7 +47,14 @@ function renderChunks(node,chunks,side){
   if(ch.c==='d'&&side==='pre'){const d=el('del',ch.s);node.append(d)}
   else if(ch.c==='i'&&side==='post'){const ins=el('ins',ch.s);node.append(ins)}
   else node.append(document.createTextNode(ch.s))}}
-let last=null;
+let last=null,baseCase,caseInvalid=false,generation=0;
+function invalidate(){last=null;$('result').hidden=true;$('export').disabled=true;$('case-export').disabled=true;say('تغير المصدر أو الإعداد؛ أعد المقارنة قبل التنزيل.');}
+for(const id of ['va','vb','title-a','title-b','url-a','url-b'])$(id).oninput=invalidate;
+$('ign-ws').onchange=invalidate;
+$('case-file').onchange=async()=>{const g=++generation;caseInvalid=true;baseCase=undefined;try{const f=$('case-file').files[0];if(!f){caseInvalid=false;$('case-status').textContent='قضية جديدة';return}if(f.size>5000000)throw Error('حد القضية5ميجابايت');const value=validateCase(JSON.parse(await f.text()));if(g!==generation)return;baseCase=value;caseInvalid=false;$('case-status').textContent='قضية مفتوحة محليًا: '+value.title}catch(e){if(g===generation)$('case-status').textContent='لم تُفتح القضية: '+e.message}};
+$('case-export').onclick=()=>{try{if(caseInvalid)throw Error('القضية غير صالحة أو لم يكتمل فتحها');if(!last)throw Error('قارن أولًا');download('journalist-versions-case.json',versionsCase(last,baseCase));$('case-status').textContent='نُزلت نسخة جديدة؛ الأصل وحالات المراجعة السابقة لم تتغير.'}catch(e){$('case-status').textContent='لم تُصدر القضية: '+e.message+'؛ تصدير المقارنة الأصلي ما زال متاحًا.'}};
+function download(name,data){const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);}
+
 $('compare').onclick=()=>{
  const ign=$('ign-ws').checked;
  const rawA=$('va').value,rawB=$('vb').value;
@@ -103,9 +112,9 @@ $('compare').onclick=()=>{
    card.append(old,nw);cbox.append(card)}}
  else cbox.hidden=true;
  $('result').hidden=false;
- last={format:'versions-diff-v1',options:{ignoreWhitespace:ign},stats:{...st,similarityPct:sim},limits:'Line-based comparison; moved paragraphs appear as delete+add. Word highlights are approximate token matches.',
+ last={format:'versions-diff-v1',sources:[{text:rawA,title:$('title-a').value,url:$('url-a').value},{text:rawB,title:$('title-b').value,url:$('url-b').value}],options:{ignoreWhitespace:ign},stats:{...st,similarityPct:sim},limits:'Line-based comparison; moved paragraphs appear as delete+add. Word highlights are approximate token matches.',
   ops:ops.map(o=>({type:o.t,a:o.a!==undefined?A[o.a]:undefined,b:o.b!==undefined?B[o.b]:undefined,aLine:o.a!==undefined?o.a+1:undefined,bLine:o.b!==undefined?o.b+1:undefined}))};
- $('export').disabled=false;
+ $('export').disabled=false;$('case-export').disabled=false;
  $('result').scrollIntoView({block:'start'});
  say('اكتملت المقارنة: '+total+' سطرًا ('+st.mod+' معدل، '+st.add+' مضاف، '+st.del+' محذوف).')};
 $('export').onclick=()=>{if(!last)return;
