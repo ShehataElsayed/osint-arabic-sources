@@ -56,3 +56,6 @@ jobs:
 
       - name: Cross-tool source and review chain
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/case-workflow-chain.cjs
+
+      - name: Planner case portability without execution claims
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/planner-case-portability.cjs

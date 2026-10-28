@@ -1,16 +1,23 @@
+import {validateCase} from '../journalist-core.js';
+import {plannerCase} from './planner-case-core.js';
 import{MATERIALS,buildPlan,planText}from'./planner-core.js';
 import{CATALOG}from'./planner-catalog.js';
 const $=id=>document.getElementById(id),el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
 const say=t=>$('status').textContent=t;
-let lastPlan=null,lastDesc='';
+let lastPlan=null,lastDesc='',reviews=[],baseCase,caseInvalid=false,caseGeneration=0;
+function invalidate(){lastPlan=null;reviews=[];$('result').hidden=true;$('export').disabled=true;$('copy').disabled=true;$('case-export').disabled=true;say('تغير الوصف أو المواد؛ أعد بناء المسار.');}
+$('case').oninput=invalidate;
+$('case-file').onchange=async()=>{const g=++caseGeneration;caseInvalid=true;baseCase=undefined;try{const f=$('case-file').files[0];if(!f){caseInvalid=false;return}if(f.size>5000000)throw Error('حد القضية5ميجابايت');const v=validateCase(JSON.parse(await f.text()));if(g!==caseGeneration)return;baseCase=v;caseInvalid=false;$('case-status').textContent='قضية مفتوحة محليًا: '+v.title}catch(e){if(g===caseGeneration)$('case-status').textContent='لم تُفتح القضية: '+e.message}};
+$('case-export').onclick=()=>{try{if(caseInvalid)throw Error('القضية غير صالحة أو لم يكتمل فتحها');const out=plannerCase(lastPlan,lastDesc,reviews,baseCase),a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));a.href=u;a.download='journalist-plan-case.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);$('case-status').textContent='نُزلت نسخة جديدة؛ الخطة اقتراح غير منفذ، والأصل لم يتغير.'}catch(e){$('case-status').textContent='لم تُصدر القضية: '+e.message}};
+
 const matBox=$('materials');
-for(const m of MATERIALS){const lab=el('label',undefined,'pl-mat');const cb=document.createElement('input');cb.type='checkbox';cb.value=m.id;lab.append(cb,document.createTextNode(m.label));matBox.append(lab)}
+for(const m of MATERIALS){const lab=el('label',undefined,'pl-mat');const cb=document.createElement('input');cb.type='checkbox';cb.onchange=invalidate;cb.value=m.id;lab.append(cb,document.createTextNode(m.label));matBox.append(lab)}
 $('run').onclick=()=>{lastPlan=null;$('export').disabled=true;$('copy').disabled=true;
- try{const desc=$('case').value.trim();
+ try{const desc=$('case').value;
   const mats=[...matBox.querySelectorAll('input:checked')].map(i=>i.value);
   if(!desc&&!mats.length){say('صف القضية أو اختر المواد المتاحة أولًا.');return}
   say('يُطابق القواعد محليًا…');
-  const plan=buildPlan(desc,mats,CATALOG);lastPlan=plan;lastDesc=desc;
+  const plan=buildPlan(desc,mats,CATALOG);lastPlan=plan;lastDesc=desc;reviews=(plan.steps||[]).map(s=>({order:s.order,review:'unreviewed',note:''}));$('case-export').disabled=plan.empty;
   render(plan);
   $('export').disabled=plan.empty;$('copy').disabled=plan.empty;
   say(plan.empty?'':'اكتمل الاقتراح محليًا. راجع كل خطوة قبل اتباعها.')}
@@ -27,7 +34,7 @@ function render(plan){const box=$('result');box.hidden=false;const wrap=$('plan'
   card.append(el('p','النتيجة المتوقعة: '+s.expected));
   card.append(el('p','شرط التوقف: '+s.stop,'pl-stop'));
   const a=el('a','افتح الأداة','pl-open');a.href='./'+s.page;card.append(a);
-  ol.append(card)}
+  const review=reviews.find(r=>r.order===s.order),select=el('select');select.setAttribute('aria-label','مراجعة اقتراح '+s.order);for(const[v,t]of[['unreviewed','لم أراجع الاقتراح'],['accepted','قبلت الخطوة في الخطة (ليست منفذة)'],['rejected','استبعدت الخطوة']]){const o=el('option',t);o.value=v;select.append(o)}select.value=review.review;select.onchange=()=>review.review=select.value;const note=el('textarea');note.setAttribute('aria-label','ملاحظات اقتراح '+s.order);note.placeholder='تعديل المسار وحدود الخطة، لا دليل تنفيذ';note.maxLength=5000;note.oninput=()=>review.note=note.value;card.append(select,note);ol.append(card)}
  wrap.append(ol);
  if(plan.external.length){const h=el('h3','أدوات خارجية من الدليل (روابط تغادر المنصة)');wrap.append(h);
   const list=el('div',undefined,'pl-ext');
