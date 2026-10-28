@@ -22,17 +22,24 @@ assert.ok((await p.locator('#detail').textContent()).includes('2026-01-15'));
 assert.ok((await p.locator('#detail blockquote').textContent()).includes('بدء العملية'));
 // manual event
 await p.fill('#m-date','2026-02-10');await p.fill('#m-event','جلسة استماع برلمانية');await p.click('#m-add');
-assert.equal(await p.locator('#axis .tl-mark').count(),3);
+// conflict surfacing: same description, different dates -> review lead card
+await p.fill('#m-date','2026-02-12');await p.fill('#m-event','جلسة استماع برلمانية');await p.click('#m-add');
+assert.ok(!(await p.locator('#review').isHidden()),'review panel shown');
+assert.ok((await p.locator('#review').textContent()).includes('تعارض'),'conflict lead surfaced');
+assert.equal(await p.locator('#review .tl-conflict').count(),1,'one conflict card');
+// gap surfacing: events span 2026-01-15..2026-03-02 with wide empty stretch
+assert.ok((await p.locator('#review').textContent()).includes('فجوة'),'gap lead surfaced');
+assert.equal(await p.locator('#axis .tl-mark').count(),4);
 // resolve it in the undated lane
 await p.locator('#undated .tl-cand input').fill('2026-02-20');
 await p.locator('#undated .tl-cand button').first().click();
-assert.equal(await p.locator('#axis .tl-mark').count(),4,'resolved event joins axis');
+assert.equal(await p.locator('#axis .tl-mark').count(),5,'resolved event joins axis');
 assert.equal(await p.locator('#undated .tl-cand').count(),0,'undated lane cleared');
 // export
 const[d]=await Promise.all([p.waitForEvent('download'),p.click('#export')]);
 const ex=JSON.parse(fs.readFileSync(await d.path()));
 assert.equal(ex.format,'timeline-events-v1');
-assert.equal(ex.events.length,4);
+assert.equal(ex.events.length,5);
 assert.ok(ex.events.every(e=>e.date&&/^(\d{4})-(\d{2})-(\d{2})$/.test(e.date)));
 assert.deepEqual(external,[],'everything stayed local: '+external.join(','));
 // bidi on axis date labels
@@ -40,4 +47,4 @@ assert.equal(await p.evaluate(()=>getComputedStyle(document.querySelector('#axis
 await p.screenshot({path:'test-output/timeline-page-desktop.png',fullPage:true});
 for(const width of [390,320]){await p.setViewportSize({width,height:1000});await p.waitForTimeout(300);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no horizontal scroll at '+width);await p.screenshot({path:`test-output/timeline-page-${width}.png`,fullPage:true})}
 assert.deepEqual(errors,[]);
-console.log(JSON.stringify({pass:true,events:4,responsive:[1280,390,320]}))}finally{if(b)await b.close();server.kill()}})().catch(e=>{console.error(e);process.exitCode=1})
+console.log(JSON.stringify({pass:true,events:5,responsive:[1280,390,320]}))}finally{if(b)await b.close();server.kill()}})().catch(e=>{console.error(e);process.exitCode=1})
