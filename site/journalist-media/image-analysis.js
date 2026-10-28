@@ -91,6 +91,9 @@ export async function analyzeImage({file,bytes,bitmap,box,say,isStale,hashes}){
  qp.append(el('p','مولّدة من حضور البيانات الوصفية أو غيابها؛ تساعد مراجعتك ولا تحكم على الصورة.','hint'));
  for(const q of verificationQuestions(result))qp.append(el('p','• '+q));
  box.append(qp);
+ // الحقول وبنية الملف قبل أقسام الإحداثيات: يبقى pre البيانات هو الأول في الحاوية (توافق المستدعين)
+ const metaFold=fold('كل الحقول المقروءة وبنية الملف ('+rows.length+' سطرًا)');
+ metaFold.body.append(meta);box.append(metaFold.fold);
  let gpsDiv=null;
  if(result.gps&&Number.isFinite(result.gps.lat)){
   const g=el('div',undefined,'analysis-gps'),{lat,lon}=result.gps;gpsDiv=g;
@@ -118,8 +121,6 @@ export async function analyzeImage({file,bytes,bitmap,box,say,isStale,hashes}){
   for(const[name,href]of[['Google Lens','https://lens.google.com/uploadbyurl?url='+enc],['TinEye','https://tineye.com/search?url='+enc],['Yandex Images','https://yandex.com/images/search?rpt=imageview&url='+enc]]){const a=document.createElement('a');a.textContent=name;a.href=href;a.target='_blank';a.rel='noopener';links.append(a)}};
  urlInput.oninput=renderLinks;
  box.append(piv);
- const metaFold=fold('كل الحقول المقروءة وبنية الملف ('+rows.length+' سطرًا)');
- metaFold.body.append(meta);box.append(metaFold.fold);
  if(isStale())return result;
  say('يُحسب فرق إعادة الضغط وخريطة الضوضاء محليًا…');
  const deepFold=fold('الطبقات البصرية العميقة: فرق إعادة الضغط، الضوضاء، النسخ، التدرج، المستويات، المدرج، PCA، المكبّر');
