@@ -11,7 +11,8 @@ const summary=await p.locator('#ia-summary').textContent();
 assert.ok(summary.includes('1000×600')&&summary.includes('SHA-256'));
 const meta=await p.locator('#analysis .analysis-meta pre').textContent();
 assert.ok(meta.includes('TestCam')&&meta.includes('UnitTestEditor'));
-assert.equal(await p.locator('.analysis-figures canvas').count(),2,'ELA + noise views');
+assert.equal(await p.locator('.analysis-figures canvas').count(),6,'ELA, noise, clone, gradient, sweep, histogram');
+assert.ok((await p.locator('.analysis-figures').textContent()).includes('كشف مناطق منسوخة'));
 assert.ok((await p.locator('.analysis-gps').textContent()).includes('30.044444'));
 assert.deepEqual(external,[],'no network after local analysis: '+external.join(','));
 await p.route('https://nominatim.openstreetmap.org/**',r=>r.fulfill({json:{display_name:'حي اصطناعي، القاهرة، مصر'}}));
@@ -22,6 +23,11 @@ assert.ok(external.every(u=>u.startsWith('https://nominatim.openstreetmap.org/re
 await p.fill('#pivot-url','https://example.org/published/photo.jpg');
 assert.equal(await p.locator('.analysis-pivots .actions a').count(),3);
 assert.ok((await p.locator('.analysis-pivots .actions a').nth(1).getAttribute('href')).startsWith('https://tineye.com/search?url='));
+await p.setInputFiles('#file','tests/fixtures/journalist-photo-clone.jpg');
+await p.waitForFunction(()=>!document.querySelector('#run').disabled);
+await p.click('#run');
+await p.waitForFunction(()=>!document.querySelector('#run').disabled,{timeout:60000});
+assert.ok((await p.locator('.analysis-figures').textContent()).includes('(250، 94)'),'clone displacement reported');
 await p.screenshot({path:'test-output/image-page-desktop.png',fullPage:true});
 for(const width of [390,320]){await p.setViewportSize({width,height:900});await p.waitForTimeout(300);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal scroll at '+width);await p.screenshot({path:`test-output/image-page-${width}.png`,fullPage:true})}
 // corrupt input rejected without navigation away

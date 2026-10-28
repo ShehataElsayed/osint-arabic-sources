@@ -114,3 +114,99 @@ export function noiseMap(rgba,width,height,radius=2,scale=8){
    out[idx+c]=Math.min(255,diff*scale)}
   out[idx+3]=255}
  return {output:out,mean:rgba.length?sum/(rgba.length/4*3):0,max,pixels:width*height}}
+
+// استخراج الصورة المصغرة المضمنة في EXIF (IFD1) إن وجدت
+export function extractExifThumbnail(tiffBytes){
+ try{
+  const t=makeTiff(tiffBytes);if(t.u16(2)!==42)return null;
+  const ifd0=t.u32(4),n=t.u16(ifd0),next=ifd0+2+n*12;
+  const ifd1=t.u32(next);if(!ifd1||ifd1+2>t.length)return null;
+  let off=0,len=0,w=null,h=null;
+  for(const e of ifdEntries(t,ifd1)){
+   if(e.tag===0x0201)off=t.u32(e.valueOffset);
+   if(e.tag===0x0202)len=t.u32(e.valueOffset);
+   if(e.tag===0x0100)w=readValue(t,e);
+   if(e.tag===0x0101)h=readValue(t,e)}
+  if(!off||!len||off+len>t.length||len>500000)return null;
+  const data=tiffBytes.subarray(off,off+len);
+  if(data[0]!==0xFF||data[1]!==0xD8)return null;
+  return {data,width:w,height:h}}catch{return null}}
+
+export function luminanceGradient(rgba,width,height,scale=4){
+ if(!(rgba instanceof Uint8ClampedArray)||rgba.length!==width*height*4)throw Error('مدخلات التدرج غير صالحة');
+ const out=new Uint8ClampedArray(rgba.length);const lum=x=>0.299*rgba[x]+0.587*rgba[x+1]+0.114*rgba[x+2];
+ for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+  const i=(y*width+x)*4;
+  if(x===0||y===0||x===width-1||y===height-1){out[i+3]=255;continue}
+  const gx=lum(i+4)-lum(i-4),gy=lum(i+width*4)-lum(i-width*4);
+  const g=Math.min(255,Math.hypot(gx,gy)*scale/2);
+  out[i]=out[i+1]=out[i+2]=g;out[i+3]=255}
+ return {output:out,pixels:width*height}}
+
+export function levelSweep(rgba,level,windowWidth=8){
+ if(!(rgba instanceof Uint8ClampedArray)||rgba.length%4||!Number.isFinite(level)||level<0||level>255)throw Error('مدخلات مسح المستويات غير صالحة');
+ const out=new Uint8ClampedArray(rgba.length);
+ for(let i=0;i<rgba.length;i+=4){
+  const l=0.299*rgba[i]+0.587*rgba[i+1]+0.114*rgba[i+2];
+  const inside=Math.abs(l-level)<=windowWidth/2;
+  out[i]=out[i+1]=out[i+2]=inside?255:0;out[i+3]=255}
+ return {output:out,level,windowWidth}}
+
+export function channelHistogram(rgba){
+ if(!(rgba instanceof Uint8ClampedArray)||rgba.length%4)throw Error('مدخلات المدرج غير صالحة');
+ const r=Array(256).fill(0),g=Array(256).fill(0),b=Array(256).fill(0),l=Array(256).fill(0);
+ for(let i=0;i<rgba.length;i+=4){r[rgba[i]]++;g[rgba[i+1]]++;b[rgba[i+2]]++;l[Math.round(0.299*rgba[i]+0.587*rgba[i+1]+0.114*rgba[i+2])]++}
+ const max=Math.max(1,...r,...g,...b);
+ return {r,g,b,l,max,pixels:rgba.length/4}}
+
+const STRING_HINT=/adobe|photoshop|gimp|lightroom|pixlr|canva|snapseed|xmp|software|creator|canon|nikon|sony|fujifilm|olympus|samsung|huawei|xiaomi|iphone|android|windows|paint/i;
+export function extractStrings(bytes,{minLen=8,limit=400,hintOnly=true}={}){
+ if(!(bytes instanceof Uint8Array)||!bytes.length)throw Error('لا بايتات للفحص');
+ const out=[];let cur=[],start=0;
+ const flush=()=>{if(cur.length>=minLen){const s=new TextDecoder('utf-8',{fatal:false}).decode(new Uint8Array(cur));if(!hintOnly||STRING_HINT.test(s))out.push({offset:start,text:s.slice(0,300)})}cur=[]};
+ const cap=Math.min(bytes.length,3*1024*1024);
+ for(let i=0;i<cap&&out.length<limit;i++){const b=bytes[i];
+  if(b>=32&&b<127){if(!cur.length)start=i;cur.push(b)}else flush()}
+ flush();
+ const seen=new Set(),dedup=[];
+ for(const s of out){const k=s.text.slice(0,120);if(seen.has(k))continue;seen.add(k);dedup.push(s)}
+ return dedup.slice(0,60)}
+
+// كشف نسخ-لصق مناطق داخل الصورة (مطابقة كتل بمعاملات DCT مكمّمة، أسلوب Fridrich وآخرين المنشور)
+const COS=[];for(let u=0;u<4;u++){COS[u]=[];for(let x=0;x<16;x++)COS[u][x]=Math.cos((2*x+1)*u*Math.PI/32)}
+function dctFeatures(gray,w,x0,y0,B,Q){
+ // معاملات DCT منخفقة التردد (u,v في 0..2) لكتلة B×B، مكمّمة بخطوة Q
+ const F=[];const cu=u=>u===0?Math.SQRT1_2:1;
+ for(let v=0;v<4;v++)for(let u=0;u<4;u++){
+  let sum=0;
+  for(let y=0;y<B;y++){const gy=gray[y0+y];for(let x=0;x<B;x++)sum+=gy[x0+x]*COS[u][x]*COS[v][y]}
+  F.push(Math.round(sum*cu(u)*cu(v)/128/Q))}
+ return F}
+export function detectClones(rgba,width,height,{block=16,stride=2,quant=6,minShift=24,minCount=60,maxGroups=6}={}){
+ if(!(rgba instanceof Uint8ClampedArray)||rgba.length!==width*height*4)throw Error('مدخلات كشف النسخ غير صالحة');
+ if(width<48||height<48)return {groups:[],blocks:0,note:'الصورة أصغر من الحد الأدنى للفحص (48 بكسل)'};
+ const gray=[];for(let y=0;y<height;y++){const row=new Float32Array(width);for(let x=0;x<width;x++){const i=(y*width+x)*4;row[x]=0.299*rgba[i]+0.587*rgba[i+1]+0.114*rgba[i+2]-128}gray.push(row)}
+ const recs=[];
+ for(let y=0;y+block<=height;y+=stride)for(let x=0;x+block<=width;x+=stride){
+  let mean=0;const row0=gray[y];for(let yy=0;yy<block;yy++)for(let xx=0;xx<block;xx++)mean+=gray[y+yy][x+xx];mean/=block*block;
+  let sd=0;for(let yy=0;yy<block;yy+=2)for(let xx=0;xx<block;xx+=2){const d=gray[y+yy][x+xx]-mean;sd+=d*d}sd=Math.sqrt(sd/(block*block/4));
+  if(sd<4)continue;
+  recs.push({x,y,f:dctFeatures(gray,width,x,y,block,quant)})}
+ recs.sort((a,b)=>{const A=a.f,B=b.f;for(let i=0;i<A.length;i++){if(A[i]!==B[i])return A[i]-B[i]}return a.y-b.y||a.x-b.x});
+ const shifts=new Map(),runPairs=[];
+ for(let i=0;i<recs.length-1;i++){
+  // طول متتالية الكتل المتطابقة: القوام الدوري (تدرجات، نوافذ) ينتج متتاليات طويلة تُستبعد
+  let runEnd=i+1;while(runEnd<recs.length&&recs[runEnd].f.every((v,k)=>v===recs[i].f[k]))runEnd++;
+  const runLen=runEnd-i;
+  if(runLen===2){const a=recs[i],b=recs[i+1],dx=b.x-a.x,dy=b.y-a.y;
+   if(Math.hypot(dx,dy)>=minShift){const k=dx+','+dy;shifts.set(k,(shifts.get(k)||0)+1);runPairs.push({ax:a.x,ay:a.y,bx:b.x,by:b.y,dx,dy})}}
+  i=runEnd-1}
+ const groups=[...shifts.entries()].filter(([,c])=>c>=minCount).sort((a,b)=>b[1]-a[1]).slice(0,maxGroups)
+  .map(([k,count])=>{const[dx,dy]=k.split(',').map(Number);
+   const pairs=runPairs.filter(p=>p.dx===dx&&p.dy===dy).slice(0,400);
+   let x0=1e9,y0=1e9,x1=-1,y1=-1;for(const p of pairs){x0=Math.min(x0,p.ax);y0=Math.min(y0,p.ay);x1=Math.max(x1,p.ax);y1=Math.max(y1,p.ay)}
+   // النسخ الحقيقي يتجمع في منطقة محدودة؛ الانتشار الدوري على كامل الصورة يُستبعد
+   const bboxArea=(x1-x0+block)*(y1-y0+block),spread=bboxArea/(width*height);
+   return {dx,dy,count,pairs,spread:+spread.toFixed(3),periodic:spread>0.45}})
+  .filter(g=>!g.periodic);
+ return {groups,blocks:recs.length,note:groups.length?'':'لم تُرصد مناطق مكررة بنفس الإزاحة فوق العتبات'}}
