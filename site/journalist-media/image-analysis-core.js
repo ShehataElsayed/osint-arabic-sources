@@ -210,3 +210,52 @@ export function detectClones(rgba,width,height,{block=16,stride=2,quant=6,minShi
    return {dx,dy,count,pairs,spread:+spread.toFixed(3),periodic:spread>0.45}})
   .filter(g=>!g.periodic);
  return {groups,blocks:recs.length,note:groups.length?'':'لم تُرصد مناطق مكررة بنفس الإزاحة فوق العتبات'}}
+
+// PCA over RGB: projections onto principal components, normalized for review.
+// Like every layer here it is a review indicator only; it cannot classify authenticity.
+export function pcaProjections(rgba,width,height){
+ if(!(rgba instanceof Uint8ClampedArray)||!Number.isInteger(width)||!Number.isInteger(height)||width<1||height<1||rgba.length!==width*height*4)throw Error('مدخلات تحليل المكونات غير صالحة');
+ const n=width*height;let mr=0,mg=0,mb=0;
+ for(let i=0;i<rgba.length;i+=4){mr+=rgba[i];mg+=rgba[i+1];mb+=rgba[i+2]}
+ mr/=n;mg/=n;mb/=n;
+ let c00=0,c01=0,c02=0,c11=0,c12=0,c22=0;
+ for(let i=0;i<rgba.length;i+=4){const r=rgba[i]-mr,g=rgba[i+1]-mg,b=rgba[i+2]-mb;c00+=r*r;c01+=r*g;c02+=r*b;c11+=g*g;c12+=g*b;c22+=b*b}
+ const inv=1/n;c00*=inv;c01*=inv;c02*=inv;c11*=inv;c12*=inv;c22*=inv;
+ // Jacobi eigendecomposition of the symmetric 3x3 covariance
+ let a=[[c00,c01,c02],[c01,c11,c12],[c02,c12,c22]],v=[[1,0,0],[0,1,0],[0,0,1]];
+ for(let sweep=0;sweep<12;sweep++){let off=0;
+  for(const[p,q]of[[0,1],[0,2],[1,2]]){off+=Math.abs(a[p][q]);
+   if(Math.abs(a[p][q])>1e-12){const theta=(a[q][q]-a[p][p])/(2*a[p][q]),t=Math.sign(theta||1)/(Math.abs(theta)+Math.sqrt(theta*theta+1)),c=1/Math.sqrt(t*t+1),sn=t*c;
+    for(let k=0;k<3;k++){const akp=a[k][p],akq=a[k][q];a[k][p]=c*akp-sn*akq;a[k][q]=sn*akp+c*akq}
+    for(let k=0;k<3;k++){const apk=a[p][k],aqk=a[q][k];a[p][k]=c*apk-sn*aqk;a[q][k]=sn*apk+c*aqk}
+    for(let k=0;k<3;k++){const vkp=v[k][p],vkq=v[k][q];v[k][p]=c*vkp-sn*vkq;v[k][q]=sn*vkp+c*vkq}}}
+  if(off<1e-10)break}
+ const order=[0,1,2].sort((x,y)=>a[y][y]-a[x][x]);
+ const vectors=order.map(k=>[v[0][k],v[1][k],v[2][k]]),variances=order.map(k=>Math.max(0,a[k][k]));
+ const mins=[1/0,1/0,1/0],maxs=[-1/0,-1/0,-1/0],raw=[new Float32Array(n),new Float32Array(n),new Float32Array(n)];
+ for(let p=0,i=0;p<n;p++,i+=4){const r=rgba[i]-mr,g=rgba[i+1]-mg,b=rgba[i+2]-mb;
+  for(let k=0;k<3;k++){const val=r*vectors[k][0]+g*vectors[k][1]+b*vectors[k][2];raw[k][p]=val;if(val<mins[k])mins[k]=val;if(val>maxs[k])maxs[k]=val}}
+ const components=raw.map((arr,k)=>{const out=new Uint8ClampedArray(arr.length),span=maxs[k]-mins[k];
+  if(span>1e-9)for(let p=0;p<arr.length;p++)out[p]=Math.round((arr[p]-mins[k])/span*255);
+  return out});
+ return {components,variances:variances.map(x=>+x.toFixed(2)),vectors:vectors.map(vec=>vec.map(x=>+x.toFixed(4)))};
+}
+
+// Magnifier enhancements on a copied RGBA region: histogram equalization or per-channel auto contrast.
+export function enhanceRegion(rgba,{mode='none'}={}){
+ if(!(rgba instanceof Uint8ClampedArray)||rgba.length%4)throw Error('مدخلات التحسين غير صالحة');
+ if(mode==='none')return rgba;
+ if(mode==='auto-contrast'){
+  for(let c=0;c<3;c++){let lo=255,hi=0;
+   for(let i=c;i<rgba.length;i+=4){const val=rgba[i];if(val<lo)lo=val;if(val>hi)hi=val}
+   if(hi>lo)for(let i=c;i<rgba.length;i+=4)rgba[i]=Math.round((rgba[i]-lo)/(hi-lo)*255)}
+  return rgba}
+ if(mode==='equalize'){
+  const hist=new Array(256).fill(0),lum=new Uint8ClampedArray(rgba.length/4);
+  for(let p=0,i=0;p<lum.length;p++,i+=4){const l=Math.round(0.2126*rgba[i]+0.7152*rgba[i+1]+0.0722*rgba[i+2]);lum[p]=l;hist[l]++}
+  const cdf=new Array(256);let acc=0;for(let i=0;i<256;i++){acc+=hist[i];cdf[i]=acc}
+  const total=lum.length||1,map=cdf.map(c=>Math.min(255,Math.round(c/total*255)));
+  for(let p=0,i=0;p<lum.length;p++,i+=4){const l=lum[p];if(l<1)continue;const s=map[l]/l;
+   for(let c=0;c<3;c++)rgba[i+c]=Math.min(255,Math.round(rgba[i+c]*s))}
+  return rgba}
+ throw Error('نمط تحسين غير معروف')}

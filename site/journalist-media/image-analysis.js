@@ -1,6 +1,6 @@
 // تحليل بصري محلي للصورة: بيانات وصفية، فرق إعادة ضغط، خريطة ضوضاء، وروابط بحث عكسي بإذن صريح.
 // كل المخرجات مؤشرات مراجعة بشرية؛ لا تكشف التزييف ولا تحكم بالأصالة.
-import{scanJpeg,parseExif,estimateQuality,scanPng,noiseMap,extractExifThumbnail,luminanceGradient,levelSweep,channelHistogram,extractStrings,detectClones}from'./image-analysis-core.js';
+import{scanJpeg,parseExif,estimateQuality,scanPng,noiseMap,extractExifThumbnail,luminanceGradient,levelSweep,channelHistogram,extractStrings,detectClones,pcaProjections,enhanceRegion}from'./image-analysis-core.js';
 import{jpegDifference}from'../image-difference-core.js';
 const $=(root,id)=>root.querySelector(id);
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
@@ -136,6 +136,43 @@ export async function analyzeImage({file,bytes,bitmap,box,say,isStale}){
   drawCh(hist.r,'#e02424',.75);drawCh(hist.g,'#059669',.75);drawCh(hist.b,'#2563eb',.75);
   const f6=el('figure');f6.append(hc,el('figcaption','المدرج التكراري للقنوات اللونية (أحمر/أخضر/أزرق) — قمم أو فجوات غير متوقعة قد تشير إلى معالجة، مؤشر مراجعة لا حكم.'));
   figs.append(f6);result.figures.push({kind:'histogram',max:hist.max});
+  // PCA: projection onto the three principal components, each normalized for display
+  const pca=pcaProjections(px.data,w,h);
+  const f7=el('figure');f7.className='analysis-pca';
+  const pwrap=el('div');pwrap.className='pca-panes';
+  const paneNames=['الأول','الثاني','الثالث'];
+  pca.components.forEach((comp,k)=>{const pc=document.createElement('canvas');pc.width=w;pc.height=h;
+   const out=new Uint8ClampedArray(w*h*4);for(let p=0,i=0;p<w*h;p++,i+=4){out[i]=out[i+1]=out[i+2]=comp[p];out[i+3]=255}
+   pc.getContext('2d').putImageData(new ImageData(out,w,h),0,0);
+   const pane=el('div');pane.append(pc,el('span','المكوّن '+paneNames[k]+' — تباين '+pca.variances[k]));pwrap.append(pane)});
+  f7.append(pwrap,el('figcaption','تحليل المكونات الرئيسية (PCA): إسقاط قنوات اللون على المحاور الثلاثة الأكثر تباينًا، كل مكوّن مُطبَّع للعرض. اختلاف نمط مكوّن عن بقية الصورة مؤشر مراجعة بشرية فقط، ولا يكشف تلاعبًا ولا يحكم بالأصالة.'));
+  figs.append(f7);result.figures.push({kind:'pca',variances:pca.variances});
+  // Magnifier: interactive lens over the image with optional local enhancement
+  const f8=el('figure');f8.className='analysis-magnifier';
+  const magBase=document.createElement('canvas');magBase.width=w;magBase.height=h;magBase.getContext('2d').drawImage(bitmap,0,0,w,h);
+  const lens=document.createElement('canvas');lens.width=220;lens.height=220;lens.className='magnifier-lens';
+  const magCtl=el('div');magCtl.className='magnifier-ctl';
+  const magRange=document.createElement('input');magRange.type='range';magRange.min='2';magRange.max='16';magRange.step='1';magRange.value='4';magRange.setAttribute('aria-label','التكبير');
+  const magMode=document.createElement('select');magMode.setAttribute('aria-label','التحسين');
+  [['none','بلا تحسين'],['equalize','موازنة المدرج التكراري'],['auto-contrast','تباين تلقائي']].forEach(([val,label])=>{const o=document.createElement('option');o.value=val;o.textContent=label;magMode.append(o)});
+  const magHint=el('span','حرّك المؤشر فوق الصورة');
+  magCtl.append(el('span','التكبير: '),magRange,el('span',' التحسين: '),magMode,magHint);
+  const src=document.createElement('canvas');const srcCtx=src.getContext('2d',{willReadFrequently:true});
+  const drawLens=(cx,cy)=>{const mag=+magRange.value,size=Math.max(8,Math.round(220/mag));
+   const sx=Math.min(Math.max(0,Math.round(cx-size/2)),Math.max(0,w-size)),sy=Math.min(Math.max(0,Math.round(cy-size/2)),Math.max(0,h-size));
+   const sw=Math.min(size,w-sx),sh=Math.min(size,h-sy);if(sw<1||sh<1)return;
+   src.width=sw;src.height=sh;srcCtx.drawImage(magBase,sx,sy,sw,sh,0,0,sw,sh);
+   const region=srcCtx.getImageData(0,0,sw,sh);
+   try{enhanceRegion(region.data,{mode:magMode.value})}catch{}
+   const lctx=lens.getContext('2d');lens.width=sw;lens.height=sh;lctx.putImageData(region,0,0);
+   const scale=220/Math.max(sw,sh);lens.style.width=Math.round(sw*scale)+'px';lens.style.height=Math.round(sh*scale)+'px';
+   magHint.textContent='منطقة '+sw+'×'+sh+' بكسل بتكبير '+mag+'×'};
+  const point=e=>{const r=magBase.getBoundingClientRect(),cx=(e.clientX-r.left)*w/r.width,cy=(e.clientY-r.top)*h/r.height;if(cx>=0&&cy>=0&&cx<w&&cy<h)drawLens(cx,cy)};
+  magBase.addEventListener('pointermove',point);magBase.addEventListener('pointerdown',point);
+  magRange.addEventListener('input',()=>drawLens(w/2,h/2));magMode.addEventListener('change',()=>drawLens(w/2,h/2));
+  drawLens(w/2,h/2);
+  f8.append(magBase,lens,magCtl,el('figcaption','المكبّر: عدسة تفاعلية لفحص منطقة صغيرة عن قرب، مع تحسين محلي اختياري (موازنة المدرج أو تباين تلقائي) لإظهار تفاصيل خافتة. التحسين يغيّر العرض فقط ولا يعدّل الملف، وما يظهره مؤشر مراجعة لا دليل.'));
+  figs.append(f8);result.figures.push({kind:'magnifier',interactive:true});
  }catch(e){result.warnings.push('تعذرت بعض الطبقات: '+e.message)}
  // الصورة المصغرة المضمنة والسلاسل النصية
  if(struct&&struct.exif){
