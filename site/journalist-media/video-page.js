@@ -1,47 +1,98 @@
-import{sampleTimes,stamp,outputSize}from'./video-core.js';
+import{sampleTimes,stamp,outputSize,candidateTimes,meanAbsDiff,pickSceneIndices}from'./video-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
 const L=v=>'⁦'+v+'⁩';
-let generation=0,url=null,record=null,frameShots=[];
+let generation=0,url=null,record=null,frameShots=[],ocrIndex=null;
 async function fingerprint(file){return[...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(v=>v.toString(16).padStart(2,'0')).join('')}
 function event(v,type){return new Promise((resolve,reject)=>{let timer;const cleanup=()=>{clearTimeout(timer);v.removeEventListener(type,done);v.removeEventListener('error',bad)};const done=()=>{cleanup();resolve()},bad=()=>{cleanup();reject(Error('تعذر فك الفيديو أو الانتقال داخله'))};v.addEventListener(type,done,{once:true});v.addEventListener('error',bad,{once:true});timer=setTimeout(bad,15000)})}
-function reset(){frameShots=[];$('ocr-run').disabled=true;$('ocr-box').hidden=true;$('ocr-list').replaceChildren();$('ocr-filter').value='';generation++;if(url)URL.revokeObjectURL(url);url=null;record=null;$('preview').replaceChildren();$('frames').replaceChildren();$('meta').hidden=true;$('meta').textContent='';$('notes-box').hidden=true;$('notes').value='';$('run').disabled=true;$('save').disabled=true}
+function reset(){frameShots=[];$('ocr-run').disabled=true;$('ocr-box').hidden=true;$('ocr-list').replaceChildren();$('ocr-filter').value='';generation++;if(url)URL.revokeObjectURL(url);url=null;record=null;$('preview').replaceChildren();$('frames').replaceChildren();$('meta').hidden=true;$('meta').textContent='';$('vf-result').hidden=true;$('vf-result').replaceChildren();$('notes-box').hidden=true;$('notes').value='';$('run').disabled=true;$('save').disabled=true}
 $('clear').onclick=()=>{reset();$('file').value='';$('clear').hidden=true;say('مُسح الملف من الواجهة. لم يُرفع الملف.')};
-$('file').onchange=async()=>{reset();const f=$('file').files[0];if(!f)return;
+async function accept(f){reset();if(!f)return;
  if(!/^video\/(mp4|webm)$/.test(f.type)||f.size>100*1024*1024){say('اختر MP4 أو WebM حتى 100 ميجابايت.');return}
+ const probe=document.createElement('video');if(f.type&&probe.canPlayType(f.type)===''){say('صيغة الحاوية '+L(f.type)+' غير مدعومة في هذا المتصفح. جرّب متصفحًا آخر أو حوّل الملف إلى MP4 بترميز H.264 ثم أعد المحاولة.');return}
  const id=generation;try{say('حساب بصمة الملف محليًا…');
   const hash=await fingerprint(f);if(id!==generation)return;
   record={name:f.name,bytes:f.size,mime:f.type,sha256:hash,extraction:'not-run'};
   url=URL.createObjectURL(f);
-  const v=el('video');v.controls=true;v.preload='metadata';v.src=url;$('preview').append(v);
+  const v=el('video');v.controls=true;v.preload='auto';v.src=url;$('preview').append(v);
   $('meta').hidden=false;$('meta').textContent=`اسم الملف: ${L(f.name)}\nالحجم: ${L(f.size+' بايت')}\nSHA-256: ${L(hash)}`;
   $('run').disabled=false;$('clear').hidden=false;
-  say('الملف جاهز. البصمة تربط السجل بالملف ولا تثبت أصالته.')}catch(e){say(e.message)}};
+  say('الملف جاهز. البصمة تربط السجل بالملف ولا تثبت أصالته.')}catch(e){say(e.message)}}
+$('file').onchange=()=>accept($('file').files&&$('file').files[0]);
+$('drop').ondragover=e=>{e.preventDefault()};$('drop').ondrop=e=>{e.preventDefault();accept(e.dataTransfer.files&&e.dataTransfer.files[0])};
+
+async function seekTo(v,position){if(Math.abs(v.currentTime-position)>.00001){const s=event(v,'seeked');v.currentTime=position;await s}if(v.readyState<2)await event(v,'loadeddata')}
+
+// عينة إضاءة صغيرة لمقارنة المشاهد: ليست لقطة عرض ولا تصلح دليلًا بذاتها
+function lumaSample(v){const w=64,h=36,c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(v,0,0,w,h);const d=x.getImageData(0,0,w,h).data,out=new Float32Array(w*h);for(let i=0;i<w*h;i++)out[i]=d[i*4]*.2126+d[i*4+1]*.7152+d[i*4+2]*.0722;return out}
+
+async function sceneTimes(v,id,count){const times=candidateTimes(v.duration),thumbs=[];
+ for(let i=0;i<times.length;i++){if(id!==generation)return null;
+  say(`مسح تغيّر المشهد: عينة ${L(i+1)} من ${L(times.length)}…`);
+  await seekTo(v,times[i]===0?Math.min(.001,v.duration/10):times[i]);
+  thumbs.push(lumaSample(v))}
+ const scores=[0];for(let i=1;i<thumbs.length;i++)scores.push(meanAbsDiff(thumbs[i-1],thumbs[i]));
+ const picked=pickSceneIndices(scores,count);
+ return{times:picked.map(p=>times[p.index]),scores:picked.map(p=>scores[p.index]),kinds:picked.map(p=>p.kind)}}
+
+
+function resultCard(rows){const c=el('div',undefined,'layer-result');
+ for(const[label,parts,cls]of rows){const p=el('p',undefined,cls);p.append(el('span',label));for(const part of parts){if(typeof part==='string')p.append(document.createTextNode(part));else p.append(part)}c.append(p)}return c}
+const ltr=text=>{const s=el('span',text);s.dir='ltr';return s};
+
 $('run').onclick=async()=>{if(!record||!url)return;const id=generation;$('run').disabled=true;$('file').disabled=true;
- try{const v=$('preview').querySelector('video');
+ try{frameShots=[];ocrIndex=null;$('ocr-box').hidden=true;$('ocr-list').replaceChildren();$('ocr-filter').value='';$('ocr-run').disabled=true;$('vf-result').hidden=true;$('vf-result').replaceChildren();delete record.ocrIndex;
+  const v=$('preview').querySelector('video');
   if(v.readyState<1)await event(v,'loadedmetadata');if(id!==generation)return;
-  const times=sampleTimes(v.duration,4),[w,h]=outputSize(v.videoWidth,v.videoHeight);
+  const count=+$('vf-count').value,mode=$('vf-mode').value,[w,h]=outputSize(v.videoWidth,v.videoHeight);
+  let times,scores=null;
+  let kinds=null;
+  if(mode==='scene'){const r=await sceneTimes(v,id,count);if(!r||id!==generation)return;times=r.times;scores=r.scores;kinds=r.kinds}
+  else times=sampleTimes(v.duration,count);
   $('frames').replaceChildren();const frames=[];
-  for(const time of times){if(id!==generation)return;
-   const seekPosition=time===0?Math.min(.001,v.duration/10):time;
-   if(Math.abs(v.currentTime-seekPosition)>.00001){const seek=event(v,'seeked');v.currentTime=seekPosition;await seek}
-   if(v.readyState<2)await event(v,'loadeddata');if(id!==generation)return;
+  for(let k=0;k<times.length;k++){if(id!==generation)return;
+   say(`استخراج اللقطات: ${L(k+1)} من ${L(times.length)}…`);
+   await seekTo(v,times[k]===0?Math.min(.001,v.duration/10):times[k]);if(id!==generation)return;
    const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(v,0,0,w,h);
    const img=el('img');img.src=c.toDataURL('image/jpeg',.9);img.alt='لقطة عند '+stamp(v.currentTime);
-   const fig=el('figure'),cap=el('figcaption');cap.textContent=img.alt+' من بداية الملف';
+   const fig=el('figure'),cap=el('figcaption');cap.textContent=img.alt+' من بداية الملف'+(kinds?(kinds[k]==='change'?' · تغيّر مرصود · درجة '+scores[k].toFixed(1):(k===0?' · لقطة البداية المرجعية':' · لقطة زمنية تكميلية')):'');
    const position=v.currentTime;
    const dl=el('button','نزّل اللقطة');dl.onclick=()=>{const a=document.createElement('a');a.href=img.src;a.download=`frame-${Math.round(position*1000)}.jpg`;a.click()};
-   fig.append(img,cap,dl);$('frames').append(fig);
-   frames.push({requestedSeconds:time,browserPositionSeconds:position,width:w,height:h});
+   fig.append(img,cap,dl);
+   if(window.OshaiReverseSearch){ // per-frame explicit-consent reverse search (two-press; no upload otherwise)
+    const rs=el('button','ابحث عكسيًا عن هذه اللقطة','rs-btn');const rsStatus=el('p','','rs-status');const rsResults=el('div','','rs-results');
+    window.OshaiReverseSearch.initReverseSearch({canvas:c,btn:rs,status:rsStatus,results:rsResults});
+    fig.append(rs,rsStatus,rsResults)}
+   $('frames').append(fig);
+   const entry={requestedSeconds:times[k],browserPositionSeconds:position,width:w,height:h};
+   if(kinds){entry.sceneScore=+scores[k].toFixed(2);entry.kind=kinds[k]==='change'?'scene-change':'temporal-fill'}
+   frames.push(entry);
    frameShots.push({src:img.src,stamp:stamp(position)})}
-  record={...record,extraction:'browser-temporal-sampling',duration:v.duration,frames,
-   limitations:'Approximate browser offsets, not capture dates or forensic frame precision. No audio/vision analysis. Short events can be missed.'};
+  if(id!==generation)return;
+  record={...record,extraction:mode==='scene'?'browser-scene-change-keyframes':'browser-temporal-sampling',extractionMode:mode==='scene'?'scene-change':'even',requestedCount:count,duration:v.duration,frames,
+   limitations:mode==='scene'?'Scene points picked by a statistical luma-difference sweep; important changes can be missed and incidental changes surfaced. Approximate browser offsets, not capture dates or forensic frame precision. No audio/vision analysis.':'Approximate browser offsets, not capture dates or forensic frame precision. No audio/vision analysis. Short events can be missed.'};
+  // بطاقة النتيجة المهنية
+  const box=$('vf-result');box.replaceChildren();
+  const noun=frames.length===2?'لقطتان':frames.length<=10?'لقطات':'لقطة';
+  const changeCount=kinds?kinds.filter(x=>x==='change').length:0;
+  const obs=['استُخرجت ',ltr(String(frames.length)),' '+noun+' '+(mode==='scene'?'بأسلوب نقاط تغيّر المشهد':'بتوزيع زمني متساوٍ')+' من فيديو مدته ',ltr(stamp(v.duration)),' بدقة ',ltr(w+'×'+h),'، وتغطي من ',ltr(stamp(frames[0].browserPositionSeconds)),' إلى ',ltr(stamp(frames[frames.length-1].browserPositionSeconds)),' من بداية الملف.'];
+  if(mode==='scene')obs.push(' منها ',ltr(String(changeCount)),' عند تغيّرات مرصودة فعلًا، و',ltr(String(frames.length-changeCount)),' لقطات زمنية تكميلية لاكتمال العدد المطلوب (موسومة بذلك أسفل كل لقطة).');
+  const coreLimit='مواضع اللقطات تقريبية كما يقرؤها المتصفح وليست توقيت التقاط؛ لا تحليل رؤية ولا حكم أصالة.';
+  const sig=['الأحداث القصيرة بين اللقطات قد تفوت، والمواضع ليست دقة جنائية بالإطار.'];
+  if(mode==='scene')sig.push(' اختيار نقاط التغيير إحصائي (فرق الإضاءة بين عينات متقاربة): قد يفوّت تغيّرات مهمة وقد يبرز تغيّرات عرضية كالوميض أو الحركة السريعة؛ اللقطات الزمنية التكميلية ليست تغيّرات مرصودة.');
+  const step=['راجع كل لقطة أمام الأصل ودوّن ملاحظاتك، ونزّل ما يهمك وابحث عنه عكسيًا لدى ',link('Google Lens','https://lens.google.com/'),' أو ',link('TinEye','https://tineye.com/'),' أو ',link('Yandex Images','https://yandex.com/images/'),' (الرفع يدوي هناك؛ الملف لا يغادر جهازك من هذه الصفحة). استخرج فهرس نص اللقطات عند الحاجة، ثم نزّل سجل JSON لتوثيق المراجعة.'];
+  const card=resultCard([['الملاحظة',obs,'obs'],['حدود أساسية',[coreLimit],'sig']]);
+  const det=document.createElement('details');det.className='vf-more';if(matchMedia('(min-width:700px)').matches)det.open=true;
+  const sum=document.createElement('summary');sum.textContent='التفاصيل وخطوة التحقق';det.append(sum,resultCard([['الدلالة والحدود',sig,'sig'],['خطوة التحقق',step,'next']]));
+  card.append(det);box.append(card);box.hidden=false;
   $('notes-box').hidden=false;$('save').disabled=false;
   if(typeof Tesseract!=='undefined')$('ocr-run').disabled=false;
-  say('اكتملت اللقطات الأربع محليًا. راجعها أمام الأصل ودوّن ملاحظاتك؛ هذا ليس تحليل رؤية ولا حكم أصالة.')}
+  say('اكتمل استخراج '+L(String(frames.length))+' '+(frames.length===2?'لقطتان':frames.length<=10?'لقطات':'لقطة')+' محليًا. راجعها أمام الأصل ودوّن ملاحظاتك؛ هذا ليس تحليل رؤية ولا حكم أصالة.')}
  catch(e){if(id===generation)say('لم يكتمل الاستخراج: '+e.message)}
  finally{if(id===generation){$('file').disabled=false;$('run').disabled=false}}};
-let ocrIndex=null;
+
+function link(text,href){const a=el('a',text);a.href=href;a.target='_blank';a.rel='noopener noreferrer';return a}
+
 $('ocr-run').onclick=async()=>{if(!frameShots.length||typeof Tesseract==='undefined')return;
  $('ocr-run').disabled=true;$('file').disabled=true;
  try{say('استخراج نص اللقطات محليًا… قد يستغرق دقيقة.');
