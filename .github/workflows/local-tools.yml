@@ -26,3 +26,6 @@ jobs:
       - run: CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:image-difference
       - run: CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:browser
       - run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:journalist
+
+      - name: Domain evidence integrity regression
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/domain-integrity.cjs

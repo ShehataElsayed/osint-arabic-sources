@@ -44,7 +44,13 @@ function renderAxis(){
  const ticks=new Set([min,max]);
  const days=span/86400000,step=days>730?365:days>120?30:days>14?7:1;
  for(let t=Date.parse(min);t<=Date.parse(max);t+=step*86400000)ticks.add(new Date(t).toISOString().slice(0,10));
- for(const t of ticks){const tx=document.createElementNS(ns,'text');tx.setAttribute('x',x(t));tx.setAttribute('y',122);tx.setAttribute('text-anchor','middle');tx.setAttribute('class','tl-tick');tx.textContent=t;svg.append(tx);
+ // collision filter: drop labels whose x positions are too close (RTL axis, ~72px min gap)
+ const MIN_GAP=72, placed=[];
+ const sorted=[...ticks].sort((a,b)=>Date.parse(a)-Date.parse(b));
+ const kept=sorted.filter(t=>{const px=x(t);if(placed.some(q=>Math.abs(q-px)<MIN_GAP))return false;placed.push(px);return true});
+ // min and max always kept: evict any stepped tick colliding with them
+ for(const t of[min,max])if(!kept.includes(t)){const px=x(t);for(let k=kept.length-1;k>=0;k--)if(Math.abs(x(kept[k])-px)<MIN_GAP)kept.splice(k,1);kept.push(t)}
+ for(const t of kept){const tx=document.createElementNS(ns,'text');tx.setAttribute('x',x(t));tx.setAttribute('y',122);tx.setAttribute('text-anchor','middle');tx.setAttribute('class','tl-tick');tx.textContent=t;svg.append(tx);
   const tl=document.createElementNS(ns,'line');for(const[k,v]of Object.entries({x1:x(t),x2:x(t),y1:92,y2:100,stroke:'#b9aca2'}))tl.setAttribute(k,v);svg.append(tl)}
  dated.forEach((e,i)=>{const cx=x(e.date),up=i%2===0,cy=up?60:150;
   const g=document.createElementNS(ns,'g');g.setAttribute('class','tl-mark');g.setAttribute('tabindex','0');g.setAttribute('role','button');g.setAttribute('aria-label',e.text);

@@ -1,6 +1,16 @@
 // Deterministic aids only. Human decisions remain separate from exact source spans.
 export const TOOL_NAMES={claims:'الادعاءات والأدلة',entities:'الكيانات والعلاقات',timeline:'الخط الزمني',versions:'مقارنة نسختين',ocr:'OCR ومراجعة الأصل',translation:'مكتب الترجمة',image:'سياق الصورة',video:'لقطات الفيديو',domain:'ملف النطاق',planner:'خطة التحقق'};
-export function sentences(text){const out=[];for(const m of text.matchAll(/[^\n.!؟?]+[.!؟?]?/gu)){const quote=m[0].trim();if(quote)out.push({quote,start:m.index+m[0].indexOf(quote),end:m.index+m[0].indexOf(quote)+quote.length})}return out}
+export function sentences(text){
+ const out=[];let start=0;
+ const push=end=>{const raw=text.slice(start,end),quote=raw.trim();if(quote){const left=start+raw.indexOf(quote);out.push({quote,start:left,end:left+quote.length})}start=end};
+ for(let i=0;i<text.length;i++){
+  const c=text[i];
+  if(c==='.'&&/[\p{N}]/u.test(text[i-1]||'')&&/[\p{N}]/u.test(text[i+1]||''))continue;
+  if(/[\n.!؟?]/u.test(c))push(i+1);
+ }
+ if(start<text.length)push(text.length);
+ return out;
+}
 export function tokens(text){return [...text.matchAll(/\p{N}+(?:[.,٫٬/]\p{N}+)*/gu)].map(m=>m[0])}
 export function negations(text){return [...text.matchAll(/(?:^|\s)(لم|لن|ليس|ليست|لا|غير|not|no|never|without)(?=\s|[.،,؛;!?؟]|$)/giu)].map(m=>m[1])}
 export function claimCandidates(text){return sentences(text).map(s=>({...s,numbers:tokens(s.quote),negative:negations(s.quote),status:'candidate',note:'تقسيم لغوي فقط، ليس تصنيفًا للادعاء. احذف الآراء والأوامر وحدد القابل للفحص.'}))}

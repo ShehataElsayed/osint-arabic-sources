@@ -13,3 +13,13 @@ test('video candidate times scale with duration and stay inside the file',()=>{c
 test('video luma difference is symmetric and bounded',()=>{assert.equal(meanAbsDiff([0,10,255],[255,10,0]),170);assert.equal(meanAbsDiff([5,5],[5,5]),0);assert.throws(()=>meanAbsDiff([1],[1,2]));assert.throws(()=>meanAbsDiff([],[]))});
 test('video scene picker ranks real changes and labels temporal fills honestly',()=>{const picked=pickSceneIndices([0,1,50,2,60,3,1,1],4);assert.deepEqual(picked,[{index:0,kind:'fill'},{index:2,kind:'change'},{index:4,kind:'change'},{index:5,kind:'fill'}]);const staticPicks=pickSceneIndices([0,0,0,0,0,0],4);assert.equal(staticPicks.length,4);assert.ok(staticPicks.every(p=>p.kind==='fill'),'static video yields no fake changes');assert.ok(pickSceneIndices([0,1,2,1,2,1],3).every(p=>p.kind==='fill'),'sub-threshold wobble is not a change');assert.throws(()=>pickSceneIndices([0],4));assert.throws(()=>pickSceneIndices([0,Number.NaN,1],3))});
 test('video even sampling and output bounds unchanged',()=>{assert.equal(sampleTimes(6,4).length,4);assert.throws(()=>sampleTimes(6,13));assert.deepEqual(outputSize(640,360),[640,360]);assert.throws(()=>outputSize(5000,5000))});
+
+test('sentence boundaries preserve decimal numbers and exact source spans',()=>{
+ const input='Magnitude 7.8 earthquake struck. ثم سجلت هزة ٦.٧ أخرى! Cost 12.50 dollars.';
+ const rows=claimCandidates(input);
+ assert.equal(rows.length,3);
+ assert.ok(rows[0].quote.includes('7.8'));
+ assert.ok(rows[1].quote.includes('٦.٧'));
+ assert.ok(rows[2].quote.includes('12.50'));
+ for(const row of rows)assert.equal(input.slice(row.start,row.end),row.quote);
+});
