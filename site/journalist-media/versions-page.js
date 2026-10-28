@@ -1,4 +1,5 @@
 import{numberChanges}from'./versions-numbers-core.js';
+import{claimChanges}from'./versions-claims-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
 const MAXL=800;
@@ -88,6 +89,19 @@ $('compare').onclick=()=>{
   if(nc.onlyRemoved||nc.onlyAdded)nbox.append(el('p',`أرقام ضمن سطور محذوفة بالكامل: ${nc.onlyRemoved} — أرقام ضمن سطور مضافة بالكامل: ${nc.onlyAdded}`,'vn-extra'));
   if(nc.truncated)nbox.append(el('p','قُصر العرض عند أول ٥٠ تغييرًا رقميًا.','vn-extra'))}
  else nbox.hidden=true;
+ // claim-phrasing change panel (leads only - rules cannot judge meaning)
+ const cc=claimChanges(ops,A,B),cbox=$('claimchg');cbox.replaceChildren();
+ if(cc.length){
+  cbox.hidden=false;
+  cbox.append(el('h3','تغيّرات محتملة في صيغ الادعاء'));
+  cbox.append(el('p','قواعد محلية ترصد تغيّر كلمات النسبة والنفي والتعميم داخل السطور المعدلة؛ لا تحكم على تغيّر المعنى - راجع النصين بنفسك.','hint'));
+  for(const c of cc){
+   const card=el('div',undefined,'vn-card');
+   card.append(el('p',`سطر ${c.aLine} ← سطر ${c.bLine} · كلمات حساسة تغيّرت: ${c.changedSensitive.join('، ')}`,'vn-lns'));
+   const old=el('div',undefined,'vn-old');old.textContent=c.oldText;
+   const nw=el('div',undefined,'vn-new');nw.textContent=c.newText;
+   card.append(old,nw);cbox.append(card)}}
+ else cbox.hidden=true;
  $('result').hidden=false;
  last={format:'versions-diff-v1',options:{ignoreWhitespace:ign},stats:{...st,similarityPct:sim},limits:'Line-based comparison; moved paragraphs appear as delete+add. Word highlights are approximate token matches.',
   ops:ops.map(o=>({type:o.t,a:o.a!==undefined?A[o.a]:undefined,b:o.b!==undefined?B[o.b]:undefined,aLine:o.a!==undefined?o.a+1:undefined,bLine:o.b!==undefined?o.b+1:undefined}))};

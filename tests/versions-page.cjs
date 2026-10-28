@@ -30,12 +30,19 @@ await p.click('#compare');
 assert.ok((await p.locator('#stats').textContent()).includes('100%'),'whitespace-only change ignored by default');
 assert.equal(await p.locator('#diff .vd-same').count(),2);
 assert.ok(await p.locator('#numchg').isHidden(),'number panel hidden when no numeric change');
+assert.ok(await p.locator('#claimchg').isHidden(),'claim panel hidden when no sensitive change');
+// claim-phrasing change (B5): attribution/negation edit surfaced as review lead
+await p.fill('#va','قال المتحدث إن التكلفة تبلغ 40 مليون جنيه.');await p.fill('#vb','نفى المتحدث أن التكلفة تبلغ 40 مليون جنيه.');
+await p.click('#compare');
+assert.ok(!(await p.locator('#claimchg').isHidden()),'claim panel shown');
+const cc=await p.locator('#claimchg').textContent();
+assert.ok(cc.includes('قال')&&cc.includes('نفي'),'changed sensitive words listed');
 // export
 const[d]=await Promise.all([p.waitForEvent('download'),p.click('#export')]);
 const ex=JSON.parse(fs.readFileSync(await d.path()));
 assert.equal(ex.format,'versions-diff-v1');
-assert.equal(ex.stats.same,2);
-assert.ok(ex.ops.length===2);
+assert.equal(ex.stats.same,0);
+assert.ok(ex.ops.length===1);
 assert.deepEqual(external,[],'everything stayed local: '+external.join(','));
 await p.screenshot({path:'test-output/versions-page-desktop.png',fullPage:true});
 for(const width of [390,320]){await p.setViewportSize({width,height:1000});await p.waitForTimeout(300);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'no horizontal scroll at '+width);await p.screenshot({path:`test-output/versions-page-${width}.png`,fullPage:true})}

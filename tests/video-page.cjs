@@ -13,6 +13,12 @@ const classes=await p.evaluate(()=>[...document.querySelectorAll('#frames figure
 assert.deepEqual(classes,['red','red','blue','blue'],'real canvas frames from the actual video scenes');
 assert.deepEqual(external,[],'frame capture is fully local: '+external.join(','));
 for(const sel of ['#meta','#frames figcaption'])assert.equal(await p.evaluate(s=>getComputedStyle(document.querySelector(s)).direction,sel),'ltr','technical values isolated LTR: '+sel);
+// frame text index (B2): local OCR per frame, review caveat
+assert.ok(await p.evaluate(()=>!document.querySelector('#ocr-run').disabled),'ocr index button enabled after frames');
+await p.click('#ocr-run');
+await p.waitForFunction(()=>!document.querySelector('#ocr-box').hidden,{timeout:90000});
+assert.equal(await p.locator('#ocr-list .vf-ocr').count(),4,'ocr index entry per frame');
+assert.deepEqual(external,[],'ocr indexing stayed local: '+external.join(','));
 await p.fill('#notes','ملاحظة مراجعة اختبارية');
 const[d]=await Promise.all([p.waitForEvent('download'),p.click('#save')]);
 const rec=JSON.parse(fs.readFileSync(await d.path()));
@@ -20,6 +26,8 @@ assert.equal(rec.format,'video-frames-record-v1');
 assert.equal(rec.source.frames.length,4);
 assert.equal(rec.source.sha256.length,64);
 assert.equal(rec.humanNotes,'ملاحظة مراجعة اختبارية');
+assert.equal(rec.source.ocrIndex.frames.length,4,'ocr index exported');
+assert.ok(rec.source.ocrIndex.caveat.includes('unverified'),'engine caveat exported');
 assert.equal(rec.reviewState,'manual-review-required');
 const[df]=await Promise.all([p.waitForEvent('download'),p.locator('#frames figure button').first().click()]);
 assert.ok((await df.path()).length>0,'per-frame JPEG downloads');

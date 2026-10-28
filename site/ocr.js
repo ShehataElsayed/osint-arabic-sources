@@ -31,7 +31,25 @@ import{flagSuspectTokens}from'./journalist-media/ocr-review-core.js';
     }
   }
   let imgURL = null, busy = false;
-  function clearResult() { out.value = ''; out.hidden = true; copy.hidden = true; review.hidden = true; reviewList.replaceChildren(); }
+  function clearResult() { out.value = ''; out.hidden = true; copy.hidden = true; review.hidden = true; reviewList.replaceChildren(); layoutSideBySide(false); }
+  function layoutSideBySide(on) {
+    const row = document.getElementById('review-row');
+    if (on) {
+      if (!row || !preview.src) return;
+      row.hidden = false;
+      const imgCell = row.querySelector('.ocr-img-cell');
+      imgCell.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = preview.src; img.alt = 'الصورة الأصلية للمراجعة جنب النص';
+      imgCell.appendChild(img);
+      row.querySelector('.ocr-txt-cell').appendChild(out);
+      out.hidden = false;
+    } else if (row && !row.hidden) {
+      row.parentNode.insertBefore(out, row);
+      row.hidden = true;
+      row.querySelector('.ocr-img-cell').innerHTML = '';
+    }
+  }
   function clearImage() {
     if (imgURL) URL.revokeObjectURL(imgURL);
     imgURL = null; preview.removeAttribute('src'); preview.hidden = true; run.disabled = true;
@@ -64,6 +82,7 @@ import{flagSuspectTokens}from'./journalist-media/ocr-review-core.js';
       const text = (result && result.data && result.data.text || '').trim();
       out.value = text; out.hidden = false; copy.hidden = !text;
       renderReview(text);
+      layoutSideBySide(true);
       status.textContent = text ? 'اكتمل الاستخراج. راجع النص قبل الاعتماد عليه.' : 'لم يُستخرج نص واضح؛ جرّب صورة أوضح أو لغة أخرى.';
     } catch (e) {
       status.textContent = 'تعذّر الاستخراج: ' + (e && e.message ? e.message : 'خطأ غير معروف');

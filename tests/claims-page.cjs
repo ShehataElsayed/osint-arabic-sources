@@ -18,6 +18,9 @@ const stats=await p.locator('#stats').textContent();
 // candidates: attribution, quote(نسب قول via نقل? no — quote signal only), superlative, conditional, negation-with-number? S_NEG has no signals... it has "أي دليل" no digits; signals: none => not candidate
 // expected candidates: S_ATTR, S_QUOTE, S_SUPER, S_COND = 4; opinion and imperative excluded; negation has no signal (plain); plain excluded
 assert.equal(await p.locator('#claims .cl-card').count(),4,'only candidate claims shown by default');
+// missing-evidence hints (B4): heuristic absence notes, not truth judgments
+assert.ok(await p.locator('#claims .cl-missing').count()>=1,'missing-evidence notes rendered');
+assert.ok((await p.locator('#claims .cl-missing').first().textContent()).includes('الدليل الناقص'),'missing-evidence label shown');
 const cards=await p.locator('#claims .cl-card').allTextContents();
 assert.ok(cards[0].includes(S_ATTR),'verbatim sentence 1');
 assert.ok(cards.some(c=>c.includes('نسبة قول إلى مصدر')&&c.includes('أرقام')&&c.includes('تاريخ أو زمن')),'attribution card carries its signals');
