@@ -18,11 +18,18 @@ assert.equal(await p.locator('#diff .vd-del').count(),1,'one removed row (انت
 const mod=p.locator('#diff .vd-mod').first();
 assert.ok((await mod.locator('del').allTextContents()).join('').includes('40'),'removed word 40 highlighted');
 assert.ok((await mod.locator('ins').allTextContents()).join('').includes('55'),'added word 55 highlighted');
+// number-change panel surfaces the 40 -> 55 change with before/after text
+assert.ok(!(await p.locator('#numchg').isHidden()),'number panel shown');
+const nc=await p.locator('#numchg').textContent();
+assert.ok(nc.includes('40')&&nc.includes('55'),'changed numbers listed');
+assert.ok(await p.locator('#numchg .vn-card .vn-old').first().textContent().then(s=>s.includes('40')),'before text shown');
+assert.ok(await p.locator('#numchg .vn-card .vn-new').first().textContent().then(s=>s.includes('55')),'after text shown');
 // whitespace-insensitive option keeps matching despite spacing change
 await p.fill('#va','سطر واحد   بمسافات\nانتهى');await p.fill('#vb','سطر واحد بمسافات\nانتهى');
 await p.click('#compare');
 assert.ok((await p.locator('#stats').textContent()).includes('100%'),'whitespace-only change ignored by default');
 assert.equal(await p.locator('#diff .vd-same').count(),2);
+assert.ok(await p.locator('#numchg').isHidden(),'number panel hidden when no numeric change');
 // export
 const[d]=await Promise.all([p.waitForEvent('download'),p.click('#export')]);
 const ex=JSON.parse(fs.readFileSync(await d.path()));
