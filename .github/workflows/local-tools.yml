@@ -65,3 +65,6 @@ jobs:
 
       - name: Video frame review case portability
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/video-case-portability.cjs
+
+      - name: Image observation case portability
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/image-case-portability.cjs
