@@ -14,6 +14,10 @@ assert.ok(meta.includes('TestCam')&&meta.includes('UnitTestEditor'));
 const qs=await p.locator('.analysis-questions').textContent();
 assert.ok(qs.includes('UnitTestEditor'),'software-derived verification question generated');
 assert.ok(qs.includes('أسئلة')||qs.includes('اطلب'),'questions panel rendered');
+// gps actions must not overlap (regression: link and button rendered as colliding inline pills)
+const boxes=await p.evaluate(()=>{const r=s=>{const e=document.querySelector(s);if(!e)return null;const b=e.getBoundingClientRect();return{x:b.x,y:b.y,w:b.width,h:b.height}};return{a:r('.analysis-gps a'),btn:r('.analysis-gps button')}});
+assert.ok(boxes.a&&boxes.btn,'gps link and button exist');
+assert.ok(boxes.btn.y>=boxes.a.y+boxes.a.h-1,'no vertical overlap between OSM link and geocode button');
 assert.equal(await p.locator('.analysis-figures canvas').count(),11,'ELA, noise, clone, gradient, sweep, histogram, PCA x3, magnifier base+lens');
 const figText=await p.locator('.analysis-figures').textContent();
 assert.ok(figText.includes('المكوّن الأول')&&figText.includes('تحليل المكونات الرئيسية'),'PCA panes rendered');
