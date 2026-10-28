@@ -1,0 +1,53 @@
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="description" content="رصد كيانات محلي: الصق وثيقة أو أكثر، وتستخرج الأداة الصيغ السطحية المتكررة (أسماء محتملة) مع مواضع ورودها الحرفية في كل وثيقة، وتعرض التزامن الجملي بينها كقرينة لا كعلاقة. الهوية غير محسومة حتى تحسمها أنت؛ كل المعالجة على جهازك."><title>رصد الكيانات والتزامن | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
+<link rel="stylesheet" href="./shell.css"><style>
+.en-src textarea{width:100%;min-height:170px}
+.en-grid{display:grid;grid-template-columns:280px 1fr;gap:14px;margin-top:12px}
+@media(max-width:800px){.en-grid{grid-template-columns:1fr}}
+.en-list{display:grid;gap:8px;align-content:start}
+.en-item{background:#faf9f7;border:1px solid #eee7e1;border-radius:10px;padding:10px 12px;color:#191c20;cursor:pointer;text-align:start;font:inherit;font-size:14px}
+.en-item[aria-pressed="true"]{outline:2px solid #d42c22}
+.en-item small{display:block;color:#7d6a5f;font-size:12px}
+.en-item.en-dismissed{opacity:.55;text-decoration:line-through}
+.en-detail{background:#faf9f7;border:1px solid #eee7e1;border-radius:12px;padding:14px;color:#191c20;min-height:120px}
+.en-detail blockquote{margin:6px 0;font-size:13.5px;color:#191c20;border-inline-start:3px solid #d42c22;padding-inline-start:10px}
+.en-mention{font-size:12.5px;color:#7d6a5f;direction:ltr;unicode-bidi:isolate;display:inline-block}
+.en-chip{font-size:11.5px;font-weight:700;background:#fff3e0;border:1px solid #f0dfc2;border-radius:999px;padding:2px 10px;color:#7a4b00;display:inline-block;margin:2px}
+.en-chip.en-warn{background:#fdecea;border-color:#f5c6c0;color:#8c1d18}
+.en-graphwrap{background:#faf9f7;color:#191c20;border:1px solid #eee7e1;border-radius:12px;padding:10px;margin-top:14px;overflow-x:auto}
+.en-graph svg{display:block;min-width:560px;width:100%}
+.en-node{cursor:pointer}
+.en-node circle{fill:#fff;stroke:#d42c22;stroke-width:2}
+.en-node text{font:700 12px Cairo,Tahoma,sans-serif;fill:#191c20}
+.en-edge-vis{stroke:#c9b6a8}
+.en-edge{cursor:pointer}
+.en-edge-dot{fill:#fff;stroke:#c9b6a8;stroke-width:1.5}
+.en-edge:hover .en-edge-dot{stroke:#d42c22}
+.en-edge-num{font:700 10px Cairo,Tahoma,sans-serif;fill:#8c1d18;pointer-events:none}
+.en-toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.en-toolbar select,.en-toolbar input{font:inherit}
+</style><link rel="stylesheet" href="./identity.css"></head><body><a class="skip-link" href="#main">تخطَّ إلى المحتوى</a><div class="app"><header class="top"><div class="brand"><img alt="شعار OS" src="./brand/oshai-mark.svg"><div><a class="brand-home" href="./index.html" aria-label="افتح الصفحة الرئيسية">دليل المصادر المفتوحة للصحفيين العرب</a><small>أدوات ومنهجيات ومكتبات للبحث الصحفي</small></div></div><nav class="topnav shellnav" aria-label="التنقل الرئيسي"><a href="./index.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M6 10v10h4v-6h4v6h4V10"/></svg></span>ابدأ</a><details data-active="1"><summary><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6M10 7v6"/></svg></span>الأدوات</summary><div class="menu"><a href="./index.html#tree">خريطة الأدوات</a><a href="./map.html#python">مكتبات بايثون</a><a href="./map.html#ai">أدوات الذكاء الاصطناعي</a><a href="./commands.html">الأوامر الاستقصائية</a><a href="./smart-search.html">بحث ذكي تجريبي</a><a href="./ocr.html">استخراج نص من صورة</a><a href="./image-analysis.html">فحص بيانات الصورة</a><a href="./domain-dossier.html">ملف النطاق</a><a href="./video-frames.html">لقطات الفيديو</a><a href="./timeline.html">الخط الزمني</a><a href="./versions.html">مقارنة النسخ</a><a href="./claims.html">رصد الادعاءات</a><a href="./entities.html" aria-current="page">رصد الكيانات</a><a href="./data-lab.html">مختبر البيانات</a></div></details><details><summary><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg></span>التحقق</summary><div class="menu"><a href="./verification.html">مسارات التحقق</a><a href="./assistant.html">مساعد NewsRAG</a></div></details><a href="./methodology.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5c3-2 5-1 8 1 3-2 5-3 8-1v14c-3-2-5-1-8 1-3-2-5-3-8-1V5ZM12 6v14"/></svg></span>المنهجية</a></nav></header><span id="main"></span><main>
+<section class="hero"><span class="badge">محلي بالكامل · لا يُرفع النص</span><h1>رصد الكيانات والتزامن</h1><p>الصق وثيقة واحدة أو أكثر (افصل بين الوثائق بسطر يحوي === فقط). تستخرج الأداة الصيغ السطحية المتكررة من كلمتين أو ثلاث كمرشحات أسماء: ليست تمييز كيانات آليًا، بل مرشحات تراجعها أنت. لكل مرشح مواضع وروده الحرفية في كل وثيقة مع اقتباس الجملة. الصيغة الواحدة قد تعود لشخصين مختلفين، والصيغتان قد تعودان لشخص واحد؛ الهوية تبقى غير محسومة حتى تدمج أو تفصل بنفسك. مخطط التزامن يعرض من ظهر في الجملة الواحدة مع من كقرينة بحث، لا كعلاقة مثبتة.</p></section>
+<section class="box en-src">
+<label for="src">الوثائق (افصل بينها بسطر ===)</label>
+<textarea id="src" maxlength="120000" placeholder="الصق نص الوثيقة الأولى&#10;===&#10;الصق نص الوثيقة الثانية"></textarea>
+<div class="row" style="margin-top:12px"><button id="extract">استخرج المرشحات</button><button id="export" disabled>نزّل النتيجة JSON</button></div>
+<p id="status" role="status"></p>
+</section>
+<section class="box" id="result" hidden>
+<h2>المرشحات والتزامن</h2>
+<div class="en-grid">
+<div class="en-list" id="list" role="list"></div>
+<div>
+<div class="en-detail" id="detail"><p class="en-hint">اختر مرشحًا من القائمة أو عقدة من المخطط لعرض مواضع وروده وقرارات الهوية.</p></div>
+<div class="en-toolbar" id="toolbar" hidden>
+<select id="merge-target" aria-label="ادمج مع مرشح آخر"></select>
+<button id="merge">ادمج الصيغتين كهوية واحدة</button>
+<button id="ambiguity">علّم: قد تعود لكيانات مختلفة</button>
+<button id="dismiss">استبعد: ليس كيانًا</button>
+</div>
+</div>
+</div>
+<div class="en-graphwrap"><h3>مخطط التزامن الجملي (قرينة لا علاقة)</h3><div class="en-graph" id="graph"></div><div class="en-detail" id="edge-detail" hidden></div></div>
+</section>
+<section class="box"><h2>حدود مهمة</h2><p>الاستخراج تكراري سطحي: تظهر عبارات متكررة ليست أسماء (استبعدها بنفسك) وقد تفوت أسماء وردت مرة واحدة أو بصيغ مختلفة. تطابق الصيغة لا يثبت وحدة الشخص، وتعدد الصيغ لا ينفيه؛ قرارات الدمج والفصل لك وتوثق في التصدير. التزامن الجملي يعني الورود المشترك فقط: لا علاقة ولا دور ولا اتجاه. لا مطابقة مع قواعد بيانات خارجية ولا اتصال بالشبكة؛ حد 120 ألف حرف و20 وثيقة.</p></section>
+</main><footer><strong>صممت بواسطة مهندس شحاته السيد</strong><span>أداة تجريبية تعمل محليًا؛ النتيجة تحتاج مراجعة بشرية</span><a class="fb" href="https://www.facebook.com/share/19PTDvQ789/" target="_blank" rel="noopener noreferrer">فيسبوك ↗</a></footer></div><script type="module" src="./journalist-media/entities-page.js"></script><script src="./shell.js" defer></script></body></html>
