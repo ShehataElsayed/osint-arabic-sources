@@ -164,3 +164,8 @@ Credits shown on the page. Data are context, not conflict events.
 
 ## Browser Python tools (site/tools)
 The bundle under site/tools vendors Pyodide (MPL-2.0), CPython (PSF), NumPy, Pillow, dnstwist, oletools, olefile, colorclass, easygui, pyparsing and the Cairo font (OFL). License texts and notices are in site/tools/THIRD_PARTY/. No model weights are included.
+
+## Local journalist OCR assets
+- Tesseract.js 5.1.1 worker, Apache-2.0, https://github.com/naptha/tesseract.js (license in site/journalist-media/ocr/LICENSE.md).
+- Tesseract.js-core 5.1.1 embedded LSTM and SIMD-LSTM WebAssembly loaders, Apache-2.0, https://github.com/naptha/tesseract.js-core (CORE-LICENSE alongside assets).
+- These are self-hosted, pinned OCR dependencies, not a language model. OCR may misread names, negation and numbers. Browser extraction must be reviewed against the image.

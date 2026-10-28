@@ -7,6 +7,8 @@ def build():
     if DEST.exists(): shutil.rmtree(DEST)
     shutil.copytree(ROOT/'site',DEST)
     shutil.copy2(ROOT/'site/site/Cairo.ttf',DEST/'Cairo.ttf')
+    p=DEST/'journalist-tools.css'
+    if p.exists(): p.write_text(p.read_text().replace("url('./site/Cairo.ttf')","url('./Cairo.ttf')"))
     shutil.rmtree(DEST/'site',ignore_errors=True)
     shutil.rmtree(DEST/'ite',ignore_errors=True)
     template=(DEST/'map.html').read_text()
@@ -23,7 +25,7 @@ def build():
     # Apply the shared editorial language last, across generated and source pages.
     import os, re
     for page in DEST.rglob('*.html'):
-        if page == DEST/'index.html':
+        if page in (DEST/'index.html',DEST/'journalist-tools.html'):
             continue
         text=page.read_text()
         relative=os.path.relpath(DEST/'editorial.css',page.parent).replace(os.sep,'/')
