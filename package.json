@@ -11,7 +11,7 @@
     "test:local-state": "node tests/local-tool-state.cjs",
     "test:home-design": "node tests/homepage-redesign.cjs",
     "test:image-difference": "node tests/image-difference.cjs",
-    "test:journalist": "node tests/journalist-workbench.cjs && node tests/journalist-edge.cjs && node tests/image-page.cjs && node tests/domain-page.cjs && node tests/video-page.cjs && node tests/ocr-page.cjs && node tests/timeline-page.cjs"
+    "test:journalist": "node tests/journalist-workbench.cjs && node tests/journalist-edge.cjs && node tests/image-page.cjs && node tests/domain-page.cjs && node tests/video-page.cjs && node tests/ocr-page.cjs && node tests/timeline-page.cjs && node tests/versions-page.cjs"
   },
   "devDependencies": {
     "pagefind": "1.5.2",
