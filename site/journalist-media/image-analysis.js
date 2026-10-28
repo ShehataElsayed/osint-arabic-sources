@@ -1,5 +1,6 @@
 // تحليل بصري محلي للصورة: بيانات وصفية، فرق إعادة ضغط، خريطة ضوضاء، وروابط بحث عكسي بإذن صريح.
 // كل المخرجات مؤشرات مراجعة بشرية؛ لا تكشف التزييف ولا تحكم بالأصالة.
+import{verificationQuestions}from'./image-review-core.js';
 import{scanJpeg,parseExif,estimateQuality,scanPng,noiseMap,extractExifThumbnail,luminanceGradient,levelSweep,channelHistogram,extractStrings,detectClones,pcaProjections,enhanceRegion}from'./image-analysis-core.js';
 import{jpegDifference}from'../image-difference-core.js';
 const $=(root,id)=>root.querySelector(id);
@@ -58,6 +59,11 @@ export async function analyzeImage({file,bytes,bitmap,box,say,isStale}){
  for(const w of result.warnings)rows.push('ملاحظة: '+w);
  meta.append(el('pre',rows.length?rows.join('\n'):'لا بيانات وصفية مقروءة في هذا الملف.'));
  box.append(meta);
+ const qp=el('div',undefined,'analysis-questions');
+ qp.append(el('h3','أسئلة تحقق مقترحة'));
+ qp.append(el('p','مولّدة من حضور البيانات الوصفية أو غيابها؛ أسئلة تساعد مراجعتك ولا تحكم على الصورة.','hint'));
+ for(const q of verificationQuestions(result))qp.append(el('p','• '+q));
+ box.append(qp);
  if(result.gps&&Number.isFinite(result.gps.lat)){
   const g=el('div',undefined,'analysis-gps'),{lat,lon}=result.gps;
   g.append(el('p','إحداثيات مسجلة في الملف: '+lat+', '+lon+(Number.isFinite(result.gps.altitude)?' · ارتفاع '+result.gps.altitude+' م':'')+' — الإحداثيات كما كتبها الجهاز أو أي محرر لاحق، لا تثبت مكان الالتقاط.'));

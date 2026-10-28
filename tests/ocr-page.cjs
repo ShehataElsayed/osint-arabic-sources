@@ -14,6 +14,8 @@ assert.ok(text.includes('Journalist source'),'English text extracted');
 // known synthetic misread documented: ١٢ read as ١١7 on this fixture
 assert.ok(/١[١٢]7?/.test(text),'number region present (synthetic misread tolerated)');
 // review aid: panel appears after extraction; flags never auto-correct the text
+assert.ok(!(await p.locator('#review-row').isHidden()),'original image placed beside extracted text');
+assert.ok(await p.locator('#review-row .ocr-img-cell img').count()===1,'original image in review row');
 assert.ok(!(await p.locator('#review').isHidden()),'review section shown');
 const rv=await p.locator('#review-list').textContent();
 assert.ok(rv.includes('مراجعة')||rv.includes('رموز'),'review guidance rendered');

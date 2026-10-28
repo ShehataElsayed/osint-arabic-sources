@@ -1,3 +1,4 @@
+import{missingEvidence}from'./claims-review-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
 const MAXS=400;
@@ -42,7 +43,13 @@ function render(){
   for(const g of c.signals)chips.append(el('span',g,'cl-chip'));
   for(const g of c.context)chips.append(el('span',g,'cl-chip'));
   if(!c.candidate&&!c.context.includes('رأي معلن')&&!c.context.includes('توجيه أو أمر'))chips.append(el('span','لا إشارة تحقق ظاهرة','cl-chip'));
-  card.append(chips);box.append(card);shown++}
+  card.append(chips);
+  if(c.candidate&&c.missing&&c.missing.length){
+   const ml=el('div',undefined,'cl-missing');
+   ml.append(el('b','الدليل الناقص: '));
+   for(const m of c.missing)ml.append(el('span',m,'cl-chip cl-miss'));
+   card.append(ml)}
+  box.append(card);shown++}
  return shown}
 $('detect').onclick=()=>{
  const text=$('src').value.trim();
@@ -51,7 +58,7 @@ $('detect').onclick=()=>{
  if(sents.length>MAXS){say('النص يتجاوز '+MAXS+' جملة؛ قسّمه إلى جزء أصغر.');return}
  const items=sents.map((s,i)=>{const sig=signals(s),ctx=context(s);
   const candidate=sig.length>0&&!ctx.includes('رأي معلن')&&!ctx.includes('توجيه أو أمر');
-  return{index:i,sentence:s,signals:sig,context:ctx,candidate}});
+  return{index:i,sentence:s,signals:sig,context:ctx,candidate,missing:candidate?missingEvidence({signals:sig,context:ctx}):[]}});
  const cand=items.filter(x=>x.candidate).length;
  const opin=items.filter(x=>x.context.includes('رأي معلن')).length;
  const dir=items.filter(x=>x.context.includes('توجيه أو أمر')).length;
@@ -61,7 +68,7 @@ $('detect').onclick=()=>{
  for(const g of Object.keys(bySig))cells.push([bySig[g],'إشارة: '+g]);
  for(const[v,l]of cells){const d=el('div',undefined,'cl-stat');d.append(el('b',String(v)),el('span',l));sb.append(d)}
  view=items;
- last={format:'claims-review-v1',limits:'Pattern heuristics surface review candidates; they do not establish checkability or truth. Sentences preserved verbatim from source.',items:items.filter(x=>x.candidate).map(x=>({sentence:x.sentence,signals:x.signals,context:x.context,reviewState:'unchecked'}))};
+ last={format:'claims-review-v1',limits:'Pattern heuristics surface review candidates; they do not establish checkability or truth. Sentences preserved verbatim from source.',items:items.filter(x=>x.candidate).map(x=>({sentence:x.sentence,signals:x.signals,context:x.context,reviewState:'unchecked',missingEvidence:x.missing}))};
  $('result').hidden=false;$('export').disabled=!cand;
  const shown=render();
  say('رُشح '+cand+' ادعاءً من '+sents.length+' جملة. تُعرض '+shown+' بطاقة؛ الجمل محفوظة حرفيًا كما وردت.')};

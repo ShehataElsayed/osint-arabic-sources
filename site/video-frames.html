@@ -1,5 +1,5 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; media-src 'self' blob:; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="description" content="لقطات زمنية من ملف فيديو محلي على جهازك: أربع لقطات متباعدة مع مواضعها التقريبية وبصمة الملف، وتنزيل كل لقطة وسجل JSON. لا رفع ولا تحليل رؤية ولا حكم أصالة."><title>لقطات الفيديو الزمنية | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
-<link rel="stylesheet" href="./shell.css"><style>
+<link rel="stylesheet" href="./shell.css"><style>.vf-ocr{margin:10px 0;padding:10px 14px;background:#faf9f7;color:#191c20;border:1px solid #eee7e1;border-radius:12px}.vf-ocr pre{white-space:pre-wrap;margin:6px 0 0}#ocr-box{margin-top:14px}#ocr-filter{width:100%;margin:6px 0}
 .vf-preview video{max-width:100%;border-radius:10px;border:1px solid #e4e0da;background:#111}
 .vf-frames{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
 .vf-frames figure{margin:0;background:#faf9f7;border:1px solid #eee7e1;border-radius:12px;padding:10px}
@@ -12,12 +12,13 @@
 <section class="box">
 <label for="file">ملف الفيديو المحلي</label>
 <input id="file" type="file" accept="video/mp4,video/webm">
-<div class="row"><button id="run" disabled>التقط أربع لقطات</button><button id="clear" hidden>امسح الملف</button><button id="save" disabled>نزّل سجل JSON</button></div>
+<div class="row"><button id="run" disabled>التقط أربع لقطات</button><button id="clear" hidden>امسح الملف</button><button id="save" disabled>نزّل سجل JSON</button><button id="ocr-run" disabled>استخرج نص اللقطات للفهرسة</button></div>
 <p id="status" role="status"></p>
 <div class="vf-preview" id="preview"></div>
 <div class="vf-meta" id="meta" hidden></div>
 <div class="vf-frames" id="frames"></div>
+<div id="ocr-box" hidden><h3>فهرس نص اللقطات (تجريبي)</h3><p class="hint">استخراج آلي محلي عرضة للخطأ - راجع كل نص أمام لقطته قبل الاعتماد عليه. الفهرسة تساعد البحث ولا تثبت محتوى.</p><input type="search" id="ocr-filter" placeholder="ابحث في نص اللقطات" aria-label="ابحث في نص اللقطات"><div id="ocr-list"></div></div>
 <div class="vf-out" id="notes-box" hidden><label for="notes">ملاحظات المراجعة البشرية على اللقطات</label><textarea id="notes" maxlength="30000" placeholder="اكتب ما راجعته في كل لقطة أمام الأصل"></textarea></div>
 </section>
 <section class="box"><h2>حدود مهمة</h2><p>مواضع اللقطات هي مواضع المتصفح التقريبية داخل الملف، وليست توقيت التقاط ولا دقة جنائية بالإطار؛ الأحداث القصيرة بين اللقطات قد تفوت. بصمة SHA-256 تربط هذا السجل بالملف الذي راجعته ولا تثبت أصالته ولا مصدره. لا يغادر الملف جهازك إطلاقًا: لا شبكة في هذه الصفحة.</p></section>
-</main><footer><strong>صممت بواسطة مهندس شحاته السيد</strong><span>أداة تجريبية تعمل محليًا؛ النتيجة تحتاج مراجعة بشرية</span><a class="fb" href="https://www.facebook.com/share/19PTDvQ789/" target="_blank" rel="noopener noreferrer">فيسبوك ↗</a></footer></div><script type="module" src="./journalist-media/video-page.js"></script><script src="./shell.js" defer></script></body></html>
+</main><footer><strong>صممت بواسطة مهندس شحاته السيد</strong><span>أداة تجريبية تعمل محليًا؛ النتيجة تحتاج مراجعة بشرية</span><a class="fb" href="https://www.facebook.com/share/19PTDvQ789/" target="_blank" rel="noopener noreferrer">فيسبوك ↗</a></footer></div><script src="./tesseract.min.js" defer></script><script type="module" src="./journalist-media/video-page.js"></script><script src="./shell.js" defer></script></body></html>
