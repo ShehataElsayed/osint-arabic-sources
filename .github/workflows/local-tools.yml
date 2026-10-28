@@ -32,3 +32,6 @@ jobs:
 
       - name: Standalone tools entry regression
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/standalone-entry.cjs
+
+      - name: Domain shared-case portability
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/domain-case-portability.cjs
