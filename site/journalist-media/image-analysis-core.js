@@ -182,7 +182,7 @@ function dctFeatures(gray,w,x0,y0,B,Q){
   for(let y=0;y<B;y++){const gy=gray[y0+y];for(let x=0;x<B;x++)sum+=gy[x0+x]*COS[u][x]*COS[v][y]}
   F.push(Math.round(sum*cu(u)*cu(v)/128/Q))}
  return F}
-export function detectClones(rgba,width,height,{block=16,stride=2,quant=6,minShift=24,minCount=60,maxGroups=6}={}){
+export function detectClones(rgba,width,height,{block=16,stride=2,quant=6,tol=1,win=64,binShift=4,margin=1,minShift=24,minCount=60,maxGroups=6}={}){
  if(!(rgba instanceof Uint8ClampedArray)||rgba.length!==width*height*4)throw Error('مدخلات كشف النسخ غير صالحة');
  if(width<48||height<48)return {groups:[],blocks:0,note:'الصورة أصغر من الحد الأدنى للفحص (48 بكسل)'};
  const gray=[];for(let y=0;y<height;y++){const row=new Float32Array(width);for(let x=0;x<width;x++){const i=(y*width+x)*4;row[x]=0.299*rgba[i]+0.587*rgba[i+1]+0.114*rgba[i+2]-128}gray.push(row)}
@@ -194,13 +194,26 @@ export function detectClones(rgba,width,height,{block=16,stride=2,quant=6,minShi
   recs.push({x,y,f:dctFeatures(gray,width,x,y,block,quant)})}
  recs.sort((a,b)=>{const A=a.f,B=b.f;for(let i=0;i<A.length;i++){if(A[i]!==B[i])return A[i]-B[i]}return a.y-b.y||a.x-b.x});
  const shifts=new Map(),runPairs=[];
+ // مطابقة متساهلة: بعد الترتيب الأبجدي، تُقبل الكتل المتجاورة ضمن نافذة إذا كان كل معامل ضمن حد التسامح؛
+ // كثافة التطابقات فوق maxSim تعني قوامًا دوريًا (نوافذ، بلاط) فتُستبعد بدل إغراق النتائج
+ // لكل كتلة يُحسب أقرب تطابق واحد فقط ضمن التسامح؛ النسخ الحقيقي يجمع كتلًا كثيرة عند نفس الإزاحة،
+ // بينما يتفرق القوام الدوري على إزاحات قصيرة أو متباعدة لا تتجاوز العتبات
  for(let i=0;i<recs.length-1;i++){
-  // طول متتالية الكتل المتطابقة: القوام الدوري (تدرجات، نوافذ) ينتج متتاليات طويلة تُستبعد
-  let runEnd=i+1;while(runEnd<recs.length&&recs[runEnd].f.every((v,k)=>v===recs[i].f[k]))runEnd++;
-  const runLen=runEnd-i;
-  if(runLen===2){const a=recs[i],b=recs[i+1],dx=b.x-a.x,dy=b.y-a.y;
-   if(Math.hypot(dx,dy)>=minShift){const k=dx+','+dy;shifts.set(k,(shifts.get(k)||0)+1);runPairs.push({ax:a.x,ay:a.y,bx:b.x,by:b.y,dx,dy})}}
-  i=runEnd-1}
+  const A=recs[i].f;let best=-1,bestD=Infinity,secondD=Infinity,checked=0;
+  for(let j=i+1;j<recs.length;j++){
+   if(recs[j].f[0]-A[0]>tol)break;
+   if(++checked>win)break;
+   let mx=0;for(let k=1;k<A.length;k++){const d=Math.abs(recs[j].f[k]-A[k]);if(d>mx)mx=d;if(mx>tol)break}
+   if(mx>tol)continue;
+   if(mx<bestD){secondD=bestD;bestD=mx;best=j}else if(mx<secondD)secondD=mx}
+  // التطابق الدوري (قوام متكرر) يكون فيه الأفضل والثاني بنفس الجودة فيُستبعد؛ النسخ الحقيقي أفضل بفارق واضح
+  if(best<0||secondD-bestD<margin)continue;
+  const dx=recs[best].x-recs[i].x,dy=recs[best].y-recs[i].y;
+  if(Math.hypot(dx,dy)<minShift)continue;
+  // تجميع الإزاحات القريبة في سلة واحدة: ضجيج إعادة الضغط يبدد الإزاحة الدقيقة
+  const bdx=Math.round(dx/binShift)*binShift,bdy=Math.round(dy/binShift)*binShift;
+  const key=bdx+','+bdy;shifts.set(key,(shifts.get(key)||0)+1);
+  runPairs.push({ax:recs[i].x,ay:recs[i].y,bx:recs[best].x,by:recs[best].y,dx:bdx,dy:bdy})}
  const groups=[...shifts.entries()].filter(([,c])=>c>=minCount).sort((a,b)=>b[1]-a[1]).slice(0,maxGroups)
   .map(([k,count])=>{const[dx,dy]=k.split(',').map(Number);
    const pairs=runPairs.filter(p=>p.dx===dx&&p.dy===dy).slice(0,400);
@@ -240,6 +253,22 @@ export function pcaProjections(rgba,width,height){
   return out});
  return {components,variances:variances.map(x=>+x.toFixed(2)),vectors:vectors.map(vec=>vec.map(x=>+x.toFixed(4)))};
 }
+
+
+// بصمات إدراكية لمطابقة النسخ المتشابهة من الصورة يدويًا: aHash (متوسط 8×8) وdHash (تدرج 9×8).
+// مؤشر مقارنة بين نسختين يحسبه المستخدم بنفسه؛ لا يثبت أصالة ولا تطابقًا قاطعًا.
+export function perceptualHashes(rgba,width,height){
+ if(!(rgba instanceof Uint8ClampedArray)||rgba.length!==width*height*4||width<1||height<1)throw Error('مدخلات البصمة الإدراكية غير صالحة');
+ const acc=(gw,gh)=>{const g=new Float64Array(gw*gh),c=new Float64Array(gw*gh);
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+   const i=(y*width+x)*4,v=0.299*rgba[i]+0.587*rgba[i+1]+0.114*rgba[i+2];
+   const cx=Math.min(gw-1,(x*gw/width)|0),cy=Math.min(gh-1,(y*gh/height)|0),k=cy*gw+cx;g[k]+=v;c[k]++}
+  for(let k=0;k<g.length;k++)g[k]/=Math.max(1,c[k]);return g};
+ const g8=acc(8,8);let mean=0;for(const v of g8)mean+=v;mean/=64;
+ let ah=0n;for(let k=0;k<64;k++){ah<<=1n;if(g8[k]>=mean)ah|=1n}
+ const g9=acc(9,8);let dh=0n;for(let y=0;y<8;y++)for(let x=0;x<8;x++){dh<<=1n;if(g9[y*9+x]>g9[y*9+x+1])dh|=1n}
+ const h=b=>b.toString(16).padStart(16,'0');
+ return {ahash:h(ah),dhash:h(dh)}}
 
 // Magnifier enhancements on a copied RGBA region: histogram equalization or per-channel auto contrast.
 export function enhanceRegion(rgba,{mode='none'}={}){

@@ -1,39 +1,89 @@
 <!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob: https://nominatim.openstreetmap.org; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="description" content="فحص الصورة محليًا دون رفعها: بياناتها الوصفية وبنية ضغطها وفرق إعادة الضغط وخريطة الضوضاء وإحداثياتها المسجلة، مع حدود واضحة بلا حكم أصالة."><title>فحص بيانات الصورة وطبقاتها | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
 <link rel="stylesheet" href="./shell.css"><style>
-.analysis-questions{color:#191c20;background:#faf9f7;border:1px solid #eee7e1;border-radius:12px;padding:14px;font-size:14px;margin-top:16px}.analysis-questions h3{margin:0 0 6px}.analysis-questions .hint{opacity:.85;margin:0 0 8px}.analysis-questions p{margin:4px 0}
-
-.ia-panel{background:#fff;border:1px solid #e4e0da;border-radius:18px;padding:24px;margin-top:18px}
-.ia-drop{border:2px dashed #ddd4cc;border-radius:14px;padding:34px 18px;text-align:center;color:#5b5f66;cursor:pointer;background:#faf9f7;display:block}
-.ia-drop:hover{border-color:#d42c22}
-.ia-drop img{max-width:100%;max-height:320px;border-radius:10px;margin-top:12px}
+.ia-panel{background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:24px;margin-top:18px;color:var(--ink)}
+.ia-drop{border:2px dashed #3f4a33;border-radius:4px;padding:30px 18px;text-align:center;color:var(--muted);cursor:pointer;background:#0b0f08;display:block}
+.ia-drop:hover{border-color:var(--accent);color:var(--ink)}
+.ia-drop img{max-width:100%;max-height:320px;border-radius:3px;margin-top:12px}
 .ia-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px}
-.ia-run{background:#d42c22;color:#fff;border:0;border-radius:10px;padding:10px 22px;font:700 15px Cairo,Tahoma,sans-serif;cursor:pointer}
-.ia-run:disabled{opacity:.5;cursor:default}
-.ia-clear{background:#fff;color:#8f1d15;border:1px solid #ecc8c3;border-radius:10px;padding:10px 18px;font:700 15px Cairo,Tahoma,sans-serif;cursor:pointer}
-.ia-status{margin-top:12px;color:#5b5f66;font-size:14px;min-height:20px;white-space:pre-wrap}
-.ia-note{color:#5b5f66;font-size:14px;margin-top:14px;line-height:1.9}
-#ia-summary{color:#191c20;white-space:pre-wrap;overflow-wrap:anywhere;background:#faf9f7;border:1px solid #eee7e1;border-radius:12px;padding:14px;font-size:14px;margin-top:16px}
-#analysis h3{font-size:1.05rem;margin:20px 0 4px;color:#191c20}
-#analysis .hint{color:#5b5f66;font-size:13.5px;margin:4px 0 8px}
-#analysis p{direction:ltr;unicode-bidi:isolate;text-align:right}
-#analysis pre{color:#191c20;direction:ltr;unicode-bidi:isolate;text-align:right;white-space:pre-wrap;overflow-wrap:break-word;background:#faf9f7;border:1px solid #eee7e1;border-radius:12px;padding:14px;font-size:14px}
-.analysis-figures{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;margin-top:10px}
+.ia-run{background:var(--accent);color:#141c09;border:1px solid var(--accent);border-radius:3px;padding:10px 22px;font:800 14px Cairo,Tahoma,sans-serif;cursor:pointer}
+.ia-run:hover{background:#cdfd79}
+.ia-run:disabled{background:#3c462e;color:#c4cdb4;border-color:#3c462e;cursor:default;opacity:1}
+.ia-clear{background:#26351a;color:#d1efa6;border:1px solid #4b6032;border-radius:3px;padding:10px 18px;font:700 14px Cairo,Tahoma,sans-serif;cursor:pointer}
+.ia-status{margin-top:12px;color:var(--muted);font-size:13px;min-height:20px;white-space:pre-wrap}
+.ia-note{color:var(--muted);font-size:13px;margin-top:14px;line-height:1.9}
+#ia-summary{color:var(--ink);background:#080d04;border:1px solid #3c4a2d;border-radius:3px;padding:14px;margin-top:16px}
+#ia-summary .hint{color:var(--muted);font-size:12.5px;margin:10px 0 0}
+.ia-file{display:flex;gap:14px;align-items:flex-start}
+.ia-file-thumb{width:132px;max-width:34%;border:1px solid var(--line);border-radius:3px}
+.ia-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;flex:1}
+.ia-facts .fact{background:#0c1108;border:1px solid var(--line);border-radius:3px;padding:10px 12px;min-width:0}
+.ia-facts .fact small{display:block;color:var(--muted);font-size:11px;margin-bottom:3px}
+.ia-facts .fact b{color:var(--ink);font-size:13.5px;font-weight:800;overflow-wrap:anywhere}
+.ia-facts .fact.wide{grid-column:1/-1}
+@media(max-width:520px){.ia-file{flex-direction:column}.ia-file-thumb{width:100%;max-width:100%}}
+.ia-chips{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0 2px}
+.ia-chips button{background:#131b0b;border:1px solid #3c4a2d;color:#c8d6b2;border-radius:999px;padding:6px 14px;font:700 12.5px Cairo,Tahoma,sans-serif;cursor:pointer}
+.ia-chips button:hover{border-color:var(--accent);color:var(--ink)}
+.layer-viewer{margin-top:10px}
+.ia-tabs{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px}
+.ia-tab{flex:0 0 auto;background:#0c1108;border:1px solid #3c4a2d;color:#c8d6b2;border-radius:999px;padding:6px 14px;font:700 12.5px Cairo,Tahoma,sans-serif;cursor:pointer}
+.ia-tab:hover{border-color:var(--accent);color:var(--ink)}
+.ia-tab[aria-selected="true"]{background:var(--accent);border-color:var(--accent);color:#141c09}
+.ia-tab.signal::after{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-inline-start:6px}
+.ia-tab.signal[aria-selected="true"]::after{background:#141c09}
+.ia-grid-toggle{background:#26351a;color:#d1efa6;border:1px solid #4b6032;border-radius:3px;padding:7px 14px;font:700 12.5px Cairo,Tahoma,sans-serif;cursor:pointer;margin:6px 0 10px}
+.ia-grid-toggle:hover{background:#364b22;color:#e9ffd0}
+.analysis-figures:not(.grid) figure{display:none}
+.analysis-figures:not(.grid) figure.active{display:block}
+.layer-result{margin-top:10px;background:#0e130a;border:1px solid var(--line);border-radius:3px;padding:10px 14px}
+.layer-result p{margin:5px 0;font-size:13px;line-height:1.85;color:#dbe6ca}
+.layer-result p span{display:inline-block;min-width:96px;color:var(--accent);font-weight:800;font-size:12px}
+.clone-groups{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.clone-groups button{background:#131b0b;border:1px solid #3c4a2d;color:#c8d6b2;border-radius:3px;padding:5px 12px;font:700 12px Cairo,Tahoma,sans-serif;cursor:pointer}
+.clone-groups button[aria-pressed="true"]{background:var(--accent);color:#141c09;border-color:var(--accent)}
+.ela-ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:13px}
+.ela-ctl input[type=range]{accent-color:var(--accent)}
+#analysis h3{font-size:1.02rem;margin:20px 0 4px;color:var(--ink)}
+#analysis .hint{color:var(--muted);font-size:12.5px;margin:4px 0 8px}
+#analysis pre{color:#d5edb4;direction:ltr;unicode-bidi:isolate;text-align:right;white-space:pre-wrap;overflow-wrap:break-word;background:#080b06;border:1px solid #3c4a2d;border-radius:3px;padding:14px;font-size:13px}
+.analysis-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-top:16px}
+.analysis-summary .fact{background:#0c1108;border:1px solid var(--line);border-radius:3px;padding:12px 14px;min-width:0}
+.analysis-summary .fact small{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
+.analysis-summary .fact b{color:var(--ink);font-size:14px;font-weight:800;overflow-wrap:anywhere}
+.analysis-summary .fact.signal{border-color:var(--accent);background:#131b0b}
+.analysis-summary .fact.signal small{color:var(--accent)}
+.analysis-questions{color:var(--ink);background:#11160c;border:1px solid #53633e;border-radius:3px;padding:14px 16px;font-size:14px;margin-top:16px}
+.analysis-questions h3{margin:0 0 6px;color:var(--accent);font-size:14px}
+.analysis-questions .hint{opacity:.9;margin:0 0 8px;color:var(--muted)}
+.analysis-questions p{margin:4px 0;color:#dbe6ca}
+details.analysis-fold{margin-top:16px;border:1px solid var(--line);border-radius:3px;background:#0c1108}
+details.analysis-fold>summary{cursor:pointer;padding:12px 16px;color:var(--accent);font-weight:700;font-size:13.5px;list-style:disclosure-closed}
+details.analysis-fold[open]>summary{border-bottom:1px solid var(--line)}
+details.analysis-fold>summary:hover{background:#131b0b}
+details.analysis-fold>.fold-body{padding:6px 16px 16px}
+.analysis-figures{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:14px;margin-top:10px}
 .analysis-figures figure{margin:0}
-.analysis-figures canvas{max-width:100%;height:auto;border:1px solid #e4e0da;border-radius:10px;background:#111}
-.analysis-figures figcaption{font-size:13px;color:#5b5f66;margin-top:6px;line-height:1.7}
-.pca-panes{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
-.pca-panes canvas{max-width:100%;height:auto;border:1px solid #e4e0da;border-radius:8px;background:#111}
-.pca-panes span{font-size:12.5px;color:#5b5f66;display:block;margin-top:4px}
-.analysis-magnifier canvas{max-width:100%;height:auto;border:1px solid #e4e0da;border-radius:10px;touch-action:none;display:block}
-.magnifier-lens{border:2px solid #d42c22 !important;image-rendering:pixelated;margin-top:8px}
-.magnifier-ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;color:#5b5f66;font-size:14px}
-.analysis-gps a{color:#8f1d15;font-weight:700}
-.analysis-gps p,.analysis-pivots p,.analysis-pivots h3{color:#191c20}
-.analysis-gps button{margin-top:10px;background:#fff;color:#8f1d15;border:1px solid #ecc8c3;border-radius:10px;padding:9px 16px;font:700 14px Cairo,Tahoma,sans-serif;cursor:pointer}
-.analysis-pivots input{width:100%;padding:12px 14px;border:1px solid #e0d5cf;border-radius:12px;font:inherit;margin:8px 0}
+.analysis-figures canvas{max-width:100%;height:auto;border:1px solid var(--line);border-radius:3px;background:#111}
+.analysis-figures figcaption{font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.7}
+.pca-panes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:10px}
+.pca-panes canvas{max-width:100%;height:auto;border:1px solid var(--line);border-radius:3px;background:#111}
+.pca-panes span{font-size:12px;color:var(--muted);display:block;margin-top:4px}
+.analysis-magnifier canvas{max-width:100%;height:auto;border:1px solid var(--line);border-radius:3px;touch-action:none;display:block}
+.magnifier-lens{border:2px solid var(--accent)!important;image-rendering:pixelated;margin-top:8px}
+.magnifier-ctl{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;color:var(--muted);font-size:13px}
+.analysis-gps p{color:#dbe6ca}
+.analysis-gps a{color:var(--accent);font-weight:700;display:inline-block;margin:4px 0}
+.analysis-gps button{display:block;margin-top:10px;background:#26351a;color:#d1efa6;border:1px solid #4b6032;border-radius:3px;padding:9px 16px;font:700 13px Cairo,Tahoma,sans-serif;cursor:pointer}
+.analysis-gps button:hover{background:#364b22;color:#e9ffd0}
+.analysis-pivots p{color:var(--muted)}
+.analysis-pivots h3{color:var(--ink)}
+.analysis-pivots input{width:100%;padding:12px 14px;border:1px solid #49573a;border-radius:3px;font:inherit;margin:8px 0;background:#0b0e08;color:#edf2e6}
 .analysis-pivots .actions{display:flex;gap:10px;flex-wrap:wrap}
-.analysis-pivots .actions a{display:inline-block;background:#fff;color:#8f1d15;border:1px solid #d42c22;border-radius:10px;padding:8px 16px;text-decoration:none;font-weight:700}
-.analysis-pivots .actions a:hover{background:#f9e9e7}
+.analysis-pivots .actions a{display:inline-block;background:#26351a;color:#d1efa6;border:1px solid #4b6032;border-radius:3px;padding:8px 16px;text-decoration:none;font-weight:700}
+.analysis-pivots .actions a:hover{background:#364b22;color:#e9ffd0}
+.analysis-thumb img{border:1px solid var(--line);border-radius:3px}
+.analysis-thumb h3{color:var(--ink)}
+.analysis-thumb .hint{color:var(--muted)}
 </style><link rel="stylesheet" href="./identity.css"></head><body><a class="skip-link" href="#main">تخطَّ إلى المحتوى</a><div class="app"><header class="top"><div class="brand"><img alt="شعار OS" src="./brand/oshai-mark.svg"><div><a class="brand-home" href="./index.html" aria-label="افتح الصفحة الرئيسية">دليل المصادر المفتوحة للصحفيين العرب</a><small>أدوات ومنهجيات ومكتبات للبحث الصحفي</small></div></div><nav class="topnav shellnav" aria-label="التنقل الرئيسي"><a href="./index.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M6 10v10h4v-6h4v6h4V10"/></svg></span>ابدأ</a><details data-active="1"><summary><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5M7 10h6M10 7v6"/></svg></span>الأدوات</summary><div class="menu"><a href="./index.html#tree">خريطة الأدوات</a><a href="./map.html#python">مكتبات بايثون</a><a href="./map.html#ai">أدوات الذكاء الاصطناعي</a><a href="./commands.html">الأوامر الاستقصائية</a><a href="./smart-search.html">بحث ذكي تجريبي</a><a href="./ocr.html">استخراج نص من صورة</a><a href="./image-analysis.html" aria-current="page">فحص بيانات الصورة</a><a href="./video-frames.html">لقطات الفيديو</a><a href="./timeline.html">الخط الزمني</a><a href="./versions.html">مقارنة النسخ</a><a href="./claims.html">رصد الادعاءات</a><a href="./entities.html">رصد الكيانات</a><a href="./archive.html">أرشيف الويب</a><a href="./planner.html">مسار التحقق</a><a href="./data-lab.html">مختبر البيانات</a></div></details><details><summary><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z"/><path d="m8 12 3 3 5-6"/></svg></span>التحقق</summary><div class="menu"><a href="./verification.html">مسارات التحقق</a><a href="./assistant.html">مساعد NewsRAG</a></div></details><a href="./methodology.html"><span class="ico" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5c3-2 5-1 8 1 3-2 5-3 8-1v14c-3-2-5-1-8 1-3-2-5-3-8-1V5ZM12 6v14"/></svg></span>المنهجية</a></nav></header><span id="main"></span><main>
 <section class="hero"><span class="badge">يعمل على جهازك · بلا رفع</span><h1>فحص بيانات الصورة وطبقاتها</h1><p>اختر صورة JPEG أو PNG من جهازك لتقرأ الأداة محليًا بياناتها الوصفية وبنية ضغطها وإحداثياتها المسجلة، وتعرض فرق إعادة الضغط وخريطة الضوضاء كمؤشرات مراجعة. الملف لا يغادر جهازك؛ لا شبكة إلا إذا طلبت تحويل الإحداثيات إلى وصف مكان بضغطة صريحة.</p></section>
 <section class="ia-panel">
