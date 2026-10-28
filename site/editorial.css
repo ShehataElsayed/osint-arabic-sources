@@ -18,3 +18,4 @@ body .dd-run,body .dd-ext{background:#b5e853;color:#15200d;border:1px solid #b5e
 body .dd-ext{background:#1b2714;color:#c9f38d;border-color:#405331}
 
 .standalone-intro{display:block!important}.standalone-intro h1{margin:14px 0}.standalone-intro p{max-width:780px}
+body .cl-stat span,body .cl-num{color:#b9c5ad}body .cl-card textarea{margin-top:12px}body .cl-missing{line-height:2}
