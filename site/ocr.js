@@ -38,7 +38,8 @@ import{flagSuspectTokens}from'./journalist-media/ocr-review-core.js';
   function download(name,data){const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)}
   $('#raw-export').onclick=()=>{if(rawText)download('ocr-review.json',snapshot())};
   $('#case-export').onclick=()=>{try{if(caseInvalid)throw Error('القضية غير صالحة أو لم يكتمل فتحها');if(busy)throw Error('انتظر الاستخراج');download('journalist-ocr-case.json',ocrCase(snapshot(),baseCase));$('#case-status').textContent='نُزلت نسخة جديدة مع الأصل وتعديلاتك منفصلة، دون تغيير القضية السابقة.'}catch(e){$('#case-status').textContent='لم تُصدر القضية: '+e.message+'؛ تصدير مراجعة OCR الأصلي ما زال متاحًا.'}};
-  function clearResult() { rawText='';imageInfo=null;$('#raw-export').disabled=true;$('#case-export').disabled=true;$('#human-review').value='unreviewed';$('#review-note').value='';out.value = ''; out.hidden = true; copy.hidden = true; review.hidden = true; reviewList.replaceChildren(); layoutSideBySide(false); }
+  out.addEventListener('input',()=>{$('#human-review').value='unreviewed';});
+  function clearResult() { $('#raw-disclosure').hidden=true;$('#raw-text').textContent='';rawText='';imageInfo=null;$('#raw-export').disabled=true;$('#case-export').disabled=true;$('#human-review').value='unreviewed';$('#review-note').value='';out.value = ''; out.hidden = true; copy.hidden = true; review.hidden = true; reviewList.replaceChildren(); layoutSideBySide(false); }
   function layoutSideBySide(on) {
     const row = document.getElementById('review-row');
     if (on) {
@@ -86,7 +87,7 @@ import{flagSuspectTokens}from'./journalist-media/ocr-review-core.js';
         logger: m => { if (m.status) status.textContent = m.status + (m.progress ? ' — ' + Math.round(m.progress * 100) + '%' : ''); }
       });
       const result = await worker.recognize(imgURL);
-      const text = result && result.data && result.data.text || '';rawText=text;const hash=await crypto.subtle.digest('SHA-256',await imageFile.arrayBuffer());imageInfo={name:imageFile.name,type:imageFile.type,size:imageFile.size,sha256:Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('')};$('#raw-export').disabled=!text;$('#case-export').disabled=!text;
+      const text = result && result.data && result.data.text || '';rawText=text;$('#raw-text').textContent=text;$('#raw-disclosure').hidden=!text;const hash=await crypto.subtle.digest('SHA-256',await imageFile.arrayBuffer());imageInfo={name:imageFile.name,type:imageFile.type,size:imageFile.size,sha256:Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('')};$('#raw-export').disabled=!text;$('#case-export').disabled=!text;
       out.value = text; out.hidden = false; copy.hidden = !text;
       renderReview(text);
       layoutSideBySide(true);
