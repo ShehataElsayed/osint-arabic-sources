@@ -14,6 +14,7 @@ assert.ok(meta.includes('TestCam')&&meta.includes('UnitTestEditor'));
 assert.equal(await p.locator('.analysis-figures canvas').count(),6,'ELA, noise, clone, gradient, sweep, histogram');
 assert.ok((await p.locator('.analysis-figures').textContent()).includes('كشف مناطق منسوخة'));
 assert.ok((await p.locator('.analysis-gps').textContent()).includes('30.044444'));
+assert.equal(await p.evaluate(()=>getComputedStyle(document.querySelector('#analysis pre')).direction),'ltr','technical values isolated LTR');
 assert.deepEqual(external,[],'no network after local analysis: '+external.join(','));
 await p.route('https://nominatim.openstreetmap.org/**',r=>r.fulfill({json:{display_name:'حي اصطناعي، القاهرة، مصر'}}));
 await p.getByRole('button',{name:/Nominatim/}).click();
