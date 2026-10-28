@@ -9,6 +9,19 @@ assert.ok((await p.locator('#meta').textContent()).includes('SHA-256'));
 await p.click('#run');
 await p.waitForFunction(()=>!document.querySelector('#save').disabled,{timeout:40000});
 assert.equal(await p.locator('#frames figure').count(),4,'four temporal frames');
+// reverse-search consent gate: press 1 arms consent with ZERO network; press 2 makes exactly one call (route-mocked)
+{const fig=p.locator('#frames figure').first();
+ assert.ok(await fig.locator('.rs-btn').count(),'reverse button rendered per frame');
+ let rsCalls=0;await p.route('https://reverse-search-proxy.egkrkr.workers.dev/**',async r=>{rsCalls++;await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({visual_matches:[{title:'t',link:'https://example.com/x',source:'s'}],exact_matches:[]})})});
+ await fig.locator('.rs-btn').click();
+ assert.ok((await fig.locator('.rs-status').innerText()).includes('SerpApi'),'consent notice names provider');
+ assert.equal(rsCalls,0,'first press uploads nothing');
+ await fig.locator('.rs-btn').click();
+ await p.waitForFunction(()=>document.querySelector('#frames figure .rs-list li'));
+ assert.equal(rsCalls,1,'confirm press sends exactly one upload');
+ await p.unroute('https://reverse-search-proxy.egkrkr.workers.dev/**');
+ for(let i=external.length-1;i>=0;i--)if(external[i].includes('workers.dev'))external.splice(i,1)}
+
 const classes=await p.evaluate(()=>[...document.querySelectorAll('#frames figure img')].map(img=>{const c=document.createElement('canvas');c.width=10;c.height=10;const x=c.getContext('2d');x.drawImage(img,0,0);const d=x.getImageData(5,5,1,1).data;return d[0]>200?'red':d[2]>200?'blue':'other'}));
 assert.deepEqual(classes,['red','red','blue','blue'],'real canvas frames from the actual video scenes');
 assert.deepEqual(external,[],'frame capture is fully local: '+external.join(','));
@@ -31,6 +44,24 @@ assert.ok(rec.source.ocrIndex.caveat.includes('unverified'),'engine caveat expor
 assert.equal(rec.reviewState,'manual-review-required');
 const[df]=await Promise.all([p.waitForEvent('download'),p.locator('#frames figure button').first().click()]);
 assert.ok((await df.path()).length>0,'per-frame JPEG downloads');
+// scene-change keyframe mode: picks the red->blue transition, same local guarantees
+await p.selectOption('#vf-mode','scene');await p.selectOption('#vf-count','8');
+await p.click('#run');
+await p.waitForFunction(()=>{const r=document.getElementById('vf-result');return r&&!r.hidden&&document.querySelectorAll('#frames figure').length===8},undefined,{timeout:120000});
+assert.ok((await p.textContent('#vf-result')).includes('تغيّر المشهد'),'professional result card names scene mode');
+assert.ok((await p.textContent('#vf-result')).includes('الملاحظة')&&(await p.textContent('#vf-result')).includes('خطوة التحقق'),'professional 3-row result card');
+const sceneCaps=await p.evaluate(()=>[...document.querySelectorAll('#frames figcaption')].map(c=>c.textContent));
+assert.ok(sceneCaps.some(t=>t.includes('تغيّر مرصود')),'ranked changes labeled');
+assert.ok(sceneCaps.some(t=>t.includes('لقطة زمنية تكميلية')),'temporal fillers labeled distinctly');
+assert.deepEqual(external,[],'scene sweep stayed local: '+external.join(','));
+const[d2]=await Promise.all([p.waitForEvent('download'),p.click('#save')]);
+const rec2=JSON.parse(fs.readFileSync(await d2.path()));
+assert.equal(rec2.source.extractionMode,'scene-change');
+assert.equal(rec2.source.requestedCount,8);
+assert.equal(rec2.source.frames.length,8);
+assert.ok(rec2.source.limitations.includes('statistical'),'scene limitations exported');
+assert.ok(rec2.source.frames.some(f=>f.kind==='scene-change')&&rec2.source.frames.some(f=>f.kind==='temporal-fill'),'frame kinds exported');
+assert.ok(!('fpsEstimate' in rec2.source),'no playback-throughput metric presented as file fact');
 await p.screenshot({path:'test-output/video-page-desktop.png',fullPage:true});
 for(const width of [390,320]){await p.setViewportSize({width,height:900});await p.waitForTimeout(300);assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal scroll at '+width);await p.screenshot({path:`test-output/video-page-${width}.png`,fullPage:true})}
 assert.deepEqual(errors,[]);
