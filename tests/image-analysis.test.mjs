@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+import {scanJpeg,parseExif,estimateQuality,scanPng,noiseMap} from '../site/journalist-media/image-analysis-core.js';
+const jpg=new Uint8Array(readFileSync('tests/fixtures/journalist-photo-exif.jpg'));
+test('scanJpeg reads markers, DQT, SOF, EXIF segment',()=>{const s=scanJpeg(jpg);assert.ok(s.markers.length>=5);assert.equal(s.dqt.length,2);assert.equal(s.sof.width,1000);assert.equal(s.sof.height,600);assert.ok(s.exif instanceof Uint8Array)});
+test('scanJpeg rejects non-JPEG',()=>{assert.throws(()=>scanJpeg(new Uint8Array([1,2,3,4])))});
+test('parseExif reads camera, software, dates and GPS coordinates',()=>{const f=parseExif(scanJpeg(jpg).exif);assert.equal(f.make,'TestCam');assert.equal(f.model,'TC-1');assert.equal(f.software,'UnitTestEditor 1.0');assert.equal(f.modified,'2026:01:02 03:04:05');assert.ok(Math.abs(f.gps.lat-30.044444)<1e-6);assert.ok(Math.abs(f.gps.lon-31.235556)<1e-6);assert.equal(f.gps.altitude,23);assert.equal(f.gps.date,'2026:01:02')});
+test('parseExif rejects bad TIFF header',()=>{assert.throws(()=>parseExif(new Uint8Array([0,0,0,0,0,0,0,0])))});
+test('estimateQuality near fixture quality 85, always within 1..100',()=>{const q=estimateQuality(scanJpeg(jpg).dqt);assert.ok(q.quality>=80&&q.quality<=95);assert.equal(estimateQuality([]),null)});
+test('scanPng reads chunks from real fixture',()=>{const png=new Uint8Array(readFileSync('tests/fixtures/journalist-ocr-arabic.png'));const s=scanPng(png);assert.ok(s.chunks.some(c=>c.type==='IHDR'));assert.ok(s.chunks.some(c=>c.type==='IEND'))});
+test('noiseMap flat region silent, spike loud; validates inputs',()=>{const flat=new Uint8ClampedArray(4*5*5);for(let i=0;i<flat.length;i+=4){flat[i]=flat[i+1]=flat[i+2]=100;flat[i+3]=255}const n=noiseMap(flat,5,5,1,8);assert.equal(n.max,0);const spiky=new Uint8ClampedArray(flat);spiky[(2*5+2)*4]=255;const n2=noiseMap(spiky,5,5,1,8);assert.ok(n2.max>50);assert.throws(()=>noiseMap(flat,5,5,0,8));assert.throws(()=>noiseMap(new Uint8ClampedArray(4),5,5,1,8))});
