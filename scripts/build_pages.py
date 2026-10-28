@@ -135,12 +135,28 @@ def build_all(ns):
                 f'<h1>{E(c["name_ar"])}</h1><p class="s">{E(c["desc_ar"])} {E(CAT_HERO[c["id"]])}</p></div>')
         page = make_tool_page(tpl, ids, hero, f'{c["name_ar"]} · أدوات OshAi', runs + note, ns)
         (SITE / 'tools' / f'{c["id"]}.html').write_text(page, encoding='utf-8')
+    # Standalone journalistic tools are the primary platform destination.
+    standalone = [
+      ('رصد الادعاءات', 'قسّم النص وراجع المرشحات واقتباساتها. إشارات لغوية، لا حكم بصحة الادعاء.', 'claims.html'),
+      ('الكيانات والعلاقات', 'استكشف العبارات المتكررة وراجع الروابط بينها. لا حسم تلقائي لهوية الأشخاص.', 'entities.html'),
+      ('الخط الزمني', 'اجمع التواريخ وراجع الأحداث والتعارضات. التواريخ المرشحة ليست أحداثًا مؤكدة.', 'timeline.html'),
+      ('مقارنة النسخ', 'قارن النصوص والأرقام والنفي مع مواضع الفروق الأصلية. اختلاف النص ليس إثبات تضليل.', 'versions.html'),
+      ('استخراج النص ومراجعته', 'استخرج نص الصورة بالعربية والإنجليزية محليًا، وراجع الأخطاء أمام الأصل.', 'ocr.html'),
+      ('فحص الصورة', 'بيانات وصفية وطبقات فحص محلية ومؤشرات للمراجعة. لا حكم تلقائي بالأصالة.', 'image-analysis.html'),
+      ('لقطات الفيديو', 'استخرج لقطات وتوقيتات وسجل ملاحظاتك. البحث العكسي الخارجي بعد موافقة مستقلة.', 'video-frames.html'),
+      ('ملف النطاق', 'تفكيك محلي للعنوان وسجلات DNS وRDAP اختيارية واضحة المصدر. لا إثبات لهوية المشغل.', 'domain-dossier.html'),
+      ('أرشيف الويب', 'ابحث عن النسخ العامة المؤرشفة واحفظ بياناتها. التغطية ليست كاملة ولا تثبت المصدر الأول.', 'archive.html'),
+      ('مسار التحقق', 'خطوات وأدوات مقترحة بقواعد معلنة. ليست خطة مولدة بالذكاء الاصطناعي.', 'planner.html'),
+    ]
+    standalone_cards = ''.join(f'<article class="feat"><small class="eyebrow">{i+1:02d}</small><h3>{E(t)}</h3><p>{E(d)}</p><a href="../{h}">افتح الأداة <span aria-hidden="true">←</span></a></article>' for i,(t,d,h) in enumerate(standalone))
     # hub
     cards = ''.join(f'<article class="feat"><span class="bar" aria-hidden="true"></span><small class="eyebrow">{k + 1:02d}</small><h3>{E(a)}</h3><p>{E(b)}</p><a href="{h.split("/")[-1]}">{E(l)} <span aria-hidden="true">←</span></a></article>' for k, (a, b, h, l) in enumerate(cat_cards))
     other = ''.join(f'<article class="feat"><span class="bar" aria-hidden="true"></span><h3>{E(a)}</h3><p>{E(b)}</p><a href="../{h}">{E(l)} <span aria-hidden="true">←</span></a></article>' for a, b, h, l in OTHERS)
-    body = (page_head('أدوات التحقق · دليل المصادر المفتوحة', 'أدوات بايثون مفتوحة المصدر تعمل في متصفحك، موزعة على فئات في صفحات مستقلة.', '../') + site_header('../', 'الأدوات') +
-            '<main id="main" class="wrap pagebody"><div class="sec-head"><h1>أدوات التحقق</h1><p>%d أداة مفتوحة المصدر، منها %d تعمل داخل متصفحك دون رفع نصك. نتائجها قواعدية قابلة للتتبع وتحتاج مراجعة بشرية، ولا تحكم بالصدق أو الكذب. كل فئة في صفحة مستقلة.</p></div>'
-            '<div class="feats">%s</div><div class="sec-head" style="margin-top:34px"><h2>أدوات أخرى في المنصة</h2></div><div class="feats">%s</div></main>' % (len(ids_all), n_run, cards, other) + footer('../') + '</body></html>')
+    body = (page_head('أدوات الصحفي · دليل المصادر المفتوحة', 'أدوات مستقلة داخل المنصة، بخطوات وحدود واضحة.', '../') + site_header('../', 'الأدوات') +
+            '<main id="main" class="wrap pagebody"><div class="sec-head standalone-intro" id="journalist-tools"><p class="eyebrow">اختر مهمتك</p><h1>أدوات الصحفي</h1><p>كل أداة في صفحة مستقلة. اختر المادة التي تعمل عليها، وراجع الناتج أمام الأصل قبل اعتماده. هذه الوظائف لا تصدر حكمًا تلقائيًا بصحة المحتوى.</p></div><div class="feats">' + standalone_cards + '</div>' +
+            '<section class="box"><h2>قضاياك السابقة محفوظة</h2><p>لو عندك ملف قضية من دفتر الصحفي القديم، ما زال بإمكانك فتحه ومراجعته وتنزيله هناك. الاستيراد المشترك بين الصفحات المستقلة لم يكتمل بعد. لا ننقل بياناتك ولا نمسحها تلقائيًا.</p><a href="../journalist-tools.html">افتح الدفتر القديم لاستعادة قضية سابقة</a></section>' +
+            '<section class="box"><h2>مراجعة الترجمة</h2><p>صفحة الترجمة المستقلة لم تكتمل بعد. المراجعة المتوازية في الدفتر القديم يدوية، وليست خدمة ترجمة آلية.</p></section>' +
+            '<div class="sec-head" style="margin-top:34px"><h2>مساعدات بايثون حسب الفئة</h2><p>%d أداة مسجلة، منها %d تعمل في المتصفح. الفئات التالية تضم عدة وظائف؛ ليست بديلًا عن صفحات الأدوات الصحفية أعلاه.</p></div><div class="feats">%s</div><div class="sec-head" style="margin-top:34px"><h2>أدوات وخدمات إضافية</h2></div><div class="feats">%s</div></main>' % (len(ids_all), n_run, cards, other) + footer('../') + '</body></html>')
     (SITE / 'tools' / 'index.html').write_text(body, encoding='utf-8')
     static_pages(ns)
     return n_run, len(ids_all)
