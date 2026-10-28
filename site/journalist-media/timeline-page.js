@@ -1,9 +1,27 @@
 import{dateCandidates,validDate}from'../journalist-core.js';
+import{findConflicts,findGaps}from'./timeline-review-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
 let events=[];
+function renderReview(){
+ const box=$('review');if(!box)return;box.replaceChildren();
+ const conflicts=findConflicts(events),gaps=findGaps(events);
+ if(!conflicts.length&&!gaps.length){box.hidden=true;return}
+ box.hidden=false;
+ box.append(el('h3','مراجعة التعارضات والفجوات'));
+ box.append(el('p','قواعد محلية تبرز ما يستحق المراجعة فقط؛ لا تحسم أي تاريخ ولا تثبت خطأ.','hint'));
+ for(const c of conflicts){
+  const card=el('div',undefined,'tl-conflict');
+  card.append(el('p','تعارض محتمل: الوصف نفسه بتواريخ مختلفة ('+c.dates.join('، ')+')','tl-flag'));
+  for(const it of c.items){const row=el('div',undefined,'tl-citem');row.append(el('span',it.date,'tl-dateval'),el('p',it.text));if(it.quote)row.append(el('blockquote',it.quote));card.append(row)}
+  box.append(card)}
+ for(const g of gaps){
+  const card=el('div',undefined,'tl-gap');
+  card.append(el('p','فجوة زمنية: '+g.days+' يومًا بين '+g.from+' و '+g.to+' - تحقق من أحداث غير موثقة بينهما.','tl-flag'));
+  card.append(el('p','قبل: '+g.fromText));card.append(el('p','بعد: '+g.toText));
+  box.append(card)}}
 function renderAxis(){
- const ax=$('axis');ax.replaceChildren();$('detail').hidden=true;
+ const ax=$('axis');ax.replaceChildren();$('detail').hidden=true;renderReview();
  const dated=events.filter(e=>e.date).sort((a,b)=>a.date.localeCompare(b.date));
  const undated=events.filter(e=>!e.date);
  const uw=$('undated');uw.replaceChildren();
