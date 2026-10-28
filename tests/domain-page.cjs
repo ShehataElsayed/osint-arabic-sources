@@ -13,6 +13,7 @@ await p.waitForFunction(()=>document.querySelector('#cards').textContent.include
 await p.click('#rdap');
 await p.waitForFunction(()=>document.querySelector('#cards').textContent.includes('Test Registrar LLC'));
 assert.ok(external.every(u=>u.startsWith('https://dns.google/')||u.startsWith('https://rdap.org/')),'only explicit endpoints: '+external.join(','));
+for(const sel of ['#parse-out','.dd-card .dd-val'])assert.equal(await p.evaluate(s=>getComputedStyle(document.querySelector(s)).direction,sel),'ltr','technical values isolated LTR: '+sel);
 const[d]=await Promise.all([p.waitForEvent('download'),p.click('#save')]);
 const dossier=JSON.parse(fs.readFileSync(await d.path()));
 assert.equal(dossier.records.length,2);
