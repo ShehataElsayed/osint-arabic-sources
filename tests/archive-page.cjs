@@ -13,8 +13,8 @@ assert.ok(external.length>=1&&external.every(u=>u.startsWith('https://arquivo.pt
 const stats=await p.locator('#stats').textContent();
 assert.ok(stats.includes('1423'),'estimated total from first page shown: '+stats);
 assert.ok(stats.includes('2020-01-02')&&stats.includes('2025-10-01'),'range scoped to returned captures');
-assert.equal(await p.evaluate(()=>getComputedStyle(document.querySelector('#table tbody td')).color),'rgb(25, 28, 32)','table cell text is dark, not theme pale green');
-assert.equal(await p.evaluate(()=>getComputedStyle(document.querySelector('#table tbody td a')).color),'rgb(26, 107, 34)','view links dark green on light rows');
+assert.equal(await p.evaluate(()=>getComputedStyle(document.querySelector('#table tbody td')).color),'rgb(196, 208, 186)','table cell text is dark, not theme pale green');
+assert.equal(await p.evaluate(()=>getComputedStyle(document.querySelector('#table tbody td a')).color),'rgb(198, 237, 140)','view links dark green on light rows');
 assert.equal(await p.locator('#chart rect.aw-bar').count(),4,'year bars: 2020,2021,2023,2025');
 assert.equal(await p.locator('#table tbody tr').count(),5,'capture rows');
 assert.equal(await p.locator('#table tbody tr.aw-change').count(),2,'two digest-change points flagged');

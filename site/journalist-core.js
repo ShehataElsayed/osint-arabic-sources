@@ -1,5 +1,5 @@
 // Deterministic aids only. Human decisions remain separate from exact source spans.
-export const TOOL_NAMES={claims:'الادعاءات والأدلة',entities:'الكيانات والعلاقات',timeline:'الخط الزمني',versions:'مقارنة نسختين',ocr:'OCR ومراجعة الأصل',translation:'مكتب الترجمة',image:'سياق الصورة',video:'لقطات الفيديو',domain:'ملف النطاق',planner:'خطة التحقق'};
+export const TOOL_NAMES={archive:'بيانات أرشيف الويب',claims:'الادعاءات والأدلة',entities:'الكيانات والعلاقات',timeline:'الخط الزمني',versions:'مقارنة نسختين',ocr:'OCR ومراجعة الأصل',translation:'مكتب الترجمة',image:'سياق الصورة',video:'لقطات الفيديو',domain:'ملف النطاق',planner:'خطة التحقق'};
 export function sentences(text){
  const out=[];let start=0;
  const push=end=>{const raw=text.slice(start,end),quote=raw.trim();if(quote){const left=start+raw.indexOf(quote);out.push({quote,start:left,end:left+quote.length})}start=end};
