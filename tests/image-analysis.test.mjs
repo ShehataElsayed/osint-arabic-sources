@@ -1,5 +1,5 @@
 import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
-import {scanJpeg,parseExif,estimateQuality,scanPng,noiseMap,extractExifThumbnail,luminanceGradient,levelSweep,channelHistogram,extractStrings,detectClones} from '../site/journalist-media/image-analysis-core.js';
+import {scanJpeg,parseExif,estimateQuality,scanPng,noiseMap,extractExifThumbnail,luminanceGradient,levelSweep,channelHistogram,extractStrings,detectClones,pcaProjections,enhanceRegion} from '../site/journalist-media/image-analysis-core.js';
 const jpg=new Uint8Array(readFileSync('tests/fixtures/journalist-photo-exif.jpg'));
 test('scanJpeg reads markers, DQT, SOF, EXIF segment',()=>{const s=scanJpeg(jpg);assert.ok(s.markers.length>=5);assert.equal(s.dqt.length,2);assert.equal(s.sof.width,1000);assert.equal(s.sof.height,600);assert.ok(s.exif instanceof Uint8Array)});
 test('scanJpeg rejects non-JPEG',()=>{assert.throws(()=>scanJpeg(new Uint8Array([1,2,3,4])))});
@@ -43,3 +43,28 @@ test('extractStrings hint filter finds software traces',()=>{
 test('extractExifThumbnail null when absent',()=>{
  const f=parseExif(scanJpeg(jpg).exif);
  assert.equal(extractExifThumbnail(scanJpeg(jpg).exif),null)});
+
+test('pcaProjections recovers dominant axes, normalizes output, validates input',()=>{
+ const W=40,H=30,px=new Uint8ClampedArray(W*H*4);
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++){const i=(y*W+x)*4;px[i]=x*6;px[i+1]=y*8;px[i+2]=128;px[i+3]=255}
+ const r=pcaProjections(px,W,H);
+ assert.equal(r.components.length,3);assert.equal(r.components[0].length,W*H);
+ assert.ok(r.variances[0]>=r.variances[1]&&r.variances[1]>=r.variances[2],'variances sorted');
+ assert.ok(r.variances[2]<1,'flat channel carries no variance');
+ assert.equal(Math.max(...r.components[0]),255);assert.equal(Math.min(...r.components[0]),0);
+ const flat=pcaProjections(new Uint8ClampedArray(16*4).fill(128),4,4);
+ assert.ok(flat.variances.every(v=>v===0),'flat image zero variance');
+ assert.throws(()=>pcaProjections(new Uint8ClampedArray(4),2,2));});
+
+test('enhanceRegion equalize spans range, auto-contrast stretches, none passthrough, bad mode throws',()=>{
+ const reg=new Uint8ClampedArray(40*40*4);
+ for(let i=0;i<reg.length;i+=4){reg[i]=60;reg[i+1]=80;reg[i+2]=100;reg[i+3]=255}
+ reg[0]=reg[1]=reg[2]=0;reg[reg.length-4]=reg[reg.length-3]=reg[reg.length-2]=255;
+ const eq=enhanceRegion(reg.slice(),{mode:'equalize'});
+ assert.equal(Math.min(...eq.filter((_,i)=>i%4===0)),0);assert.equal(Math.max(...eq.filter((_,i)=>i%4===0)),255);
+ const ac=enhanceRegion(reg.slice(),{mode:'auto-contrast'});
+ assert.equal(ac[0],0);assert.equal(ac[reg.length-4],255);
+ const same=new Uint8ClampedArray([10,20,30,255]);
+ assert.equal(enhanceRegion(same,{mode:'none'}),same);
+ assert.throws(()=>enhanceRegion(same.slice(),{mode:'bogus'}));
+ assert.throws(()=>enhanceRegion(new Uint8ClampedArray(3),{mode:'none'}));});
