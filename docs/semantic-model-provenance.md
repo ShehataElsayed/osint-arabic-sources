@@ -21,19 +21,23 @@ artifact actually is, pinned where possible, with the API evidence checked on
   confirming inference is on-device and queries do not leave the device.
 
 ## License
-- The mirror card (Xenova/paraphrase-multilingual-MiniLM-L12-v2) declares
-  `base_model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`
-  and carries NO license field of its own (HF API `license: null`,
-  checked 2026-10-29). It is a format conversion (ONNX/quantized weights)
-  for transformers.js.
-- The base model card (sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2)
-  is tagged `license:apache-2.0` (HF API tags, checked 2026-10-29; base sha
-  `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`).
-- Standing caveat, same bar as `docs/free-ai-local-candidates.md`: the mirror
-  itself does not restate a license. The Apache-2.0 tag on the exact base
-  model it converts is the strongest available evidence of redistribution
-  terms; if a stricter reading is required, treat the semantic re-rank the
-  same way as the held NER candidates until Xenova's card declares a license.
+- Mirror repo (Xenova/paraphrase-multilingual-MiniLM-L12-v2): declares
+  `base_model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`;
+  its file tree contains NO LICENSE file and its card has NO license field
+  (HF API `license: null`; file list and README checked 2026-10-29). It is a
+  format conversion (ONNX/quantized weights) for transformers.js.
+- Owning base repo (sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2,
+  sha `e8f8c211226b894fcb81acc59f3b34ba3efd5f42`): the card YAML itself
+  declares `license: apache-2.0` (README frontmatter line 53, checked
+  2026-10-29). The sentence-transformers source repository
+  (UKPLab/sentence-transformers) ships the Apache License 2.0 text.
+- Assessment: the weights derive from an artifact whose owning repo declares
+  Apache-2.0, which permits redistribution with notice. The mirror not
+  restating terms is a provenance gap, not a confirmed conflict. We keep
+  this note as the notice record and attribute both repos here; if Xenova's
+  card later declares different terms, this note must be revisited.
+- Retrieval-side changes in PR #115 (stemmer consistency, vocabulary pairs,
+  concept coverage, rank fusion) are model-agnostic and unaffected.
 
 ## Runtime compatibility evidence
 - Chromium (headless shell 1248, desktop and 320/390px viewports): model

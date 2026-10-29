@@ -1,6 +1,6 @@
 // Candidate retrieval for the smart search. Pure functions, no network. Used by smart-search.js and tests.
 export const normalize = s => String(s || '').toLowerCase().normalize('NFKD')
-  .replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه')
+  .replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/هه(?=\s|$)/g, 'ه')
   .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 // Light Arabic stemmer: strips common prefixes/suffixes while keeping at least 3 letters. Latin words pass through.
@@ -15,6 +15,11 @@ const STOP = new Set(['اريد', 'احتاج', 'كيف', 'هل', 'ما', 'هو'
 
 // Task vocabulary: Arabic task words (normalised, stemmed forms are derived) mapped to extra terms that appear in tool names/descriptions.
 const SYN = {
+  'رابط': ['روابط', 'url', 'link', 'links'], 'روابط': ['رابط', 'url', 'link'], 'مشبوه': ['suspicious', 'phishing', 'malicious'],
+  'ملف': ['ملفات', 'file', 'files'], 'حساب': ['حسابات', 'account', 'accounts'], 'صفحه': ['صفحات', 'page', 'webpage'],
+  'exif': ['exiftool', 'metadata'], 'ميتا': ['metadata'], 'وصفيه': ['metadata', 'exif'],
+  'تجاري': ['registry', 'register', 'companies'], 'ملكيه': ['ownership', 'beneficial', 'owner'],
+  'ضغط': ['compression', 'ela', 'jpeg'], 'معالج': ['تعديل', 'تلاعب', 'manipulation', 'edit', 'edited'], 'تلاعب': ['manipulation', 'tamper', 'fake', 'edited'],
   'صوره': ['image', 'images', 'صور', 'reverse', 'photo'], 'صور': ['image', 'images', 'photo'], 'سفينه': ['vessel', 'ship', 'ais', 'maritime'], 'سفن': ['vessel', 'ship', 'ais'], 'بحري': ['vessel', 'ship', 'maritime', 'ais'],
   'طائره': ['flight', 'aircraft', 'adsb', 'ads', 'flightradar24'], 'طيران': ['flight', 'aircraft', 'ads', 'flightradar24'], 'رحله': ['flight', 'flightradar24'],
   'تيليجرام': ['telegram'], 'تلغرام': ['telegram'], 'تلجرام': ['telegram'], 'قناه': ['channel'],
@@ -45,7 +50,7 @@ export function buildIndex(items) {
   const docs = items.map(t => {
     const name = tok(t.name).map(stem), desc = tok(t.description).map(stem);
     const tf = new Map(); for (const w of desc) tf.set(w, (tf.get(w) || 0) + 1);
-    return { name: new Set(name), tf, len: desc.length || 1 };
+    return { name: new Set(name), tf, len: desc.length || 1, seq: desc };
   });
   const df = new Map(); for (const d of docs) for (const w of new Set([...d.name, ...d.tf.keys()])) df.set(w, (df.get(w) || 0) + 1);
   const names = new Set(); for (const d of docs) for (const w of d.name) names.add(w);
@@ -64,7 +69,7 @@ export function search(idx, query, { limit = 15, minScore = 2.2, minTerms = 1 } 
     for (const [w, wt] of terms) {
       let s = 0; const tf = d.tf.get(w) || 0;
       if (tf) s += idf(w) * (tf * 2.2) / (tf + 1.2 * (0.25 + .75 * d.len / idx.avg));
-      if (d.name.has(w)) s += idf(w) * 1.6;
+      if (d.name.has(w)) s += idf(w) * 1.6 * wt;
       if (s) { hits++; score += s * wt; }
     }
     return { t, id: i, score, hits };
@@ -72,6 +77,33 @@ export function search(idx, query, { limit = 15, minScore = 2.2, minTerms = 1 } 
   // Same tool can be catalogued under several branches; recommend each URL once, keeping its best-scored entry.
   const seenUrl = new Set();
   scored = scored.filter(x => { const u = x.t.url || x.t.name; return !seenUrl.has(u) && seenUrl.add(u); });
+  // Phrase proximity: an adjacent pair of query concepts in a description is much stronger
+  // intent evidence than the same words scattered. Synonym-expanded on both sides.
+  const w1 = base.filter(w => terms.get(w) === 1);
+  for (const x of scored) {
+    const seq = idx.docs[x.id].seq; let bonus = 0;
+    for (let i = 0; i + 1 < seq.length; i++) {
+      for (const a of w1) {
+        const aw = [a, ...(SYNS[a] || [])];
+        if (!aw.includes(seq[i])) continue;
+        for (const b of w1) {
+          if (a === b) continue;
+          const bw = [b, ...(SYNS[b] || [])];
+          if (bw.includes(seq[i + 1])) { bonus += 0.5 * (idf(a) + idf(b)) * 0.5; }
+        }
+      }
+    }
+    if (bonus) x.score += Math.min(bonus, 8);
+    // Coordination/coverage: reward covering many distinct query concepts (a concept counts
+    // once whether matched directly or through a synonym), not just one strong term.
+    const d = idx.docs[x.id]; let cov = 0;
+    for (const a of w1) {
+      const aw = [a, ...(SYNS[a] || [])];
+      if (aw.some(w => d.tf.has(w) || d.name.has(w))) cov += 0.4 * idf(a);
+    }
+    x.score += Math.min(cov, 10);
+  }
+  scored.sort((a, b) => b.score - a.score);
   const top = scored.slice(0, limit);
   // Abstain unless the query contains task vocabulary we know (synonym table or a tool name) and the best match is strong enough.
   const known = base.some(w => SYNS[w] || (idx.names.has(w) && w.length > 2));
