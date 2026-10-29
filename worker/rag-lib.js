@@ -148,12 +148,24 @@ export async function factCheckQuick(question, env, f = fetch) {
   const key = env.FACTCHECK_API_KEY || env.GEMINI_API_KEY;
   if (!key) return { error: 'off' };
   // Direct call (not factCheck()) so an API failure is NEVER misreported to the user as "no match":
-  // empty matches here means the API answered 200 with zero matching reviews.
-  let claims;
-  try {
-    const r = await f(`https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(q)}&languageCode=ar&pageSize=8&key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(15000) });
+  // empty matches here means the API answered 200 with zero matching reviews. Arabic first; when it
+  // finds nothing, retry in English (limited Arabic checker coverage - the user-facing note says so).
+  // An API error stops the search instead of silently falling through to a fake empty.
+  const search = async lang => {
+    const r = await f(`https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(q)}&languageCode=${lang}&pageSize=8&key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(15000) });
     if (!r.ok) return { error: 'fc_http_' + r.status };
-    claims = (await r.json()).claims || [];
+    return { claims: (await r.json()).claims || [] };
+  };
+  let claims, coverage = 'ar';
+  try {
+    const ar = await search('ar');
+    if (ar.error) return { error: ar.error };
+    if (ar.claims.length) claims = ar.claims;
+    else {
+      const en = await search('en');
+      if (en.error) return { error: en.error };
+      claims = en.claims; coverage = claims.length ? 'en' : 'none';
+    }
   } catch { return { error: 'neterr' }; }
   const rows = [];
   for (const c of claims) for (const rv of c.claimReview || [])
@@ -173,7 +185,7 @@ export async function factCheckQuick(question, env, f = fetch) {
       if (r.ok) { const t = ((await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/\s+/g, ' ').trim().slice(0, 500); summary = t && !/https?:|www\./i.test(t) ? t : null; }
     } catch { /* summary optional - matches still render */ }
   }
-  return { matches, summary };
+  return { matches, summary, coverage };
 }
 // Live Arabic news discovery via direct publisher RSS feeds (user-requested RSS link, 2026-10-30).
 // Direct publisher feeds only: the Google News RSS terms shown in the feed itself restrict it to

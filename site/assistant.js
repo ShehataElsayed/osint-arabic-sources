@@ -219,15 +219,28 @@ function renderNews(r, box) {
 // its checker with rating/date/link; Gemini summarizes only the matched reviews. No match is shown
 // as unknown - never as proof the news is true or false. Optional: any failure just skips the card.
 function factPanel(q) {
-  return post({ mode: 'factcheck_quick', q }).then(r => (r && Array.isArray(r.matches)) ? r : null).catch(() => null);
+  // Direct fetch (not post()) so the raw error code ('off', 'fc_http_403', ...) survives for the
+  // status card; post() rewrites codes into generic localized messages.
+  return fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'factcheck_quick', q }) })
+    .then(r => r.json())
+    .then(d => (d && Array.isArray(d.matches)) ? d : { error: (d && d.error) || 'unexpected' })
+    .catch(() => ({ error: 'neterr' }));
 }
 function renderFacts(r, box) {
   const card = el('div', 'src-card fade');
   card.append(el('span', 'badge', 'تحقق سريع'));
   card.append(el('h3', null, 'مراجعات تحقق مطابقة (Google Fact Check)'));
+  if (r.error) {
+    // Never silently skip: the user asked for this check, so say plainly why it did not run.
+    card.append(el('p', null, r.error === 'off'
+      ? 'خدمة التحقق السريع غير مفعّلة حاليًا: مفتاح Google Fact Check غير مهيأ على الخادم. النتيجة غير معروفة — تحقق يدويًا.'
+      : 'تعذّر الوصول إلى خدمة Google Fact Check الآن (' + r.error + '). النتيجة غير معروفة — أعد المحاولة لاحقًا أو تحقق يدويًا.'));
+    box.append(card); return;
+  }
   if (!r.matches.length) {
     card.append(el('p', null, 'لا توجد مراجعة تحقق مطابقة لهذا الخبر في قاعدة Google Fact Check حاليًا. غياب النتيجة لا يعني أن الخبر صحيح ولا أنه كاذب — اتبع مسار التحقق اليدوي.'));
   } else {
+    if (r.coverage === 'en') card.append(el('p', 'note', 'لا توجد مراجعات عربية مطابقة؛ النتائج التالية من مدققين بالإنجليزية (تغطية المدققين العرب محدودة في القاعدة).'));
     if (r.summary) card.append(el('p', null, r.summary));
     const list = el('ol', null, 'plan-steps');
     for (const m of r.matches) {
@@ -237,7 +250,7 @@ function renderFacts(r, box) {
       list.append(li);
     }
     card.append(list);
-    card.append(el('p', 'note', 'الأحكام لجهات التحقق المذكورة بأسمائها وتواريخها، لا للدليل ولا لـGemini؛ الملخص الآلي ينقل ما في المراجعات فقط. افتح المراجعة الأصلية قبل الاعتماد، وقد لا تطابق المراجعة خبرك بدقة كاملة.'));
+    card.append(el('p', 'note', 'الأحكام لجهات التحقق المذكورة بأسمائها وتواريخها، لا للدليل ولا لـGemini؛ الملخص الآلي ينقل ما في المراجعات فقط. المطابقة تعتمد على تشابه الكلمات في قاعدة Google Fact Check وليست تأكيدًا حرفيًا لخبرك بالذات — افتح المراجعة الأصلية وقارنها بخبرك قبل الاعتماد.'));
   }
   box.append(card);
 }

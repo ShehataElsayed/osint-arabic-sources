@@ -27,17 +27,31 @@ test('route: matched reviews render attributed, https-only, capped, and Gemini s
   assert.equal(r.matches.length, 2, 'insecure URL dropped');
   assert.equal(r.matches[0].publisher, 'مسبار'); assert.equal(r.matches[0].rating, 'مضلل'); assert.equal(r.matches[0].date, '2026-10-20');
   assert.ok(r.summary.includes('مسبار'), 'Gemini summary attributed');
+  assert.equal(r.coverage, 'ar');
   assert.ok(calls.some(u => u.includes('factchecktools.googleapis.com/v1alpha1/claims:search')), 'Fact Check API called');
   assert.ok(calls.some(u => u.includes('generativelanguage.googleapis.com')), 'Gemini called for the summary');
   assert.ok(calls.every(u => u.includes('factchecktools') || !u.includes(encodeURIComponent('خبر'))), 'claim text only to the Fact Check API, not pasted into other URLs');
 });
 
-test('route: zero matching reviews -> empty matches, null summary, NO Gemini call', async () => {
+test('route: zero matching reviews in BOTH languages -> empty matches, null summary, NO Gemini call', async () => {
   calls = [];
   mock(async u => u.includes('factchecktools') ? FC([]) : geminiOk('should never happen'));
   const r = await (await post({ mode: 'factcheck_quick', q: 'خبر بلا مراجعات' })).json();
-  assert.deepEqual(r.matches, []); assert.equal(r.summary, null);
+  assert.deepEqual(r.matches, []); assert.equal(r.summary, null); assert.equal(r.coverage, 'none');
   assert.equal(calls.filter(u => u.includes('generativelanguage')).length, 0, 'no Gemini call without matches');
+  assert.equal(calls.filter(u => u.includes('factchecktools')).length, 2, 'Arabic then English searched before declaring none');
+});
+
+test('route: no Arabic reviews -> English retry returns attributed matches marked coverage=en', async () => {
+  calls = [];
+  mock(async u => {
+    if (u.includes('factchecktools') && u.includes('languageCode=ar')) return FC([]);
+    if (u.includes('factchecktools') && u.includes('languageCode=en')) return FC([CLAIM('English claim', 'AFP Fact Check', 'False', 'https://factcheck.afp.com/1')]);
+    return geminiOk('AFP Fact Check rated a related claim False.');
+  });
+  const r = await (await post({ mode: 'factcheck_quick', q: 'international claim' })).json();
+  assert.equal(r.coverage, 'en'); assert.equal(r.matches.length, 1); assert.equal(r.matches[0].publisher, 'AFP Fact Check');
+  assert.ok(r.summary, 'summary still generated for English matches');
 });
 
 test('route: Fact Check API failure is an explicit error, never a fake "no match"', async () => {
