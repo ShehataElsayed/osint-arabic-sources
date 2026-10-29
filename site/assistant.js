@@ -30,7 +30,8 @@ async function post(payload) {
   let data = null; try { data = await r.json(); } catch { /* ignore */ }
   if (!r.ok || !data || data.error) {
     const code = data && data.error;
-    const msg = code === 'off' || code === 'no_key' ? 'المساعد غير مفعّل بعد: يلزم ضبط مفتاح خدمة الذكاء الاصطناعي على الخادم.'
+    const msg = code === 'too_long' ? 'السؤال أطول من الحد المسموح (٤٠٠ حرف) — اختصره وحاول مجددًا.'
+      : code === 'off' || code === 'no_key' ? 'المساعد غير مفعّل بعد: يلزم ضبط خدمة الذكاء الاصطناعي على الخادم.'
       : code === 'busy' || code === 'rate_limited' ? 'ضغط على الخدمة حاليًا — أعد المحاولة بعد دقيقة.'
       : 'تعذر الوصول إلى الخادم — أعد المحاولة لاحقًا.';
     throw new Error(msg);
@@ -71,7 +72,7 @@ function render(conf, question) {
     const reason = conf.insufficient_reason || '';
     const badge = (reason === 'generation_failed' || reason === 'no_checkable_claims') ? 'تعذّرت المعالجة' : 'أدلة غير كافية';
     const text = reason === 'generation_failed'
-      ? 'تعذّر على الخدمة الخارجية توليد مسودة هذه المرة (انتهت مهلة أو تعذّرت الصياغة)، فلم تُفحص إجابة. هذا لا يعني غياب المعلومة — أعد المحاولة بعد قليل أو أكمل البحث بأدوات الدليل.'
+      ? 'تعذّر على خادم الدليل تجهيز مسودة هذه المرة (انتهت مهلة أو تعذّرت الصياغة)، فلم تُفحص إجابة. هذا لا يعني غياب المعلومة — أعد المحاولة بعد قليل أو أكمل البحث بأدوات الدليل.'
       : reason === 'no_checkable_claims'
         ? 'تعذّر استخراج ادعاءات قابلة للفحص من مسودة النموذج، فلم تُفحص إجابة. هذا سبب معالجة لا يعني غياب المعلومة — أعد المحاولة أو ضيّق السؤال، أو أكمل البحث بأدوات الدليل.'
       : reason === 'unsupported_claims'

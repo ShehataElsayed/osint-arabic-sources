@@ -58,20 +58,20 @@ const fs=require('fs');
   await page.locator('.tf-btn').first().click();
   const stored=JSON.parse(await page.evaluate(()=>localStorage.getItem('osint-verification-v2')));
   assert.ok(stored.cases[0].evidence.length>=1,'tool saved into case evidence');
-  // assistant page: static-only build — no backend is configured, so the NewsRAG server flow must be
-  // genuinely unreachable: ask button disabled, honest static-mode notice, redirect to the on-device
-  // smart search, and zero requests to the retired external worker.
+  // assistant page: backend restored on the project's Cloudflare worker (all AI runs on Cloudflare
+  // Workers AI there). Server mode must be genuine: connected-mode notice, ask button enabled, no
+  // static-mode redirect, and zero worker requests before the user actually asks.
   let workerHit = false;
   await page.route('https://osint-rag.egkrkr.workers.dev/**', r => { workerHit = true; r.abort(); });
   await page.goto('http://127.0.0.1:8765/assistant.html');
   assert.equal(await page.getByAltText('شعار OS').count(),1);
   await page.screenshot({path:'test-output/assistant-desktop.png'});
   const modeTxt = await page.locator('#mode').innerText();
-  assert.ok(modeTxt.includes('ثابت بالكامل'),'static-only notice shown');
-  assert.ok(await page.locator('#askBtn').isDisabled(),'ask button disabled without backend');
-  assert.equal(await page.locator('#mode a[href="./smart-search.html"]').count(),1,'redirect to on-device smart search');
+  assert.ok(modeTxt.includes('متصل بالخادم'),'connected-to-server notice shown');
+  assert.ok(!(await page.locator('#askBtn').isDisabled()),'ask button enabled with backend configured');
+  assert.equal(await page.locator('#mode a[href="./smart-search.html"]').count(),0,'no static-mode redirect in server mode');
   await page.waitForTimeout(500);
-  assert.equal(workerHit,false,'no request to the retired external worker');
+  assert.equal(workerHit,false,'no worker request before the user asks');
   await page.unroute('https://osint-rag.egkrkr.workers.dev/**');
   await page.goto('http://127.0.0.1:8765/verification.html');
   await page.locator('#title').fill('اختبار حفظ محلي');
