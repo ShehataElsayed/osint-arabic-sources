@@ -59,7 +59,7 @@ export function search(idx, query, { limit = 15, minScore = 2.2, minTerms = 1 } 
   const terms = new Map();
   for (const w of base) { terms.set(w, 1); for (const s of SYNS[w] || []) if (!terms.has(s)) terms.set(s, 0.7); }
   const idf = w => Math.log(1 + (idx.n - (idx.df.get(w) || 0) + .5) / ((idx.df.get(w) || 0) + .5));
-  const scored = idx.items.map((t, i) => {
+  let scored = idx.items.map((t, i) => {
     const d = idx.docs[i]; let score = 0, hits = 0;
     for (const [w, wt] of terms) {
       let s = 0; const tf = d.tf.get(w) || 0;
@@ -69,6 +69,9 @@ export function search(idx, query, { limit = 15, minScore = 2.2, minTerms = 1 } 
     }
     return { t, id: i, score, hits };
   }).filter(x => x.hits >= minTerms).sort((a, b) => b.score - a.score);
+  // Same tool can be catalogued under several branches; recommend each URL once, keeping its best-scored entry.
+  const seenUrl = new Set();
+  scored = scored.filter(x => { const u = x.t.url || x.t.name; return !seenUrl.has(u) && seenUrl.add(u); });
   const top = scored.slice(0, limit);
   // Abstain unless the query contains task vocabulary we know (synonym table or a tool name) and the best match is strong enough.
   const known = base.some(w => SYNS[w] || (idx.names.has(w) && w.length > 2));

@@ -54,11 +54,14 @@ async function ask(q) {
 wireComposer({ form: $('composer'), input: $('q'), send: $('send'), chips: [...document.querySelectorAll('.chip')], onAsk: async q => { try { await ask(q); } catch (e) { startTurn($('thread'), q).replaceChildren(el('p', 'تعذّر إكمال الطلب: ' + e.message, 'why')); } } });
 $('local').onclick = async () => {
   if (!last) { $('status').textContent = 'اسأل أولًا ثم رتّب النتائج.'; return; }
-  $('status').textContent = 'جارٍ تنزيل نموذج صغير يعمل على جهازك (مرة واحدة)...';
-  try { const r = await semantic(last.q, last.cands), body = startTurn($('thread'), 'ترتيب دلالي على جهازي'); body.replaceChildren(el('h3', 'ترتيب دلالي تجريبي من نموذج يعمل على جهازك:', 'answer-title')); r.slice(0, 6).forEach((x, i) => body.append(card(x.t, i))); $('status').textContent = ''; }
+  $('status').textContent = 'جارٍ تنزيل نموذج لغوي (نحو 140MB، مرة واحدة) ليعمل على جهازك...';
+  try { const r = await semantic(last.q, last.cands), body = startTurn($('thread'), 'ترتيب دلالي على جهازي'); body.replaceChildren(el('h3', 'ترتيب دلالي تجريبي من نموذج يعمل على جهازك:', 'answer-title'));
+  const seen = new Set(); const deduped = r.filter(x => x.t.url && !seen.has(x.t.url) && seen.add(x.t.url));
+  deduped.slice(0, 6).forEach((x, i) => body.append(card(x.t, i))); $('status').textContent = ''; }
   catch (e) { $('status').textContent = 'تعذر تشغيل النموذج على هذا الجهاز: ' + e.message; }
 };
 if (EXTERNAL_AI) $('ext').addEventListener('change', e => { $('notice').textContent = e.target.checked ? NOTICE : ''; });
+else if ($('ext')) $('ext').closest('label').hidden = true; // static-only build: external mode unavailable, not just off
 
 const initQ = new URLSearchParams(location.search).get('q');
 if (initQ && initQ.trim()) { const q = initQ.trim().slice(0, 300); $('q').value = q; ask(q).catch(e => startTurn($('thread'), q).replaceChildren(el('p', 'تعذّر إكمال الطلب: ' + e.message, 'why'))); }

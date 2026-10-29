@@ -6,4 +6,6 @@ export const BACKEND_URL = 'https://osint-rag.egkrkr.workers.dev';
 // lab tool's private test split (see newsrag library CHANGELOG/methodology), NOT to this assistant,
 // and are intentionally not shown on this page.
 // The Worker forwards request text to an external AI service. Pages show a data-use notice while this is true.
-export const EXTERNAL_AI = true;
+// Static-only build (2026-10-29 judging decision): no backend, no external AI calls.
+// The worker endpoint above is stale; re-enable only after an explicit approved backend decision.
+export const EXTERNAL_AI = false;
