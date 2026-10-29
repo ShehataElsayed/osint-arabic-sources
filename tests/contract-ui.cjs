@@ -71,6 +71,14 @@ function scripted(draft, pages = { [OK_URL]: PAGE }) {
     browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox'] });
     for (const [name, fx] of Object.entries(scenarios)) {
       const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      // The shipped static build has no backend (BACKEND_URL is empty), so the server-mode render
+      // contract is exercised here by serving a test-only config that points BACKEND_URL at the
+      // scripted fixture below. This hook lives in the test only; nothing ships.
+      await page.route('**/rag-config.js', async r => {
+        const resp = await r.fetch(); let body = await resp.text();
+        body = body.replace("BACKEND_URL = ''", "BACKEND_URL = 'https://osint-rag.egkrkr.workers.dev'");
+        r.fulfill({ status: 200, contentType: 'text/javascript', body });
+      });
       await page.route('**/osint-rag.egkrkr.workers.dev/**', r => r.fulfill({ status: fx.error ? 200 : 200, contentType: 'application/json', body: JSON.stringify(fx) }));
       await page.goto('http://127.0.0.1:8775/assistant.html');
       await page.getByLabel('سؤالك', { exact: true }).fill('سؤال اختبار التكامل؟');

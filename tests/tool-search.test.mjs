@@ -33,3 +33,38 @@ test('a tool listed under several branches is recommended once per URL', () => {
   const r = search(buildIndex([...items, ...dupItems]), 'أرشفة صفحات الويب', { minScore: 1 });
   assert.equal(r.candidates.filter(c => c.t.url === 'https://archive.is/').length, 1);
 });
+
+test('jurisdiction mismatch is flagged and jurisdiction-covered queries are not', () => {
+  const items = [
+    { name: 'UK Companies', url: 'https://example.com/uk', description: 'السجل الحكومي الرسمي لمعلومات الشركات البريطانية وإيداعاتها قارن الملف بدفاتر الشركة وإفصاحاتها الرسمية' },
+    { name: 'Companies House', url: 'https://example.com/ch', description: 'يبحث Companies House عن شركات مسجلة في المملكة المتحدة ومسؤوليها ومستندات التسجيل المتاحة' },
+    { name: 'OpenCorporates', url: 'https://example.com/oc', description: 'قاعدة مجمعة لسجلات الشركات من ولايات قضائية مختلفة ارجع للسجل الأصلي طابق رقم التسجيل' },
+  ];
+  const idx = buildIndex(items);
+  const fr = search(idx, 'السجل التجاري الفرنسي');
+  assert.equal(fr.jurisdictionMiss, true);
+  assert.ok(fr.queryJuris.includes('فرنس'));
+  const fr2 = search(idx, 'السجل التجاري الفرنسية');
+  assert.equal(fr2.jurisdictionMiss, true);
+  const uk = search(idx, 'السجل التجاري البريطاني');
+  assert.equal(uk.jurisdictionMiss, false);
+  const uk2 = search(idx, 'شركات مسجلة في المملكة المتحدة البريطانية');
+  assert.equal(uk2.jurisdictionMiss, false);
+  const plain = search(idx, 'سجلات شركات');
+  assert.equal(plain.jurisdictionMiss, false);
+  const lat = search(idx, 'French commercial registry');
+  assert.ok(lat.queryJuris.includes('french')); // latin jurisdiction terms are detected on the query side
+});
+
+test('transactional intent stays non-confident and exposes no candidates for resurrection', () => {
+  const items = [
+    { name: 'FlightRadar24', url: 'https://example.com/fr', description: 'تتبع حركة الطيران والرحلات الجوية flight tracking aircraft' },
+  ];
+  const idx = buildIndex(items);
+  const r = search(idx, 'احجز تذكرة طيران');
+  assert.equal(r.txIntent, true);
+  assert.equal(r.confident, false);
+  // the UI contract: candidates only surface when confident, so a refusal leaves nothing to resurrect
+  const shown = r.confident ? r.candidates : [];
+  assert.equal(shown.length, 0);
+});

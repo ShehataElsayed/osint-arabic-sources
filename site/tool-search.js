@@ -58,6 +58,20 @@ export function buildIndex(items) {
   return { items, docs, df, avg, names, n: docs.length };
 }
 
+// Jurisdiction roots (normalized surface matching): detect when a request names a jurisdiction the
+// returned tools do not actually cover, so the UI can qualify results honestly instead of silently
+// answering for a different jurisdiction. Arabic roots match as substrings of the normalized text
+// (covers case/adjective/definite-article variants); Latin roots match on word boundaries.
+const JURIS_AR = ['فرنس', 'بريطان', 'انجليز', 'انجلتر', 'المان', 'امريك', 'مصر', 'سعود', 'امارات', 'تركي', 'اسبان', 'ايطال', 'هولند', 'سويسر', 'كندا', 'كندي', 'استرال', 'الهند', 'هندي', 'الصين', 'صيني', 'روسيا', 'روسي', 'يابان', 'اردن', 'لبنان', 'مغرب', 'تونس', 'جزائر', 'عراق', 'سوري', 'ليبي', 'سودان', 'يمن', 'قطر', 'كويت', 'بحرين', 'عمان', 'اوروب'];
+const JURIS_LAT = ['french', 'france', 'british', 'britain', 'england', 'uk', 'german', 'germany', 'american', 'america', 'usa', 'egypt', 'egyptian', 'saudi', 'emirati', 'emirates', 'uae', 'turkish', 'turkey', 'spanish', 'spain', 'italian', 'italy', 'dutch', 'netherlands', 'swiss', 'switzerland', 'canadian', 'canada', 'australian', 'australia', 'indian', 'india', 'chinese', 'china', 'russian', 'russia', 'japanese', 'japan', 'jordanian', 'jordan', 'lebanese', 'lebanon', 'moroccan', 'morocco', 'tunisian', 'tunisia', 'algerian', 'algeria', 'iraqi', 'iraq', 'syrian', 'syria', 'libyan', 'libya', 'sudanese', 'sudan', 'yemeni', 'yemen', 'qatari', 'qatar', 'kuwaiti', 'kuwait', 'bahraini', 'bahrain', 'omani', 'oman', 'european', 'europe'];
+const LAT_BOUNDARY = r => new RegExp(`(^|[^\\p{L}])${r}($|[^\\p{L}])`, 'u');
+export function jurisHits(text) {
+  const n = normalize(text), padded = ` ${n} `, hits = new Set();
+  for (const r of JURIS_AR) if (padded.includes(r)) hits.add(r);
+  for (const r of JURIS_LAT) if (LAT_BOUNDARY(r).test(n)) hits.add(r);
+  return [...hits];
+}
+
 // Transactional intent (booking, buying, tickets): the catalogue contains research tools only,
 // so these requests are never confident regardless of which domain words co-occur.
 const TX_INTENT = new Set(['حجز', 'احجز', 'حجزت', 'تذكره', 'تذاكر', 'تذكرت', 'شراء', 'اشترى', 'يشتري', 'ابتاع', 'اشتري'].map(w => stem(normalize(w))));
@@ -126,7 +140,14 @@ export function search(idx, query, { limit = 15, minScore = 2.2, minTerms = 1 } 
   const top = scored.slice(0, limit);
   // Abstain unless the query contains task vocabulary we know (synonym table or a tool name) and the best match is strong enough.
   const known = base.some(w => SYNS[w] || (idx.names.has(w) && w.length > 2));
-  return { terms: [...terms.keys()], candidates: top, known, txIntent, anchorMiss, confident: !txIntent && !anchorMiss && known && !!top.length && top[0].score >= minScore };
+  // If the request names a jurisdiction, at least one displayed tool should actually mention it;
+  // otherwise the results are cross-jurisdiction alternatives and must be labeled as such.
+  const queryJuris = jurisHits(query);
+  const jurisdictionMiss = !!queryJuris.length && !!top.length && !top.slice(0, 6).some(x => {
+    const it = idx.items[x.id] || {};
+    return jurisHits(`${it.name || ''} ${it.description || ''}`).some(r => queryJuris.includes(r));
+  });
+  return { terms: [...terms.keys()], candidates: top, known, txIntent, anchorMiss, jurisdictionMiss, queryJuris, confident: !txIntent && !anchorMiss && known && !!top.length && top[0].score >= minScore };
 }
 
 // The previous retrieval (kept only so tests can measure the change honestly).

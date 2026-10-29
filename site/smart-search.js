@@ -35,6 +35,7 @@ async function ask(q) {
   const all = await load(), found = search(getIndex(all), q), cands = found.confident ? found.candidates : []; last = { q, cands };
   body.replaceChildren(); const title = el('h3', null, 'answer-title'); body.append(title);
   if (!cands.length) { addPlanner(body, q); await typeInto(title, 'لا أجد أداة مناسبة لهذا الطلب في الدليل بثقة كافية. جرّب وصف المهمة بكلمات أخرى (مثل: صورة، أرشيف خبر، سجلات شركات)، أو تصفّح خريطة الأدوات.'); return; }
+  if (found.jurisdictionMiss) body.append(el('p', 'تنبيه ولاية قضائية: سؤالك يذكر جهة أو دولة لا تغطيها أدوات الدليل مباشرة؛ النتائج التالية بدائل عامة أو من ولايات قضائية أخرى، فراجع نطاق تغطية كل أداة قبل الاعتماد عليها.', 'meta-line'));
   let picks = null, web = [];
   const useExt = EXTERNAL_AI && BACKEND_URL && $('ext') && $('ext').checked;
   if (useExt) {
@@ -61,6 +62,7 @@ async function ask(q) {
 wireComposer({ form: $('composer'), input: $('q'), send: $('send'), chips: [...document.querySelectorAll('.chip')], onAsk: async q => { try { await ask(q); } catch (e) { startTurn($('thread'), q).replaceChildren(el('p', 'تعذّر إكمال الطلب: ' + e.message, 'why')); } } });
 $('local').onclick = async () => {
   if (!last) { $('status').textContent = 'اسأل أولًا ثم رتّب النتائج.'; return; }
+  if (!last.cands.length) { $('status').textContent = 'لا توجد نتائج من الدليل لترتيبها دلاليًا لهذا الطلب.'; return; }
   $('status').textContent = 'جارٍ تنزيل نموذج لغوي (نحو 140MB، مرة واحدة) ليعمل على جهازك...';
   try { const r = await semantic(last.q, last.cands), body = startTurn($('thread'), 'ترتيب دلالي على جهازي'); body.replaceChildren(el('h3', 'ترتيب دلالي تجريبي من نموذج يعمل على جهازك:', 'answer-title'), el('p', 'ترتيب بديل بالتشابه الدلالي؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة.', 'meta-line'));
   const seen = new Set(); const deduped = r.filter(x => x.t.url && !seen.has(x.t.url) && seen.add(x.t.url));
