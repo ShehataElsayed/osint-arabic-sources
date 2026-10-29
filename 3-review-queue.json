@@ -224,12 +224,14 @@
   "url": "https://www.melissa.com/",
   "names": [
    "Email to Address (R)",
-   "Melissa Data - People Finder (R)"
+   "Melissa Data - People Finder (R)",
+   "Melissa Data - Property Viewer (R)",
+   "MelissaData - Campaign Contributions"
   ],
-  "last_checked": "2026-10-29T17:27:57+00:00",
+  "last_checked": "2026-10-29T17:44:11+00:00",
   "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
+  "notes": "repaired 2026-10-29 from unreachable dns https://melissa-data.com, official successor verified HTTP 200",
   "http_status": 200
  },
  {
@@ -1394,12 +1396,13 @@
  {
   "url": "https://urlhaus.abuse.ch/",
   "names": [
-   "Zeus C2 Tracker"
+   "Zeus C2 Tracker",
+   "ZeuS Tracker"
   ],
   "last_checked": "2026-10-29T17:44:11+00:00",
   "review_status": "ok",
   "evidence_url": null,
-  "notes": "repaired 2026-10-29 from unreachable dns https://zeustracker.abuse.ch/blocklist.php?download=domainblocklist, official successor verified HTTP 200",
+  "notes": "repaired 2026-10-29 from unreachable dns https://zeustracker.abuse.ch/blocklist.php?download=domainblocklist, official successor verified HTTP 200 | repaired 2026-10-29 from unreachable dns https://zeustracker.abuse.ch/blocklist.php, official successor verified HTTP 200",
   "http_status": 200
  },
  {
@@ -1488,17 +1491,6 @@
   "review_status": "ok",
   "evidence_url": null,
   "notes": "",
-  "http_status": 200
- },
- {
-  "url": "https://urlhaus.abuse.ch/",
-  "names": [
-   "ZeuS Tracker"
-  ],
-  "last_checked": "2026-10-29T17:44:11+00:00",
-  "review_status": "ok",
-  "evidence_url": null,
-  "notes": "repaired 2026-10-29 from unreachable dns https://zeustracker.abuse.ch/blocklist.php, official successor verified HTTP 200",
   "http_status": 200
  },
  {
@@ -5455,18 +5447,6 @@
   "review_status": "ok",
   "evidence_url": null,
   "notes": "",
-  "http_status": 200
- },
- {
-  "url": "https://www.melissa.com/",
-  "names": [
-   "Melissa Data - Property Viewer (R)",
-   "MelissaData - Campaign Contributions"
-  ],
-  "last_checked": "2026-10-29T17:44:11+00:00",
-  "review_status": "ok",
-  "evidence_url": null,
-  "notes": "repaired 2026-10-29 from unreachable dns https://melissa-data.com, official successor verified HTTP 200",
   "http_status": 200
  },
  {
@@ -11050,16 +11030,16 @@
   "http_status": 200
  },
  {
-  "url": "https://phenoelit.org/dpl/dpl.html",
+  "url": "http://www.phenoelit.de/dpl/dpl.html",
   "names": [
    "Phenoelit Default Password List"
   ],
-  "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "unreachable",
+  "last_checked": "2026-10-29T17:49:40+00:00",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "dns",
+  "notes": "row URL corrected 2026-10-29 from https://phenoelit.org/dpl/dpl.html (not in catalogue, dns fail) to the catalogue URL; verified HTTP 200",
   "priority": "unverified_link",
-  "http_status": null
+  "http_status": 200
  },
  {
   "url": "https://www.routerpasswords.com/",
@@ -11781,12 +11761,13 @@
  {
   "url": "https://www.whatsmybrowser.org/",
   "names": [
-   "WhatsMyBrowser.org"
+   "WhatsMyBrowser.org",
+   "What Browser?"
   ],
   "last_checked": "2026-10-29T17:28:41+00:00",
   "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
+  "notes": "repaired 2026-10-29 from broken https://whatbrowser.org/, replacement verified HTTP 200",
   "http_status": 200
  },
  {
@@ -11799,17 +11780,6 @@
   "evidence_url": null,
   "notes": "",
   "http_status": 502
- },
- {
-  "url": "https://www.whatsmybrowser.org/",
-  "names": [
-   "What Browser?"
-  ],
-  "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "ok",
-  "evidence_url": null,
-  "notes": "repaired 2026-10-29 from broken https://whatbrowser.org/, replacement verified HTTP 200",
-  "http_status": 200
  },
  {
   "url": "https://www.ip2proxy.com/",
@@ -12282,15 +12252,6 @@
  },
  {
   "url": "https://toolbox.google.com/factcheck/explorer",
-  "names": [],
-  "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "ok",
-  "evidence_url": null,
-  "notes": "",
-  "http_status": 200
- },
- {
-  "url": "http://www.phenoelit.de/dpl/dpl.html",
   "names": [],
   "last_checked": "2026-10-29T17:28:41+00:00",
   "review_status": "ok",
