@@ -240,6 +240,19 @@ export async function embedTexts(texts, env, f = fetch) {
   } catch { return null; }
 }
 export const vcos = (a, b) => { let d = 0, na = 0, nb = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; } return na && nb ? d / Math.sqrt(na * nb) : 0; };
+// Semantic rerank signal for the guide's smart search: one query plus up to 12 candidate texts
+// (tool name + description) -> bge-m3 cosine score per candidate, in input order. Retrieval signal
+// only; the client fuses it with the lexical order (RRF) and labels the result experimental.
+export async function semanticScores(query, candidates, env) {
+  const q = String(query || '').trim().slice(0, 400);
+  const cands = (Array.isArray(candidates) ? candidates : []).slice(0, 12)
+    .map(c => String((c && c.text) || '').slice(0, 1000)).filter(Boolean);
+  if (!q || !cands.length) return { error: 'bad_request' };
+  if (!hasEmbed(env)) return { error: 'off' };
+  const vecs = await embedTexts([q, ...cands], env);
+  if (!vecs || vecs.length !== cands.length + 1 || !vecs[0]) return { error: 'upstream' };
+  return { scores: cands.map((_, i) => Math.round(vcos(vecs[0], vecs[i + 1] || []) * 1000) / 1000) };
+}
 export const SEM_SUPPORT = 0.78; // calibrated 2026-10-25 on live gemini-embedding-001: paraphrase 0.81-0.85, related-not-supporting 0.716-0.73. bge-m3 spot check 2026-10-29 (2 paraphrase vs 2 related-not-supporting pairs: 0.894-0.944 vs 0.395-0.417) is consistent but is NOT a validated threshold // semantic retrieval floor; grounded guards still apply on top
 const numTokens = s => (String(s).match(/\d+(?:[.,\u066C]\d+)?%?/g) || []).map(digits).filter(x => x && x.length >= 2);
 // Grounded support evaluation on the actual passage: numbers/years from the claim must appear in the
@@ -1256,6 +1269,7 @@ export default {
     let b; try { b = await req.json(); } catch { return json({ error: 'json' }, 400, o); }
     if (b?.mode === 'compose') { try { return json({ text: await compose(String(b.question || ''), b.labels, b.decision, env) }, 200, o); } catch { return json({ text: null }, 200, o); } }
     if (b?.mode === 'recommend') { try { const [rec, web] = await Promise.all([recommend(String(b.query || ''), b.candidates, env), exaWeb(String(b.query || ''), env, fetch, 3)]); return json(Array.isArray(rec) ? { picks: rec, web } : { picks: null, web, reason: rec?.error || 'off' }, 200, o); } catch { return json({ picks: null }, 200, o); } }
+    if (b?.mode === 'semantic') { try { return json(await semanticScores(b.query, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'verify') { try { return json(await verifyModel(String(b.question || ''), env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'ingest') { try { return json(await ingestUrl(String(b.url || ''), fetch, env), 200, o); } catch { return json({ error: 'fetch' }, 200, o); } }
     if (b?.mode === 'ask') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } } // evidence-first route: the draft pipeline's long JSON draft loses its claims array to token truncation on the current on-Cloudflare model (2026-10-29 probes); askAssistant stays exported for tests and future adaptation
