@@ -1,7 +1,7 @@
 import { BACKEND_URL, EXTERNAL_AI } from './rag-config.js';
 import { $, el, startTurn, typeInto, wireComposer, NOTICE } from './chat-ui.js';
 let tools, pipeline;
-import { buildIndex, search, gateScopes } from './tool-search.js';
+import { buildIndex, search, gateScopes, fuseSemanticCatalog, SEM_CATALOG_FLOOR } from './tool-search.js';
 let index;
 const load = async () => tools || (tools = await (await fetch('./search-tools.json')).json());
 const getIndex = items => index || (index = buildIndex(items));
@@ -34,6 +34,24 @@ async function semanticServer(q, cands) {
   const scored = top.map((c, i) => ({ ...c, sem: j.scores[i] }));
   return gateScopes(q, fuseRanks(scored));
 }
+// Full-catalogue semantic ranking: precomputed bge-m3 vectors for EVERY tool live in
+// tool-embeddings.{json,bin} next to this page; the worker embeds only the question and ranks
+// the whole catalogue server-side, so tools the keyword pass missed can surface. Only the
+// question text leaves the device - candidate descriptions stay in the deployed asset.
+// The manifest fingerprint guards parity: if the worker's asset does not match the deployed
+// search-tools.json, this throws and the caller falls back to the 12-candidate path.
+async function semanticCatalog(q) {
+  const mRes = await fetch('./tool-embeddings.json', { cache: 'force-cache' });
+  if (!mRes.ok) throw new Error('asset_missing');
+  const fp = (await mRes.json() || {}).fingerprint;
+  if (!fp) throw new Error('asset_missing');
+  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'semantic_catalog', q, top: 12, fingerprint: fp }) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  if (!j || !Array.isArray(j.ranking)) throw new Error(j && j.error || 'bad_response');
+  const all = await load();
+  return j.ranking.map(x => ({ id: x.i | 0, s: x.s, t: all[x.i | 0] })).filter(x => x.t && typeof x.s === 'number');
+}
 function fuseRanks(scored) {
   // Reciprocal-rank fusion of the lexical order (input order) and the semantic order (k=60,
   // the literature default): a strong lexical match cannot be buried by the semantic pass,
@@ -49,7 +67,7 @@ function addPlanner(body, q) {
 let last = null;
 async function ask(q) {
   $('greet').hidden = true; const body = startTurn($('thread'), q);
-  const all = await load(), found = search(getIndex(all), q), cands = found.confident ? found.candidates : []; last = { q, cands };
+  const all = await load(), found = search(getIndex(all), q), cands = found.confident ? found.candidates : []; last = { q, cands, txIntent: found.txIntent, anchorMiss: found.anchorMiss, queryJuris: found.queryJuris };
   body.replaceChildren(); const title = el('h3', null, 'answer-title'); body.append(title);
   if (!cands.length) { addPlanner(body, q); await typeInto(title, 'لا أجد أداة مناسبة لهذا الطلب في الدليل بثقة كافية. جرّب وصف المهمة بكلمات أخرى (مثل: صورة، أرشيف خبر، سجلات شركات)، أو تصفّح خريطة الأدوات.'); return; }
   if (found.jurisdictionMiss) body.append(el('p', 'تنبيه ولاية قضائية: سؤالك يذكر جهة أو دولة لا تغطيها أدوات الدليل مباشرة؛ النتائج التالية بدائل عامة أو من ولايات قضائية أخرى، فراجع نطاق تغطية كل أداة قبل الاعتماد عليها.', 'meta-line'));
@@ -85,12 +103,34 @@ function showRanking(r, title, note) {
   shown.forEach((x, i) => body.append(card(x.t, i, x.scopeMismatch ? [['تنبيه نطاق:', 'أداة مقيدة بـ' + x.scopeMismatch + ' وسؤالك لا يذكر هذا النوع؛ رُتبت بعد الأدوات المطابقة لنوع مهمتك.']] : null)));
   if (shown.some(x => x.scopeMismatch)) body.append(el('p', 'التشابه الدلالي يقيس قرب الوصف لا نوع المهمة؛ الأدوات المقيدة بنطاق لا يذكره سؤالك موسومة ومؤخرة.', 'meta-line fade'));
 }
+const RANK_NOTE_CATALOG = 'ترتيب دلالي تجريبي على كامل دليل الأدوات عبر خادم الدليل (Cloudflare Workers AI)؛ أُرسل سؤالك فقط إلى الخادم، والمطابقة تمت على أوصاف كل أدوات الدليل هناك. ليس بالضرورة أدق من ترتيب الكلمات، وهو اقتراح للمراجعة وليس إجابة موثقة.';
+const RANK_NOTE_CATALOG_ONLY = 'لم تطابق الكلمات أي أداة بثقة، لكن التشابه الدلالي على كامل الدليل يقترح هذه الأدوات (أُرسل سؤالك فقط إلى خادم الدليل). اقتراح تجريبي للمراجعة وليس إجابة موثقة؛ تحقق من ملاءمة كل أداة بنفسك.';
 const RANK_NOTE_SERVER = 'ترتيب بديل بالتشابه الدلالي (نموذج Workers AI على خادم الدليل)؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة. أُرسل سؤالك وأوصاف الأدوات المرشحة إلى الخادم لحساب هذا الترتيب.';
 const RANK_NOTE_DEVICE = 'ترتيب بديل بالتشابه الدلالي؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة.';
 $('local').onclick = async () => {
   if (!last) { $('status').textContent = 'اسأل أولًا ثم رتّب النتائج.'; return; }
-  if (!last.cands.length) { $('status').textContent = 'لا توجد نتائج من الدليل لترتيبها دلاليًا لهذا الطلب.'; return; }
   $('local-device').hidden = true;
+  // Primary: full-catalogue ranking on the guide's worker (covers tools the keyword pass missed,
+  // and can suggest tools even when lexical search abstains entirely).
+  $('status').textContent = 'جارٍ الترتيب الدلالي على كامل الدليل عبر خادم الدليل (Cloudflare Workers AI)...';
+  try {
+    const rows = await semanticCatalog(last.q);
+    if (last.cands.length) {
+      const fused = gateScopes(last.q, fuseSemanticCatalog(last.cands, rows));
+      showRanking(fused, 'ترتيب دلالي تجريبي على كامل الدليل:', RANK_NOTE_CATALOG);
+    } else if (last.txIntent || last.anchorMiss || (last.queryJuris && last.queryJuris.length)) {
+      // Abstention gates hold on the full-catalogue path too: transactional requests,
+      // capabilities the catalogue does not cover, and uncovered jurisdictions are NOT
+      // overridden by semantic similarity.
+      $('status').textContent = 'لا توجد نتائج من الدليل لترتيبها دلاليًا لهذا الطلب.'; return;
+    } else {
+      const above = rows.filter(x => x.s >= SEM_CATALOG_FLOOR);
+      if (!above.length) { $('status').textContent = 'لا توجد نتائج من الدليل لهذا الطلب حتى بالمطابقة الدلالية.'; return; }
+      showRanking(gateScopes(last.q, above.map(x => ({ t: x.t, rrf: x.s }))), 'اقتراحات دلالية من كامل الدليل:', RANK_NOTE_CATALOG_ONLY);
+    }
+    $('status').textContent = ''; return;
+  } catch (e) { if (!last.cands.length) { $('status').textContent = 'لا توجد نتائج من الدليل لترتيبها دلاليًا لهذا الطلب، والترتيب الدلالي على كامل الدليل غير متاح الآن (' + e.message + ').'; return; } }
+  // Fallback: the older 12-candidate server ranking, unchanged.
   $('status').textContent = 'جارٍ الترتيب الدلالي عبر خادم الدليل (Cloudflare Workers AI)...';
   try { const r = await semanticServer(last.q, last.cands); showRanking(r, 'ترتيب دلالي تجريبي عبر خادم الدليل:', RANK_NOTE_SERVER); $('status').textContent = ''; }
   catch (e) { $('status').textContent = 'تعذّر الترتيب الدلالي عبر الخادم الآن (' + e.message + ')؛ نتائج الكلمات أعلاه ما زالت متاحة. يمكنك اختيار الترتيب على جهازك صراحة بالزر المجاور (تنزيل نحو 140MB مرة واحدة).'; $('local-device').hidden = false; }

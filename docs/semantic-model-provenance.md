@@ -50,3 +50,15 @@ artifact actually is, pinned where possible, with the API evidence checked on
 - Not a factual QA or answer model. It re-ranks the lexical search candidates
   by embedding similarity between the query and each tool's name+description
   in the guide. Scores are not calibrated confidence.
+
+## Server-side full-catalogue ranking (added 2026-10-30)
+
+Scope: the "رتّب النتائج" button's primary path now ranks the whole catalogue on the guide's Cloudflare worker (mode `semantic_catalog`), not only the top-12 keyword candidates.
+
+- Catalogue asset: `site/tool-embeddings.json` + `site/tool-embeddings.bin`, generated locally by `scripts/build_embeddings.py` from the exact built `_site/search-tools.json` bytes (manifest fingerprint = sha256[:16]; CI fails the deploy if they drift, `tests/semantic-catalog.test.mjs`).
+- Encoding model: `Xenova/bge-m3`, file `onnx/sentence_transformers_int8.onnx` (int8 ONNX conversion of `BAAI/bge-m3`, dims 1024, mean pooling, L2-normalized). License: MIT on all three cards (BAAI/bge-m3, Xenova/bge-m3, onnx-community/bge-m3-ONNX; checked via HF API 2026-10-29).
+- Quantization: symmetric int8 per vector with a float32 scale; layout `[count x f32 scales][count x dims x int8]`; measured deviation from fp32 on the full catalogue: mean |cos - 1| = 0.000149, max 0.000400.
+- Query embedding at runtime: Workers AI `@cf/baai/bge-m3` (the worker's existing embed binding), so only the question text is embedded per request; catalogue vectors are fetched from the Pages asset and cached per isolate for 5 minutes.
+- Parity: the local ONNX int8 conversion and Workers AI `@cf/baai/bge-m3` are the same base model but not bit-identical; release-time parity is checked on a bounded sample and recorded in `docs/deployment.md`.
+- Atomic safety: the manifest carries `bin_sha256`; the worker verifies the fetched bin against it on every cold load and fails closed (`catalog_unavailable`) on any mismatch, so a Pages deploy landing between the two asset fetches cannot produce a mixed-generation index. The per-isolate cache (5 minutes) revalidates the manifest fingerprint.
+- Privacy: only the question text is sent to the worker; tool descriptions never leave the deployed asset. The on-device MiniLM path above remains available as an explicit fallback.

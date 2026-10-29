@@ -1,0 +1,14 @@
+{
+ "model": "BAAI/bge-m3",
+ "conversion": "Xenova/bge-m3 onnx/sentence_transformers_int8.onnx",
+ "license": "mit (base model and conversion cards)",
+ "cf_model": "@cf/baai/bge-m3",
+ "format": "int8-symmetric-per-vector",
+ "normalized": true,
+ "dims": 1024,
+ "count": 1156,
+ "fingerprint": "244fda46170cd61c",
+ "texts": "name + \": \" + description, same shape as the semantic rerank candidates",
+ "generated_by": "scripts/build_embeddings.py (local, no Cloudflare quota)",
+ "bin_sha256": "220025b2470d2b9efa702584ea7173a42fe3ca1cade98ed295822d4757f0a15d"
+}
