@@ -24,11 +24,14 @@ async function semantic(q, cands) {
 // texts with bge-m3 (Workers AI) and returns one score per candidate. Throws on any failure so the
 // caller can offer the explicit on-device fallback instead of silently downloading 140MB.
 async function semanticServer(q, cands) {
-  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'semantic', query: q, candidates: cands.map(x => ({ text: `${x.t.name}: ${x.t.description}` })) }) });
+  // The worker caps at 12 candidates; send the same slice we map scores back onto, and fuse only
+  // those — the lexical list below stays complete either way.
+  const top = cands.slice(0, 12);
+  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'semantic', query: q, candidates: top.map(x => ({ text: `${x.t.name}: ${x.t.description}` })) }) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const j = await r.json();
-  if (!j || !Array.isArray(j.scores) || j.scores.length !== cands.length || j.scores.some(v => typeof v !== 'number')) throw new Error(j && j.error ? j.error : 'bad_response');
-  const scored = cands.map((c, i) => ({ ...c, sem: j.scores[i] }));
+  if (!j || !Array.isArray(j.scores) || j.scores.length !== top.length || j.scores.some(v => typeof v !== 'number')) throw new Error(j && j.error ? j.error : 'bad_response');
+  const scored = top.map((c, i) => ({ ...c, sem: j.scores[i] }));
   return fuseRanks(scored);
 }
 function fuseRanks(scored) {
