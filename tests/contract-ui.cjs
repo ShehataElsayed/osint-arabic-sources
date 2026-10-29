@@ -74,7 +74,7 @@ function scripted(draft, pages = { [OK_URL]: PAGE }) {
       // The shipped static build has no backend (BACKEND_URL is empty), so the server-mode render
       // contract is exercised here by serving a test-only config that points BACKEND_URL at the
       // scripted fixture below. This hook lives in the test only; nothing ships.
-      await page.route('**/rag-config.js', async r => {
+      await page.route('**/rag-config.js*', async r => {
         const resp = await r.fetch(); let body = await resp.text();
         body = body.replace("BACKEND_URL = ''", "BACKEND_URL = 'https://osint-rag.egkrkr.workers.dev'");
         r.fulfill({ status: 200, contentType: 'text/javascript', body });

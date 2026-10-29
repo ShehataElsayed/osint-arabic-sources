@@ -44,7 +44,7 @@ const fs=require('fs');
   assert.ok((await p.locator('#result').innerText()).includes('Alex'),'retry after failed query reloads correct source');
   await p.setInputFiles('#file',[]);assert.equal(await p.locator('#run').isDisabled(),true);
   // No real OCR engine/model runs in this lifecycle test.
-  await p.route('**/tesseract.min.js',r=>r.fulfill({contentType:'text/javascript',body:`window.terminated=0;window.Tesseract={OEM:{DEFAULT:1},createWorker:async()=>({recognize:()=>new Promise((resolve,reject)=>{window.finishOCR=()=>resolve({data:{text:'controlled old image text'}});window.failOCR=()=>reject(new Error('controlled failure'));}),terminate:async()=>{window.terminated++}})};`}));
+  await p.route('**/tesseract.min.js*',r=>r.fulfill({contentType:'text/javascript',body:`window.terminated=0;window.Tesseract={OEM:{DEFAULT:1},createWorker:async()=>({recognize:()=>new Promise((resolve,reject)=>{window.finishOCR=()=>resolve({data:{text:'controlled old image text'}});window.failOCR=()=>reject(new Error('controlled failure'));}),terminate:async()=>{window.terminated++}})};`}));
   await p.goto('http://127.0.0.1:8789/ocr.html');
   await upload('image.png','dummy','image/png');await p.click('#run');
   await p.waitForFunction(()=>typeof window.finishOCR==='function');
