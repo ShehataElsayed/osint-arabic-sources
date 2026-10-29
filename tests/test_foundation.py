@@ -25,7 +25,11 @@ class Foundation(unittest.TestCase):
         # and pending entries still carry no check date.
         import datetime
         reviews=json.loads((ROOT/'3-review-queue.json').read_text())
-        self.assertEqual(len(reviews),1113)  # 1109 original + 4 catalogue URLs the queue had missed
+        self.assertEqual(len(reviews),1109)  # 2026-10-29 reconciliation: exactly one row per catalogue
+        # unique URL. Repairs had created 3 duplicate rows (melissa.com, urlhaus.abuse.ch,
+        # whatsmybrowser.org) and the audit had probed a phenoelit.org variant absent from the
+        # catalogue; its row now tracks the real catalogue URL (phenoelit.de). All names and
+        # notes from merged rows are preserved on the surviving row.
         known={'pending','ok','broken','server_error','unreachable','blocked','template'}
         required={'url','names','last_checked','review_status','evidence_url','notes','http_status'}
         now=datetime.datetime.now(datetime.timezone.utc)
