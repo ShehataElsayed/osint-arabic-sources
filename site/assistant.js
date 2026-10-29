@@ -232,8 +232,8 @@ function renderFacts(r, box) {
   card.append(el('h3', null, 'مراجعات تحقق مطابقة (Google Fact Check)'));
   if (r.error) {
     // Never silently skip: the user asked for this check, so say plainly why it did not run.
-    card.append(el('p', null, r.error === 'off'
-      ? 'خدمة التحقق السريع غير مفعّلة حاليًا: مفتاح Google Fact Check غير مهيأ على الخادم. النتيجة غير معروفة — تحقق يدويًا.'
+    card.append(el('p', null, (r.error === 'off' || r.error === 'fc_http_401' || r.error === 'fc_http_403')
+      ? 'خدمة التحقق السريع غير مفعّلة حاليًا: واجهة Google Fact Check غير مهيأة بعد على مشروع المفتاح. النتيجة غير معروفة — تحقق يدويًا.'
       : 'تعذّر الوصول إلى خدمة Google Fact Check الآن (' + r.error + '). النتيجة غير معروفة — أعد المحاولة لاحقًا أو تحقق يدويًا.'));
     box.append(card); return;
   }

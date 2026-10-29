@@ -4,10 +4,11 @@
 // 2026-10-30) called BY THE WORKER server-side - the API key never reaches the browser or this
 // repository - with automatic fallback to Workers AI. Embeddings stay on Workers AI bge-m3.
 export const BACKEND_URL = 'https://osint-rag.egkrkr.workers.dev';
-// Research-plan generation on smart-search: OFF until BOTH the production worker carries the
-// research_plan route AND the Gemini provider is activated (pending current billing verification).
-// While false the page never calls the route - no wasted calls against an old worker, no fake plan.
-export const RESEARCH_PLAN = false;
+// Research-plan generation on smart-search: ON since 2026-10-30 ~01:40 EET - production worker
+// carries the research_plan route and serves it via Gemini (live-verified: real Arabic plan in ~5s
+// after the gemini-3-flash-preview model fix). The flag remains the kill switch: set false and the
+// page stops calling the route immediately, no redeploy needed.
+export const RESEARCH_PLAN = true;
 // Measured line shown on the page. Source: newsrag verdict+abstention component, Misbar claims test split 2023+, 2 Oct 2026 run.
 // Replace with the Kaggle four-stage pipeline numbers when that run finishes.
 // Historical lab metrics (84.1% raw verdict accuracy, 93.2% at 60.9% coverage) belong to the old
