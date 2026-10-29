@@ -1392,15 +1392,15 @@
   "http_status": 200
  },
  {
-  "url": "https://zeustracker.abuse.ch/blocklist.php?download=domainblocklist",
+  "url": "https://urlhaus.abuse.ch/",
   "names": [
    "Zeus C2 Tracker"
   ],
-  "last_checked": "2026-10-29T17:27:57+00:00",
-  "review_status": "unreachable",
+  "last_checked": "2026-10-29T17:44:11+00:00",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "dns",
-  "http_status": null
+  "notes": "repaired 2026-10-29 from unreachable dns https://zeustracker.abuse.ch/blocklist.php?download=domainblocklist, official successor verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://mirror1.malwaredomains.com/files/domains.txt",
@@ -1491,15 +1491,15 @@
   "http_status": 200
  },
  {
-  "url": "https://zeustracker.abuse.ch/blocklist.php",
+  "url": "https://urlhaus.abuse.ch/",
   "names": [
    "ZeuS Tracker"
   ],
-  "last_checked": "2026-10-29T17:27:57+00:00",
-  "review_status": "unreachable",
+  "last_checked": "2026-10-29T17:44:11+00:00",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "dns",
-  "http_status": null
+  "notes": "repaired 2026-10-29 from unreachable dns https://zeustracker.abuse.ch/blocklist.php, official successor verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://www.shadowserver.org/",
@@ -5458,16 +5458,16 @@
   "http_status": 200
  },
  {
-  "url": "https://melissa-data.com",
+  "url": "https://www.melissa.com/",
   "names": [
    "Melissa Data - Property Viewer (R)",
    "MelissaData - Campaign Contributions"
   ],
-  "last_checked": "2026-10-29T17:28:20+00:00",
-  "review_status": "unreachable",
+  "last_checked": "2026-10-29T17:44:11+00:00",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "dns",
-  "http_status": null
+  "notes": "repaired 2026-10-29 from unreachable dns https://melissa-data.com, official successor verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://regrid.com",
@@ -5987,15 +5987,15 @@
   "http_status": 200
  },
  {
-  "url": "https://sanctions-tool.ec.europa.eu",
+  "url": "https://www.sanctionsmap.eu/",
   "names": [
    "EU Sanctions Tool (D)"
   ],
-  "last_checked": "2026-10-29T17:28:20+00:00",
-  "review_status": "unreachable",
+  "last_checked": "2026-10-29T17:44:11+00:00",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "dns",
-  "http_status": null
+  "notes": "repaired 2026-10-29 from unreachable dns https://sanctions-tool.ec.europa.eu, official successor verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://dilisense.com/en",
@@ -7642,15 +7642,15 @@
   "http_status": 200
  },
  {
-  "url": "https://www.opendoar.org/search.php",
+  "url": "https://opendoar.ac.uk/",
   "names": [
    "OpenDOAR"
   ],
-  "last_checked": "2026-10-29T17:28:20+00:00",
-  "review_status": "unreachable",
+  "last_checked": "2026-10-29T17:44:11+00:00",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "dns",
-  "http_status": null
+  "notes": "repaired 2026-10-29 from unreachable dns https://www.opendoar.org/search.php, official successor verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://academic.microsoft.com/",
