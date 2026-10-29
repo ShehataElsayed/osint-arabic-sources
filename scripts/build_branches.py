@@ -22,15 +22,23 @@ qpath = ROOT / '3-review-queue.json'
 if qpath.is_file():
     for r in json.loads(qpath.read_text()):
         review[r['url']] = r
+max_check_day = max(((r.get('last_checked') or '')[:10] for r in review.values()), default='')
 
 def health_tag(n):
     r = review.get(n.get('url'))
+    st0 = (n.get('status') or '').lower()
+    day = (r.get('last_checked') or '')[:10] if r else ''
+    # retired/historical services take precedence: a responding URL must never
+    # read as a working-service endorsement
+    if st0 in ('down', 'defunct'):
+        return '<span class="tag h-dim">الخدمة الأصلية متوقفة — مرجع تاريخي</span>'
+    if st0 == 'degraded':
+        return '<span class="tag h-dim">الخدمة متدهورة بحسب المصدر</span>'
     if not r or r.get('review_status') in (None, 'pending'):
         return ''
     st = r['review_status']
-    day = (r.get('last_checked') or '')[:10]
     if st == 'ok':
-        return f'<span class="tag h-ok">الرابط مفحوص {E(day)} ✓</span>'
+        return f'<span class="tag h-ok">استجاب الرابط وقت الفحص {E(day)}</span>'
     if st == 'broken':
         return f'<span class="tag h-bad">الرابط معطّل {E(day)} — بديل موثّق قيد المراجعة</span>'
     if st == 'server_error':
@@ -42,6 +50,7 @@ def health_tag(n):
     if st == 'template':
         return f'<span class="tag h-dim">صفحة نموذج عام — الاستخدام يدوي</span>'
     return ''
+
 
 # Seven research paths. Each branch belongs to exactly one; unknown branches go to the last path.
 CLUSTERS = [
@@ -247,6 +256,7 @@ def branch_page(i, t):
           f'<div class="b-tools-bar"><nav class="chips" aria-label="أقسام الفرع">{chips}</nav>'
           f'<label class="filter"><span class="sr">ابحث داخل هذا الفرع</span><input id="filter" type="search" placeholder="ابحث داخل هذا الفرع" autocomplete="off"></label></div>'
           f'<p id="count" class="muted" role="status" aria-live="polite"></p>'
+          f'<p class="muted legend"><small>شارات الفحص تعني استجابة HTTP للرابط وقت الفحص ({E(max_check_day)}) فقط — لا تؤكد أن الأداة تعمل أو صحة محتواها أو سلامتها.</small></p>'
           f'{"".join(body)}<p id="none" class="empty" hidden>لا توجد أداة مطابقة داخل هذا الفرع. جرّب كلمة أخرى أو ابحث من <a href="{base}index.html#search">الصفحة الرئيسية</a>.</p>'
           f'<aside class="peers" aria-label="فروع من نفس المسار"><h2>من نفس المسار: {E(cl[2])}</h2><div>{peer_html or "<p class=muted>هذا الفرع وحده في مساره.</p>"}</div></aside>'
           f'<div class="pager"><a href="{slugs[prev_t["name"]]}.html">→ {E(title(prev_t))}</a><a href="{slugs[next_t["name"]]}.html">{E(title(next_t))} ←</a></div></main>')
