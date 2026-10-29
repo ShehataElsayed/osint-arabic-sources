@@ -61,14 +61,19 @@ function newPath(q) {
   const scores = semScores(q);
   const semRanked = [...scores.keys()].sort((a, b) => scores[b] - scores[a]).slice(0, 60)
     .map(i => ({ id: i, s: scores[i], t: items[i] }));
+  // Production client merges the exact candidate scores the worker returns separately
+  // (semantic_catalog's `scores` field) so candidates below top-60 rerank exactly.
+  const have = new Set(semRanked.map(x => x.id));
+  for (const c of cands.slice(0, 12)) if (!have.has(c.id)) semRanked.push({ id: c.id, s: scores[c.id], t: items[c.id] });
   let ranked;
   if (!cands.length) {
     // Abstention gates hold: transactional intent, capability gap, uncovered jurisdiction -> nothing.
     if (found.txIntent || found.anchorMiss || (found.queryJuris && found.queryJuris.length)) return [];
     const above = semRanked.filter(x => x.s >= SEM_CATALOG_FLOOR);
-    ranked = gateScopes(q, above.map(x => ({ t: x.t, rrf: x.s })));
+    ranked = gateScopes(q, above.map(x => ({ t: x.t, rrf: x.s }))).filter(x => !x.scopeMismatch);
   } else {
-    ranked = gateScopes(q, fuseSemanticCatalog(cands, semRanked));
+    const fused0 = fuseSemanticCatalog(cands.slice(0, 12), semRanked, q);
+    ranked = [...gateScopes(q, fused0.filter(x => !x.discovery)), ...fused0.filter(x => x.discovery)];
   }
   // Production display (showRanking) recommends each URL once; mirror that here.
   const seen = new Set();
@@ -78,7 +83,7 @@ function metrics(set, run) {
   let r5 = 0, r15 = 0, mrr = 0, hit5 = 0;
   for (const x of set) {
     const names = run(key(x)).map(c => c.t.name), rel = new Set(x.rel);
-    const f5 = names.slice(0, 5).filter(n => rel.has(n)).length, f15 = names.filter(n => rel.has(n)).length;
+    const f5 = new Set(names.slice(0, 5).filter(n => rel.has(n))).size, f15 = new Set(names.filter(n => rel.has(n))).size;
     r5 += f5 / rel.size; r15 += f15 / rel.size; hit5 += f5 > 0 ? 1 : 0;
     const k = names.findIndex(n => rel.has(n)); mrr += k < 0 ? 0 : 1 / (k + 1);
   }

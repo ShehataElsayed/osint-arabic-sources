@@ -40,17 +40,25 @@ async function semanticServer(q, cands) {
 // question text leaves the device - candidate descriptions stay in the deployed asset.
 // The manifest fingerprint guards parity: if the worker's asset does not match the deployed
 // search-tools.json, this throws and the caller falls back to the 12-candidate path.
-async function semanticCatalog(q) {
+async function semanticCatalog(q, candIds) {
   const mRes = await fetch('./tool-embeddings.json', { cache: 'force-cache' });
   if (!mRes.ok) throw new Error('asset_missing');
   const fp = (await mRes.json() || {}).fingerprint;
   if (!fp) throw new Error('asset_missing');
-  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'semantic_catalog', q, top: 12, fingerprint: fp }) });
+  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'semantic_catalog', q, top: 12, fingerprint: fp, ids: candIds || [] }) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const j = await r.json();
   if (!j || !Array.isArray(j.ranking)) throw new Error(j && j.error || 'bad_response');
   const all = await load();
-  return j.ranking.map(x => ({ id: x.i | 0, s: x.s, t: all[x.i | 0] })).filter(x => x.t && typeof x.s === 'number');
+  const rows = j.ranking.map(x => ({ id: x.i | 0, s: x.s, t: all[x.i | 0] })).filter(x => x.t && typeof x.s === 'number');
+  // Exact scores for the lexical candidates (returned separately so a candidate ranked below the
+  // top-60 window still reranks exactly as the established 12-candidate path).
+  const have = new Set(rows.map(x => x.id));
+  for (const [id, sc] of Object.entries(j.scores || {})) {
+    const i = id | 0;
+    if (!have.has(i) && all[i]) rows.push({ id: i, s: sc, t: all[i] });
+  }
+  return rows;
 }
 function fuseRanks(scored) {
   // Reciprocal-rank fusion of the lexical order (input order) and the semantic order (k=60,
@@ -103,7 +111,7 @@ function showRanking(r, title, note) {
   shown.forEach((x, i) => body.append(card(x.t, i, x.scopeMismatch ? [['تنبيه نطاق:', 'أداة مقيدة بـ' + x.scopeMismatch + ' وسؤالك لا يذكر هذا النوع؛ رُتبت بعد الأدوات المطابقة لنوع مهمتك.']] : null)));
   if (shown.some(x => x.scopeMismatch)) body.append(el('p', 'التشابه الدلالي يقيس قرب الوصف لا نوع المهمة؛ الأدوات المقيدة بنطاق لا يذكره سؤالك موسومة ومؤخرة.', 'meta-line fade'));
 }
-const RANK_NOTE_CATALOG = 'ترتيب دلالي تجريبي على كامل دليل الأدوات عبر خادم الدليل (Cloudflare Workers AI)؛ أُرسل سؤالك فقط إلى الخادم، والمطابقة تمت على أوصاف كل أدوات الدليل هناك. ليس بالضرورة أدق من ترتيب الكلمات، وهو اقتراح للمراجعة وليس إجابة موثقة.';
+const RANK_NOTE_CATALOG = 'نتائج الكلمات بترتيبها كما هي، مع إضافة أدوات اكتشفها التشابه الدلالي على كامل الدليل في نهاية القائمة (نموذج Workers AI على خادم الدليل؛ أُرسل سؤالك فقط). الإضافات الدلالية اقتراح تجريبي للمراجعة وليست إجابة موثقة.';
 const RANK_NOTE_CATALOG_ONLY = 'لم تطابق الكلمات أي أداة بثقة، لكن التشابه الدلالي على كامل الدليل يقترح هذه الأدوات (أُرسل سؤالك فقط إلى خادم الدليل). اقتراح تجريبي للمراجعة وليس إجابة موثقة؛ تحقق من ملاءمة كل أداة بنفسك.';
 const RANK_NOTE_SERVER = 'ترتيب بديل بالتشابه الدلالي (نموذج Workers AI على خادم الدليل)؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة. أُرسل سؤالك وأوصاف الأدوات المرشحة إلى الخادم لحساب هذا الترتيب.';
 const RANK_NOTE_DEVICE = 'ترتيب بديل بالتشابه الدلالي؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة.';
@@ -114,10 +122,13 @@ $('local').onclick = async () => {
   // and can suggest tools even when lexical search abstains entirely).
   $('status').textContent = 'جارٍ الترتيب الدلالي على كامل الدليل عبر خادم الدليل (Cloudflare Workers AI)...';
   try {
-    const rows = await semanticCatalog(last.q);
+    const rows = await semanticCatalog(last.q, (last.cands || []).slice(0, 12).map(c => c.id));
     if (last.cands.length) {
-      const fused = gateScopes(last.q, fuseSemanticCatalog(last.cands, rows));
-      showRanking(fused, 'ترتيب دلالي تجريبي على كامل الدليل:', RANK_NOTE_CATALOG);
+      const fused0 = fuseSemanticCatalog(last.cands.slice(0, 12), rows, last.q);
+      // gateScopes (label + scope sort) applies to the candidate portion ONLY - identical input,
+      // identical math to the established path; discoveries append below every candidate.
+      const fused = [...gateScopes(last.q, fused0.filter(x => !x.discovery)), ...fused0.filter(x => x.discovery)];
+      showRanking(fused, 'نتائج الكلمات مع اكتشافات دلالية من كامل الدليل:', RANK_NOTE_CATALOG);
     } else if (last.txIntent || last.anchorMiss || (last.queryJuris && last.queryJuris.length)) {
       // Abstention gates hold on the full-catalogue path too: transactional requests,
       // capabilities the catalogue does not cover, and uncovered jurisdictions are NOT
@@ -126,7 +137,7 @@ $('local').onclick = async () => {
     } else {
       const above = rows.filter(x => x.s >= SEM_CATALOG_FLOOR);
       if (!above.length) { $('status').textContent = 'لا توجد نتائج من الدليل لهذا الطلب حتى بالمطابقة الدلالية.'; return; }
-      showRanking(gateScopes(last.q, above.map(x => ({ t: x.t, rrf: x.s }))), 'اقتراحات دلالية من كامل الدليل:', RANK_NOTE_CATALOG_ONLY);
+      showRanking(gateScopes(last.q, above.map(x => ({ t: x.t, rrf: x.s }))).filter(x => !x.scopeMismatch), 'اقتراحات دلالية من كامل الدليل:', RANK_NOTE_CATALOG_ONLY);
     }
     $('status').textContent = ''; return;
   } catch (e) { if (!last.cands.length) { $('status').textContent = 'لا توجد نتائج من الدليل لترتيبها دلاليًا لهذا الطلب، والترتيب الدلالي على كامل الدليل غير متاح الآن (' + e.message + ').'; return; } }
