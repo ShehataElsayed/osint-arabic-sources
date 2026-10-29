@@ -29,7 +29,7 @@ const SYN = {
   'ترجمه': ['translate', 'translator', 'translation'], 'ترجم': ['translate', 'translator'],
   'اقمار': ['satellite', 'imagery', 'landsat', 'earth'], 'قمر': ['satellite', 'imagery'], 'صناعيه': ['satellite', 'imagery'],
   'تغريدات': ['twitter', 'tweets'], 'تغريده': ['twitter'], 'تويتر': ['twitter'],
-  'مولد': ['ai', 'deepfake', 'generated'], 'مزيفه': ['fake', 'deepfake', 'forensics', 'ai'], 'مزيف': ['fake', 'deepfake'], 'تلاعب': ['forensic', 'forensics', 'forensically', 'ela', 'manipulation'], 'تعديل': ['forensic', 'forensics', 'manipulation'], 'تزييف': ['fake', 'deepfake', 'forensics'], 'فحص': ['forensic', 'forensics'],
+  'مولد': ['ai', 'deepfake', 'generated'], 'مزيفه': ['fake', 'deepfake', 'forensics', 'ai'], 'مزيف': ['fake', 'deepfake'], 'تلاعب': ['forensic', 'forensics', 'forensically', 'ela', 'manipulation'], 'تعديل': ['forensic', 'forensics', 'manipulation'], 'تزييف': ['fake', 'deepfake', 'forensics'], 'فحص': ['scan', 'scanner', 'check', 'forensic', 'forensics'],
   'ارشيف': ['archive', 'wayback', 'archived'], 'مؤرشفه': ['archive', 'wayback'], 'محذوفه': ['archive', 'wayback', 'cache'], 'قديمه': ['archive', 'wayback'],
   'مكشوفه': ['shodan', 'zoomeye', 'netlas', 'exposed', 'devices'], 'اجهزه': ['devices', 'shodan', 'zoomeye', 'netlas'],
   'يوتيوب': ['youtube'], 'فيديو': ['video', 'videos', 'youtube'], 'مقطع': ['video', 'videos', 'invid'],
@@ -58,9 +58,14 @@ export function buildIndex(items) {
   return { items, docs, df, avg, names, n: docs.length };
 }
 
+// Transactional intent (booking, buying, tickets): the catalogue contains research tools only,
+// so these requests are never confident regardless of which domain words co-occur.
+const TX_INTENT = new Set(['حجز', 'احجز', 'حجزت', 'تذكره', 'تذاكر', 'تذكرت', 'شراء', 'اشترى', 'يشتري', 'ابتاع', 'اشتري'].map(w => stem(normalize(w))));
+
 // Returns scored candidates; `confident` is false when evidence is too weak to recommend anything.
 export function search(idx, query, { limit = 15, minScore = 2.2, minTerms = 1 } = {}) {
   const base = [...new Set(tok(query).filter(w => !STOP.has(w)).map(stem).filter(w => w.length > 1))];
+  const txIntent = base.some(w => TX_INTENT.has(w));
   const terms = new Map();
   for (const w of base) { terms.set(w, 1); for (const s of SYNS[w] || []) if (!terms.has(s)) terms.set(s, 0.7); }
   const idf = w => Math.log(1 + (idx.n - (idx.df.get(w) || 0) + .5) / ((idx.df.get(w) || 0) + .5));
@@ -69,14 +74,28 @@ export function search(idx, query, { limit = 15, minScore = 2.2, minTerms = 1 } 
     for (const [w, wt] of terms) {
       let s = 0; const tf = d.tf.get(w) || 0;
       if (tf) s += idf(w) * (tf * 2.2) / (tf + 1.2 * (0.25 + .75 * d.len / idx.avg));
-      if (d.name.has(w)) s += idf(w) * 1.6 * wt;
       if (s) { hits++; score += s * wt; }
+    }
+    for (const a of base) {
+      let nameBest = 0;
+      if (d.name.has(a)) nameBest = idf(a) * 1.6;
+      for (const syn of SYNS[a] || []) if (d.name.has(syn)) nameBest = Math.max(nameBest, idf(syn) * 1.6 * 0.5);
+      score += nameBest;
     }
     return { t, id: i, score, hits };
   }).filter(x => x.hits >= minTerms).sort((a, b) => b.score - a.score);
   // Same tool can be catalogued under several branches; recommend each URL once, keeping its best-scored entry.
   const seenUrl = new Set();
   scored = scored.filter(x => { const u = x.t.url || x.t.name; return !seenUrl.has(u) && seenUrl.add(u); });
+  // Anchor filter: query terms with known capability vocabulary must actually be served by a
+  // recommended tool; otherwise the honest answer is low confidence (e.g. a jurisdiction or
+  // capability the catalogue does not cover).
+  const anchors = base.filter(w => SYNS[w] || (idx.names.has(w) && w.length > 2));
+  let anchorMiss = false;
+  if (anchors.length) {
+    const kept = scored.filter(x => anchors.some(a => [a, ...(SYNS[a] || [])].some(w => idx.docs[x.id].tf.has(w) || idx.docs[x.id].name.has(w))));
+    if (kept.length) scored = kept; else anchorMiss = true;
+  }
   // Phrase proximity: an adjacent pair of query concepts in a description is much stronger
   // intent evidence than the same words scattered. Synonym-expanded on both sides.
   const w1 = base.filter(w => terms.get(w) === 1);
@@ -107,7 +126,7 @@ export function search(idx, query, { limit = 15, minScore = 2.2, minTerms = 1 } 
   const top = scored.slice(0, limit);
   // Abstain unless the query contains task vocabulary we know (synonym table or a tool name) and the best match is strong enough.
   const known = base.some(w => SYNS[w] || (idx.names.has(w) && w.length > 2));
-  return { terms: [...terms.keys()], candidates: top, known, confident: known && !!top.length && top[0].score >= minScore };
+  return { terms: [...terms.keys()], candidates: top, known, txIntent, anchorMiss, confident: !txIntent && !anchorMiss && known && !!top.length && top[0].score >= minScore };
 }
 
 // The previous retrieval (kept only so tests can measure the change honestly).
