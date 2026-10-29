@@ -253,6 +253,66 @@ export async function semanticScores(query, candidates, env) {
   if (!vecs || vecs.length !== cands.length + 1 || !vecs[0]) return { error: 'upstream' };
   return { scores: cands.map((_, i) => Math.round(vcos(vecs[0], vecs[i + 1] || []) * 1000) / 1000) };
 }
+// Full-catalogue semantic ranking, fully server-side: the catalogue's bge-m3 vectors are
+// precomputed ONCE (scripts/build_embeddings.py, local run, no Cloudflare quota) and published
+// as a static asset next to the site. The worker fetches that public asset once per isolate,
+// embeds only the query (ONE model call per search instead of query + 12 candidates), and
+// ranks all catalogue entries here; the browser never receives vectors and runs no model.
+// The client sends the fingerprint of the manifest it sees; a mismatch means the Pages cache
+// window left client and worker on different catalogue builds, so we refuse and the client
+// falls back to the 12-candidate path instead of ranking against the wrong catalogue.
+const CATALOG_ASSET_BASE = 'https://shehataelsayed.github.io/osint-arabic-sources';
+let catalogCache = null; // per-isolate: { fp, count, dims, scales, data, norms, loadedAt }
+async function loadCatalogAsset(f) {
+  if (catalogCache && Date.now() - catalogCache.loadedAt < 300000) return catalogCache;
+  const mr = await f(`${CATALOG_ASSET_BASE}/tool-embeddings.json`, { signal: AbortSignal.timeout(5000) });
+  if (!mr.ok) throw new Error('manifest_http');
+  const m = await mr.json();
+  if (catalogCache && catalogCache.fp === m.fingerprint) { catalogCache.loadedAt = Date.now(); return catalogCache; }
+  if (!m || m.format !== 'int8-symmetric-per-vector' || !Number.isInteger(m.count) || !Number.isInteger(m.dims) || !m.fingerprint || !/^[0-9a-f]{64}$/.test(m.bin_sha256 || '')) throw new Error('bad_manifest');
+  const br = await f(`${CATALOG_ASSET_BASE}/tool-embeddings.bin`, { signal: AbortSignal.timeout(15000) });
+  if (!br.ok) throw new Error('bin_http');
+  const buf = await br.arrayBuffer();
+  if (buf.byteLength !== m.count * 4 + m.count * m.dims) throw new Error('bad_bin');
+  // Atomic-safety across Pages deploys: manifest and bin are two separate fetches, so a deploy
+  // landing between them (or a stale PoP) could mix generations. Same-size changes would pass the
+  // length check, so verify the content hash and fail closed instead of ranking on a mixed index.
+  const digest = await crypto.subtle.digest('SHA-256', buf.slice(0));
+  const hex = [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+  if (hex !== m.bin_sha256) throw new Error('bin_mismatch');
+  const scales = new Float32Array(buf, 0, m.count);
+  const data = new Int8Array(buf, m.count * 4);
+  const norms = new Float32Array(m.count);
+  for (let i = 0; i < m.count; i++) {
+    let n = 0; const off = i * m.dims, s = scales[i];
+    for (let j = 0; j < m.dims; j++) { const v = data[off + j] * s; n += v * v; }
+    norms[i] = Math.sqrt(n) || 1;
+  }
+  catalogCache = { fp: m.fingerprint, count: m.count, dims: m.dims, scales, data, norms, loadedAt: Date.now() };
+  return catalogCache;
+}
+export async function semanticCatalog(query, fingerprint, env, f = fetch) {
+  const q = String(query || '').trim().slice(0, 400);
+  if (!q) return { error: 'bad_request' };
+  if (!hasEmbed(env)) return { error: 'off' };
+  let cat;
+  try { cat = await loadCatalogAsset(f); } catch { return { error: 'catalog_unavailable' }; }
+  if (fingerprint && fingerprint !== cat.fp) return { error: 'catalog_mismatch', fingerprint: cat.fp };
+  const vecs = await embedTexts([q], env, f);
+  if (!vecs || !vecs[0] || !vecs[0].length) return { error: 'upstream' };
+  const qv = vecs[0].slice(0, cat.dims);
+  if (qv.length !== cat.dims) return { error: 'dims_mismatch' };
+  const qn = Math.sqrt(qv.reduce((a, x) => a + x * x, 0)) || 1;
+  const scores = new Float64Array(cat.count);
+  for (let i = 0; i < cat.count; i++) {
+    let d = 0; const off = i * cat.dims, s = cat.scales[i];
+    for (let j = 0; j < cat.dims; j++) d += qv[j] * (cat.data[off + j] * s);
+    scores[i] = d / (qn * cat.norms[i]);
+  }
+  const order = [...scores.keys()].sort((a, b) => scores[b] - scores[a]).slice(0, 60);
+  return { ranking: order.map(i => ({ i, s: Math.round(scores[i] * 1000) / 1000 })), count: cat.count, fingerprint: cat.fp };
+}
+
 export const SEM_SUPPORT = 0.78; // calibrated 2026-10-25 on live gemini-embedding-001: paraphrase 0.81-0.85, related-not-supporting 0.716-0.73. bge-m3 spot check 2026-10-29 (2 paraphrase vs 2 related-not-supporting pairs: 0.894-0.944 vs 0.395-0.417) is consistent but is NOT a validated threshold // semantic retrieval floor; grounded guards still apply on top
 const numTokens = s => (String(s).match(/\d+(?:[.,\u066C]\d+)?%?/g) || []).map(digits).filter(x => x && x.length >= 2);
 // Grounded support evaluation on the actual passage: numbers/years from the claim must appear in the
@@ -1274,6 +1334,7 @@ export default {
     if (b?.mode === 'compose') { try { return json({ text: await compose(String(b.question || ''), b.labels, b.decision, env) }, 200, o); } catch { return json({ text: null }, 200, o); } }
     if (b?.mode === 'recommend') { try { const [rec, web] = await Promise.all([recommend(String(b.query || ''), b.candidates, env), exaWeb(String(b.query || ''), env, fetch, 3)]); return json(Array.isArray(rec) ? { picks: rec, web } : { picks: null, web, reason: rec?.error || 'off' }, 200, o); } catch { return json({ picks: null }, 200, o); } }
     if (b?.mode === 'semantic') { try { return json(await semanticScores(b.query, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
+    if (b?.mode === 'semantic_catalog') { try { return json(await semanticCatalog(b.query, b.fingerprint, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'verify') { try { return json(await verifyModel(String(b.question || ''), env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'ingest') { try { return json(await ingestUrl(String(b.url || ''), fetch, env), 200, o); } catch { return json({ error: 'fetch' }, 200, o); } }
     if (b?.mode === 'ask') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } } // evidence-first route: the draft pipeline's long JSON draft loses its claims array to token truncation on the current on-Cloudflare model (2026-10-29 probes); askAssistant stays exported for tests and future adaptation

@@ -173,6 +173,31 @@ export function toolScopes(text) {
   const n = ' ' + normalize(text) + ' ';
   return SCOPES.filter(s => s.terms.some(t => n.includes(t))).map(s => s.id);
 }
+// Full-catalogue semantic fusion: the worker's semantic_catalog mode ranks the WHOLE
+// catalogue server-side (precomputed bge-m3 vectors + one query embedding); the lexical
+// candidates stay the other ranking signal. RRF (k=60, same constant as fuseRanks) blends
+// the two orders: a strong lexical match cannot be buried, and a semantically strong tool
+// the keyword pass missed entirely can now surface - that is the point of the full-catalogue
+// pass. Tools present in only one list get that list's contribution alone.
+export function fuseSemanticCatalog(lexCands, semRanked) {
+  const K = 60, byId = new Map();
+  (Array.isArray(semRanked) ? semRanked : []).forEach((x, i) => { byId.set(x.id, { t: x.t, id: x.id, sem: x.s, rrf: 1 / (K + i + 1) }); });
+  (Array.isArray(lexCands) ? lexCands : []).forEach((c, i) => {
+    const e = byId.get(c.id);
+    if (e) e.rrf += 1 / (K + i + 1);
+    else byId.set(c.id, { t: c.t, id: c.id, sem: null, rrf: 1 / (K + i + 1) });
+  });
+  return [...byId.values()].sort((a, b) => b.rrf - a.rrf);
+}
+
+// Abstention floor for the full-catalogue path when the lexical pass produced NO confident
+// candidates: semantic suggestions are only shown above this cosine. Chosen from the small
+// self-authored set (tests/semantic-catalog.eval.mjs): the 8 out-of-scope questions top out
+// at 0.457 (excluding 0.542 for a genuinely OSINT-adjacent car-identification tool), while
+// sampled in-scope questions top at >= 0.55. Indicative only - tiny sample, not a calibrated
+// separation guarantee.
+export const SEM_CATALOG_FLOOR = 0.5;
+
 export function gateScopes(query, scored) {
   const qs = toolScopes(query);
   for (const c of scored) {

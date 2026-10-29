@@ -29,3 +29,23 @@ The Worker address is in `site/rag-config.js`. The only allowed origin is the Gi
 ```sh
 npm ci && npm run build && npm test && npm run check:js
 ```
+
+## Parity record: local ONNX int8 asset vs live Workers AI bge-m3 (2026-10-30)
+
+Release gate for the full-catalogue semantic ranking (PR #124), run BEFORE merge and before any
+production worker write, via the temporary probe worker `osint-rag-parity-probe` (same AI binding,
+returns raw embeddings; not linked from the site). Measured on the 48 eval queries:
+
+- Encoder parity: cosine(live CF vector, local ONNX int8 vector) mean 0.9816, min 0.9694.
+- Ranking parity (CF query vector x committed int8 catalogue, exactly the production
+  configuration): top-10 overlap with the local-vector ranking mean 8.8/10, min 7.
+- Semantic-only quality, like-for-like: held-out recall@15 CF 0.602 vs local 0.634; dev CF 0.654
+  vs local 0.649. Within the gate tolerance (0.06); the fused production path adds lexical on top.
+- Full fused-path eval with live CF query vectors (`CF_VECTORS=/tmp/cf-vectors.json node
+  tests/semantic-catalog.eval.mjs`): held-out recall@15 0.929 vs the 12-cap baseline 0.678;
+  hit@5 0.85 vs 0.80; MRR 0.646 vs 0.600; out-of-scope 0/8 shown, abstention gates intact.
+
+Verdict: PASS. Gate command: `PROBE_URL=<probe> python3 scripts/parity_check.py` (exit 0).
+Note: Cloudflare's workers.dev edge rejects the default python urllib user-agent (403); the
+script sets a curl UA. Workers AI embeddings vary slightly run to run (observed ~1e-3 in early
+coordinates), so parity numbers are reproducible up to that noise, not bit-stable.
