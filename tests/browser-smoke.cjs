@@ -58,62 +58,20 @@ const fs=require('fs');
   await page.locator('.tf-btn').first().click();
   const stored=JSON.parse(await page.evaluate(()=>localStorage.getItem('osint-verification-v2')));
   assert.ok(stored.cases[0].evidence.length>=1,'tool saved into case evidence');
-  // assistant page: question-only flow against a fixture backend (fixtures live in tests only, never shipped).
-  const fixture={generated:true,decision:'answer',answer_qualified:true,completeness:'إجابة بعد الفحص مع حذف أو تطويق ما لم يجد سندًا نصيًا',
-   answer:'خلاصة مباشرة: ارتفعت درجات حرارة البحر بشكل قياسي [S1]. لم نعثر على سند موثق لادعاء انخفاض الصيد في خليج السويس، فحُذف من الإجابة.',
-   claims:[{text:'ارتفعت درجات حرارة البحر خلال العقد الأخير',supported:true,similarity:0.62,evidence:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',source_ref:1},{text:'انخفض الصيد في خليج السويس بنسبة محددة',supported:false,similarity:0.05,evidence:'',source_ref:0}],
-   confidence:{score:69,band:'mid',criteria:[
-    {id:'sources_opened',label:'فتح المصادر المذكورة',score:1,detail:'فُتح 1 من 2'},
-    {id:'claim_support',label:'تطابق نصي بين الادعاءات ونصوص المصادر (لفظي، لا استدلالي)',score:0.5,detail:'1 من 2 ادعاء له سند نصي'},
-    {id:'independence',label:'تنوّع نطاقات المصادر المفتوحة',score:0.5,detail:'1 نطاق مميز (تنوّع نطاقات لا يثبت استقلالًا تحريريًا)'},
-    {id:'provenance',label:'شفافية جهات النشر (نطاق وتسجيل، لا دقة محتوى)',score:1,detail:'جهة رسمية بينها'},
-    {id:'self_critic',label:'نقد ذاتي للتناقض (تقدير آلي)',score:1,detail:'0.10'}]},
-   sources:[{name:'تقرير المنظمة العالمية للأرصاد',url:'https://www.who.int/ar/news/item/x',claimed:'',host:'www.who.int',exists:true,title:'تقرير المنظمة العالمية للأرصاد',quote:'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي',picked:true,repaired:false,by_search:false,original:'',rel:'very_high',tier:'official',similarity:0.62,verified:true,numbers_ok:null,negation_conflict:false,identity:{domain:'who.int',age_years:28,registrar:null,registrant:null,rdap:'ok'},page:{site_name:'WHO',author:null,has_about:true,has_contact:true}},
-    {name:'صفحة ميتة',url:'',claimed:'https://dead.example.com/gone',host:'dead.example.com',exists:false,title:'',quote:'',picked:false,repaired:false,by_search:false,original:'',rel:'unknown',tier:'unknown',similarity:0,verified:false,numbers_ok:null,negation_conflict:false,identity:null,page:null}],
-   issues:['فجوة في البيانات الإقليمية المحدثة'],
-   angles:['زاوية: أثر موجات الحر على صيادي الساحل وما تحتاجه من مقابلات وبيانات'],
-   tools:[],factcheck:[],time_sensitive:false,
-   warnings:['حُذفت من الإجابة ادعاءات بلا سند نصي في المصادر المفتوحة أو طُوّقت صراحة بأنها غير موثقة','مؤشر الثقة checklist آلي على معايير معلنة، وليس احتمالًا لصحة الإجابة','تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال']};
-  await page.route('https://osint-rag.egkrkr.workers.dev/**',r=>r.fulfill({status:200,contentType:'application/json',body:JSON.stringify(fixture)}));
+  // assistant page: static-only build — no backend is configured, so the NewsRAG server flow must be
+  // genuinely unreachable: ask button disabled, honest static-mode notice, redirect to the on-device
+  // smart search, and zero requests to the retired external worker.
+  let workerHit = false;
+  await page.route('https://osint-rag.egkrkr.workers.dev/**', r => { workerHit = true; r.abort(); });
   await page.goto('http://127.0.0.1:8765/assistant.html');
   assert.equal(await page.getByAltText('شعار OS').count(),1);
   await page.screenshot({path:'test-output/assistant-desktop.png'});
-  assert.equal(await page.locator('#askQ').count(),1,'single question box');
-  assert.equal(await page.locator('#askBtn').count(),1);
-  await page.getByLabel('سؤالك',{exact:true}).fill('ما أثر موجات الحر البحرية على الصيد؟');
-  await page.getByRole('button',{name:'اسأل الآن',exact:true}).click();
-  await page.locator('#askResult .conf-complete').waitFor();
-  await page.waitForTimeout(700); // let the fade-in finish before pixel checks
-  const rt=await page.locator('#askResult').innerText();
-  assert.ok(rt.includes('خلاصة مباشرة'),'answer rendered');
-  assert.ok(rt.includes('نتائج الفحوص الآلية — معايير معلنة'),'checks card');
-  assert.ok(rt.includes('لا احتمال صحة الإجابة'),'honest coverage caveat');
-  assert.ok(rt.includes('لا تغني عن مراجعة المصادر الأصلية'),'lexical-not-entailment caveat');
-  assert.ok(rt.includes('المصادر المفتوحة (1)'),'only opened source counted');
-  assert.ok(rt.includes('لا سند نصي'),'unsupported claim flagged');
-  assert.ok(rt.includes('الإجابة بعد الفحص والتنقية'),'qualification badge shown');
-  assert.ok(rt.includes('لم نعثر على سند موثق'),'unsupported claim framed out of the answer');
-  assert.ok(rt.includes('تعذر فتح 1'),'dead source excluded and counted');
-  assert.ok(rt.includes('فتح المصادر المذكورة'),'criteria checklist rendered');
-  
-  assert.ok(rt.includes('جهة رسمية — تصنيف نطاق'),'provenance pill, not accuracy');
-  assert.ok(rt.includes('مسجل منذ 28'),'rdap provenance shown');
-  assert.ok(rt.includes('خيوط لا تحققًا'),'discovery-leads caveat');
-  assert.ok(rt.includes('الإشكاليات')&&rt.includes('زوايا صحفية'),'issues and angles');
-  assert.ok(await page.locator('#askResult a[href^="https://www.who.int"]').count()===1,'source link present');
-  assert.ok(await page.locator('#askResult .cite-chip').count()>=1,'citation chips in answer');
-  assert.ok(!(await page.content()).includes('84.1'),'no historical lab metrics on assistant page');
-  assert.equal(await page.locator('#askResult svg[role="img"]').count(),0,'no aggregate gauge ring displayed');
-  assert.ok(rt.includes('إجابة بعد الفحص مع حذف أو تطويق ما لم يجد سندًا نصيًا'),'explicit answer completeness leads');
-  assert.ok(rt.includes('تغطية فحوص متوسطة'),'checks-coverage band word, not truth claim');
-  const confCard=await page.evaluate(()=>{const c=document.querySelectorAll('#askResult .src-card')[1];return {op:+getComputedStyle(c).opacity,band:getComputedStyle(c.querySelector('.conf-complete')).color};});
-  assert.equal(confCard.op,1,'confidence card fully opaque');
-  assert.equal(confCard.band,'rgb(184, 137, 50)','guide amber for mid band with unsupported claim');
-  assert.ok(!rt.includes('69/100')&&!rt.includes('نقطة في المؤشر'),'no aggregate score displayed');
-  assert.ok(rt.includes('لا يُجمع في رقم كلي'),'per-check-only rubric visible');
-  assert.ok(rt.includes('تنوّع نطاقات المصادر المفتوحة'),'distinct-domains wording, not independence');
-  assert.equal(await page.evaluate(()=>sessionStorage.getItem('newsrag-sources-session-v1')),null,'no session source storage in question-only flow');
-  assert.equal(await page.evaluate(()=>localStorage.getItem('newsrag-sources-v1')),null,'nothing written to localStorage');
+  const modeTxt = await page.locator('#mode').innerText();
+  assert.ok(modeTxt.includes('ثابت بالكامل'),'static-only notice shown');
+  assert.ok(await page.locator('#askBtn').isDisabled(),'ask button disabled without backend');
+  assert.equal(await page.locator('#mode a[href="./smart-search.html"]').count(),1,'redirect to on-device smart search');
+  await page.waitForTimeout(500);
+  assert.equal(workerHit,false,'no request to the retired external worker');
   await page.unroute('https://osint-rag.egkrkr.workers.dev/**');
   await page.goto('http://127.0.0.1:8765/verification.html');
   await page.locator('#title').fill('اختبار حفظ محلي');
@@ -132,6 +90,6 @@ const fs=require('fs');
   await page.goto('http://127.0.0.1:8765/assistant.html?local=1');
   const clampDisp = await page.evaluate(() => getComputedStyle(document.querySelector('.hero p')).display);
   assert.notEqual(clampDisp, '-webkit-box', 'assistant hero paragraph not clamped on mobile');
-  console.log('PASS: Arabic Pagefind, NewsRAG question-only assistant against fixture backend, verification persistence/export, Yemen hidden, nav/logo and 3 mobile widths. No live Gemini tested.');
+  console.log('PASS: Arabic Pagefind, assistant static-only mode, verification persistence/export, Yemen hidden, nav/logo and 3 mobile widths. No live Gemini tested.');
  }finally{if(browser)await browser.close();server.kill();}
 })().catch(e=>{console.error(e);process.exitCode=1});
