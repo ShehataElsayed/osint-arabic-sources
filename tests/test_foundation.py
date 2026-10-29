@@ -25,11 +25,19 @@ class Foundation(unittest.TestCase):
         # and pending entries still carry no check date.
         import datetime
         reviews=json.loads((ROOT/'3-review-queue.json').read_text())
-        self.assertEqual(len(reviews),1109)
+        self.assertEqual(len(reviews),1113)  # 1109 original + 4 catalogue URLs the queue had missed
         known={'pending','ok','broken','server_error','unreachable','blocked','template'}
+        required={'url','names','last_checked','review_status','evidence_url','notes','http_status'}
         now=datetime.datetime.now(datetime.timezone.utc)
         for r in reviews:
+            self.assertTrue(required.issubset(set(r)),r['url'])
+            self.assertIsInstance(r['names'],list,r['url'])
             self.assertIn(r['review_status'],known,r['url'])
+            if r['review_status']!='pending':
+                # raw observation must survive: numeric HTTP code for reachable hosts,
+                # transport subtype in notes for unreachable ones
+                if r['review_status'] in ('ok','broken','server_error','blocked') and r['http_status'] is None and '%3C' not in r['url']:
+                    self.assertIsNotNone(r['http_status'],r['url'])
             if r['review_status']=='pending':
                 self.assertIsNone(r['last_checked'],r['url'])
                 continue
