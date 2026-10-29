@@ -26,9 +26,13 @@ export async function factCheck(q, key, f = fetch) {
 // errors instead of billing). env.CF_AI_MODEL / env.CF_AI_EMBED_MODEL pick the models.
 function hasCF(env) { return !!(env && env.AI && env.CF_AI_MODEL); }
 function hasCFEmbed(env) { return !!(env && env.AI && env.CF_AI_EMBED_MODEL); }
-// Production pins AI_PROVIDER=cloudflare: external paid/quota providers stay in source for local
-// development only and are UNREACHABLE there — never an automatic fallback when the binding errors
-// or is missing. Local dev leaves AI_PROVIDER unset to opt into the external keys explicitly.
+// Generation provider order (2026-10-30, user-requested platform-wide Gemini link): with
+// AI_PROVIDER="gemini-first" (production) every generative route tries Google Gemini first when
+// GEMINI_API_KEY+GEMINI_MODEL are set, and falls back to Workers AI on any Gemini error so a
+// free-tier quota exhaustion degrades instead of breaking. AI_PROVIDER="cloudflare" restores the
+// strict Workers-AI-only pin (external keys unreachable). Local dev leaves AI_PROVIDER unset.
+// Embeddings are NOT switched: embedTexts prefers the Workers AI bge-m3 binding whenever present,
+// because the precomputed catalogue asset is bge-m3 and parity would break otherwise.
 const cfOnly = env => !!(env && env.AI_PROVIDER === 'cloudflare');
 export const hasChat = env => hasCF(env) || (!cfOnly(env) && (!!(env && env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL) || !!(env && env.GEMINI_API_KEY && env.GEMINI_MODEL)));
 export const hasEmbed = env => hasCFEmbed(env) || (!cfOnly(env) && !!(env && env.GEMINI_API_KEY));
@@ -128,6 +132,60 @@ ${list}`;
   const txt = (v, n) => { const t = String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n); return bad.test(t) ? '' : t; };
   return { intro: txt(j.intro, 240), steps, limits: txt(j.limits, 240) };
 }
+// Live Arabic news discovery via direct publisher RSS feeds (user-requested RSS link, 2026-10-30).
+// Direct publisher feeds only: the Google News RSS terms shown in the feed itself restrict it to
+// personal feed readers, so it is not fetched here. The query is matched on the guide's own server -
+// it is never sent to the publishers. Items are headline + source + date + link only: DISCOVERY leads
+// for the journalist to open, never fetched article content and never verified facts. Feeds verified
+// reachable 2026-10-30; a browser UA is sent because some publishers (Sky News Arabia) 403 the
+// default worker UA. Feeds that fail are counted and skipped, never retried aggressively.
+export const NEWS_FEEDS = [
+  { name: 'بي بي سي عربي', url: 'https://feeds.bbci.co.uk/arabic/rss.xml' },
+  { name: 'فرانس 24 بالعربية', url: 'https://www.france24.com/ar/rss' },
+  { name: 'سكاي نيوز عربية', url: 'https://www.skynewsarabia.com/rss' },
+  { name: 'CNN بالعربية', url: 'https://arabic.cnn.com/rss.xml' },
+  { name: 'المصري اليوم', url: 'https://www.almasryalyoum.com/rss/rssfeeds' },
+];
+const RSS_UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+const tagText = (block, tag) => {
+  const m = block.match(new RegExp('<' + tag + '[^>]*>([\\s\\S]*?)</' + tag + '>', 'i'));
+  if (!m) return '';
+  return decodeEnt(m[1].replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+};
+export function parseRssItems(raw, source) {
+  const out = [];
+  for (const m of String(raw || '').matchAll(/<item[\s\S]*?<\/item>/gi)) {
+    const b = m[0];
+    const title = tagText(b, 'title'), url = tagText(b, 'link');
+    if (!title || !/^https:\/\//.test(url)) continue;
+    out.push({ title: title.slice(0, 200), url: url.slice(0, 500), source, published: tagText(b, 'pubDate').slice(0, 60), description: tagText(b, 'description').slice(0, 400) });
+  }
+  return out.slice(0, 30);
+}
+export async function newsRss(query, env, f = fetch) {
+  const q = String(query || '').trim().slice(0, 200);
+  if (!q) return { error: 'bad_request' };
+  const terms = [...new Set(nrm(q).split(' ').filter(w => w.length > 2))].slice(0, 8);
+  if (!terms.length) return { error: 'bad_request' };
+  const results = await Promise.all(NEWS_FEEDS.map(async fd => {
+    try {
+      const r = await f(fd.url, { headers: { 'user-agent': RSS_UA, accept: 'application/rss+xml,application/xml,text/xml;q=0.9,*/*;q=0.8' }, signal: AbortSignal.timeout(8000) });
+      if (!r.ok) return { failed: true, items: [] };
+      return { failed: false, items: parseRssItems((await r.text()).slice(0, 400000), fd.name) };
+    } catch { return { failed: true, items: [] }; }
+  }));
+  const seen = new Set(), items = [];
+  for (const res of results) for (const it of res.items) {
+    if (seen.has(it.url)) continue;
+    const hay = nrm(it.title + ' ' + it.description);
+    const hits = terms.filter(t => hay.includes(t)).length;
+    if (!hits) continue;
+    seen.add(it.url);
+    items.push({ title: it.title, url: it.url, source: it.source, published: it.published, hits, ts: Date.parse(it.published) || 0 });
+  }
+  items.sort((a, b) => b.hits - a.hits || b.ts - a.ts);
+  return { items: items.slice(0, 8).map(({ hits, ts, description, ...x }) => x), feeds_ok: results.filter(r => !r.failed).length, feeds_failed: results.filter(r => r.failed).length };
+}
 // Investigative-builder assistant: turns the user's description into a target kind and form fields. It never produces commands or links;
 // the page builds commands deterministically. Identifiers (emails, phones, urls, handles) arrive already replaced by tokens.
 export const PLAN_KINDS = { person: ['name', 'org', 'city', 'extra', 'exclude', 'from', 'to'], username: ['handle'], email: ['email'], phone: ['phone'], domain: ['domain'], image: ['imageurl'], topic: ['topic', 'city', 'exclude', 'from', 'to'] };
@@ -141,13 +199,9 @@ export async function plan(text, env, f = fetch) {
   if (!hasChat(env) || !String(text || '').trim()) return { error: 'off' };
   const kinds = Object.entries(PLAN_KINDS).map(([k, v]) => `${k} (${v.join(', ')})`).join('؛ ');
   const prompt = `أنت مساعد داخل منشئ أوامر البحث الاستقصائي لدليل عربي للصحفيين. حوّل وصف المستخدم إلى نوع هدف وحقول فقط، بدون أي أوامر بحث أو روابط. الأنواع وحقولها: ${kinds}. القيم الرمزية مثل EMAIL1 وPHONE1 وURL1 وHANDLE1 انسخها كما هي في الحقل المناسب. التواريخ بصيغة YYYY-MM-DD. لا تخترع معلومات لم تُذكر. اكتب note جملة عربية واحدة تشرح ما فهمته وما ينقصه. أعد JSON فقط: {"kind":"...","fields":{...},"note":"..."}.\nوصف المستخدم: ${String(text).slice(0, 500)}`;
-  let raw = '';
-  if (hasCF(env)) { const c = await cfChat(prompt, env, 0.1, 2048); if (c.error) return { error: c.error }; raw = c.text; }
-  else {
-    const r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.1, responseMimeType: 'application/json' } }) });
-    if (!r.ok) return { error: 'http_' + r.status };
-    raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
-  }
+  const rr = await chatText(prompt, env, f, 0.1, 2048);
+  if (rr.error) return { error: rr.error };
+  const raw = rr.text || '';
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   return cleanPlan(j) || { error: 'filtered' };
 }
@@ -182,6 +236,25 @@ async function chatText(prompt, env, f, temperature, maxTokens, jsonMode = true,
   if (cfOnly(env) && !hasCF(env)) { led?.push({ stage, ms: 0, status: 'off' }); return { error: 'off' }; }
   let r;
   try {
+    if (!cfOnly(env) && env.GEMINI_API_KEY && env.GEMINI_MODEL) {
+      try {
+        r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: maxTokens, temperature, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(to) });
+        if (r.ok) {
+          const txt = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+          led?.push({ stage, ms: Date.now() - t0, status: 'ok' });
+          return { text: txt };
+        }
+        led?.push({ stage: stage + '_gemini', ms: Date.now() - t0, status: 'http_' + r.status });
+        if (!hasCF(env)) return { error: 'http_' + r.status };
+      } catch (e) {
+        led?.push({ stage: stage + '_gemini', ms: Date.now() - t0, status: e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'timeout' : 'neterr' });
+        if (!hasCF(env)) return { error: 'neterr' };
+      }
+      // Gemini failed and Workers AI is bound: fall back so quota/instability degrades, not breaks.
+      const c = await cfChat(prompt, env, temperature, maxTokens);
+      led?.push({ stage, ms: Date.now() - t0, status: 'cf_fallback_' + (c.error || 'ok') });
+      return c;
+    }
     if (hasCF(env)) {
       const c = await cfChat(prompt, env, temperature, maxTokens);
       led?.push({ stage, ms: Date.now() - t0, status: c.error || 'ok' });
@@ -1381,6 +1454,7 @@ export default {
     if (b?.mode === 'ask') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } } // evidence-first route: the draft pipeline's long JSON draft loses its claims array to token truncation on the current on-Cloudflare model (2026-10-29 probes); askAssistant stays exported for tests and future adaptation
     if (b?.mode === 'ask_ef') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'rag') { try { return json(await ragAsk(b.question, b.sources, b.options || {}, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
+    if (b?.mode === 'news_rss') { try { return json(await newsRss(b.q ?? b.query ?? b.question, env, fetch), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     const q = String(b?.question || '').trim().slice(0, 300); if (!q) return json({ error: 'empty' }, 400, o);

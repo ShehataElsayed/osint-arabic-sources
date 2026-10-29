@@ -187,7 +187,7 @@ $('local-device').onclick = async () => {
 // Keep the fixed composer from covering page-bottom content (consent text, semantic button) on any viewport.
 const fitComposer = () => { const cw = document.querySelector('.composer-wrap'); if (cw) document.getElementById('chat').style.paddingBottom = (cw.offsetHeight + 24) + 'px'; };
 addEventListener('resize', fitComposer); fitComposer();
-const NOTICE_PLAN = 'يُرسل نص سؤالك إلى خادم الدليل على Cloudflare (نماذج Workers AI)، ولتوليد خطة البحث يُرسل نص السؤال وأوصاف الأدوات المرشحة إلى Google عبر واجهة Gemini (فئة مجانية؛ قد تستخدم Google النص لتحسين منتجاتها وفق شروطها). لا تكتب بيانات حساسة.';
+const NOTICE_PLAN = 'يُرسل نص سؤالك إلى خادم الدليل على Cloudflare؛ يولّد نموذج Gemini من Google الترشيح وخطة البحث (فئة مجانية؛ قد تستخدم Google النص لتحسين منتجاتها وفق شروطها) مع رجوع تلقائي إلى نماذج Workers AI عند تعذّره. لا تكتب بيانات حساسة.';
 if (EXTERNAL_AI) $('ext').addEventListener('change', e => { $('notice').textContent = e.target.checked ? NOTICE_PLAN : ''; });
 else if ($('ext')) $('ext').closest('label').hidden = true; // static-only build: external mode unavailable, not just off
 

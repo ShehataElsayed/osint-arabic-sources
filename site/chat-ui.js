@@ -3,7 +3,7 @@ export const $ = id => document.getElementById(id);
 export const el = (tag, txt, cls) => { const n = document.createElement(tag); if (txt != null) n.textContent = txt; if (cls) n.className = cls; return n; };
 export const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 export const sleep = ms => new Promise(r => setTimeout(r, ms));
-export const NOTICE = 'يُرسل نص طلبك إلى خادم الدليل على Cloudflare لمعالجته بنماذج Workers AI هناك، فلا تكتب بيانات حساسة.';
+export const NOTICE = 'يُرسل نص طلبك إلى خادم الدليل على Cloudflare؛ يولّد الردَّ نموذج Gemini من Google (فئة مجانية؛ قد تستخدم Google النص لتحسين منتجاتها) مع رجوع تلقائي إلى نماذج Workers AI عند تعذّره، فلا تكتب بيانات حساسة.';
 export async function typeInto(node, text) { if (REDUCED) { node.textContent = text; return; } const w = text.split(' '); node.textContent = ''; for (let i = 0; i < w.length; i++) { node.textContent += (i ? ' ' : '') + w[i]; await sleep(28); } }
 export function startTurn(thread, q) {
   const turn = el('div', null, 'turn'), bot = el('div', null, 'bot'), body = el('div', null, 'bot-body'), dots = el('div', null, 'thinking');

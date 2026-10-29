@@ -216,6 +216,25 @@ $('build').addEventListener('click', () => {
   $('outbox').hidden = false;
   $('status').textContent = '';
   $('outbox').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Live RSS matches for topic plans: publisher feeds fetched and matched on the guide's server
+  // (the topic never leaves the guide's server to the publishers). Discovery leads, not verified facts.
+  if (kind === 'topic' && v.topic) {
+    import('./rag-config.js').then(({ BACKEND_URL }) => {
+      if (!BACKEND_URL) return;
+      fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'news_rss', q: v.topic }) })
+        .then(r => r.ok ? r.json() : null).then(j => {
+          if (!j || !Array.isArray(j.items) || !j.items.length) return;
+          const card = document.createElement('div');
+          card.className = 'card cmdstage';
+          let h = '<h3>موجز أخبار مباشر (RSS)</h3><p class="muted">عناوين حديثة من موجزات RSS لمصادر إخبارية طابقت موضوعك على خادم الدليل — مواد للاكتشاف عند مصدرها، ليست محتوى كاملًا ولا تحققًا.</p><div class="cmdlist">';
+          for (const it of j.items) {
+            h += '<div class="cmd"><code>' + esc(it.title) + '</code><span class="cmdbtns"><a class="btn" href="' + esc(it.url) + '" target="_blank" rel="noopener noreferrer">' + esc(it.source) + ' ↗</a></span></div>';
+          }
+          card.innerHTML = h + '</div>';
+          host.appendChild(card);
+        }).catch(() => { /* RSS panel optional */ });
+    }).catch(() => { /* no backend config */ });
+  }
 });
 
 document.addEventListener('click', (e) => {

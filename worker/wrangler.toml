@@ -4,6 +4,9 @@ compatibility_date = "2026-10-01"
 
 # AI runs on Cloudflare Workers AI via this binding: no external provider, no API key, and the
 # Workers Free plan free allocation (10,000 neurons/day) errors instead of billing.
+# Generation provider: Google Gemini via the GEMINI_API_KEY secret (free tier - a project stays free
+# unless billing is explicitly set up in AI Studio, ai.google.dev/gemini-api/docs/pricing); Workers AI
+# below is the automatic fallback when Gemini errors or is over quota.
 # https://developers.cloudflare.com/workers-ai/platform/pricing/
 [ai]
 binding = "AI"
@@ -14,7 +17,7 @@ binding = "AI"
 #   wrangler secret put GEMINI_API_KEY        # used ONLY by the research_plan route (user-requested Gemini link); free tier - a project stays free unless billing is explicitly set up in AI Studio. All other routes stay pinned to Workers AI by AI_PROVIDER.
 #   wrangler secret put EXA_API_KEY           # Exa web search (optional; separate paid account, only if chosen)
 [vars]
-AI_PROVIDER = "cloudflare"               # pins production to Workers AI only; external provider keys unreachable here
+AI_PROVIDER = "gemini-first"               # generation: Gemini first (user-requested platform link 2026-10-30), Workers AI automatic fallback; "cloudflare" restores the strict Workers-AI-only pin. Embeddings stay on Workers AI bge-m3 (catalogue parity).
 CF_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"   # live-tested 2026-10-29: Arabic fidelity/abstention/conflict probes passed
 CF_AI_EMBED_MODEL = "@cf/baai/bge-m3"        # multilingual, live-tested 2026-10-29 (1024-dim)
 GEMINI_MODEL = "gemini-3.8-flash"         # research_plan route only (needs GEMINI_API_KEY secret); documented free tier: ai.google.dev/gemini-api/docs/pricing
