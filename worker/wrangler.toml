@@ -20,6 +20,6 @@ binding = "AI"
 AI_PROVIDER = "gemini-first"               # generation: Gemini first (user-requested platform link 2026-10-30; user confirmed the owning project is free/no billing 2026-10-30 01:10), Workers AI automatic fallback; "cloudflare" restores the strict Workers-AI-only pin and gates research_plan OFF. Embeddings stay on Workers AI bge-m3 (catalogue parity).
 CF_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"   # live-tested 2026-10-29: Arabic fidelity/abstention/conflict probes passed
 CF_AI_EMBED_MODEL = "@cf/baai/bge-m3"        # multilingual, live-tested 2026-10-29 (1024-dim)
-GEMINI_MODEL = "gemini-3.8-flash"         # research_plan route only (needs GEMINI_API_KEY secret); documented free tier: ai.google.dev/gemini-api/docs/pricing
+GEMINI_MODEL = "gemini-3-flash-preview"   # live-verified 2026-10-30 with the project key: 200 in <1s. gemini-3.8-flash was the documented free pick but the live API returns 503 "high demand" (free-tier capacity, sometimes after a 45-60s hang) on every call with this key; CF Workers AI remains the automatic fallback on quota errors (429).
 GEMINI_EMBED_MODEL = "gemini-embedding-2" # optional external fallback only
 # Without any provider the assistant runs retrieval-only and says so on the page.
