@@ -151,7 +151,7 @@ h1,h2,h3,p{margin:0}
 .tool .path{font-size:12px}
 .tool h3{font-size:17px;font-weight:800;word-break:break-word}
 .tool p{color:#c4cabb;font-size:14.5px;line-height:1.75;flex:1}
-.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.tag{font-size:12px;border:1px solid var(--line2);border-radius:6px;padding:0 8px;color:var(--muted)}.tag.warn{color:var(--warn);border-color:#6b5a2a}
+.tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.tag{font-size:12px;border:1px solid var(--line2);border-radius:6px;padding:0 8px;color:var(--muted)}.tag.warn{color:var(--warn);border-color:#6b5a2a}.tag.h-ok{color:#7fc98f;border-color:#2a5a36}.tag.h-bad{color:#e08a8a;border-color:#6b2a2a}.tag.h-dim{color:var(--muted);border-style:dashed}
 .acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}
 .go{font-weight:800;text-decoration:none;color:var(--lime-ink);background:var(--lime);border-radius:8px;padding:2px 12px;font-size:14px}.go:hover{background:#d4f58e;color:var(--lime-ink)}
 .tf-btn{font:700 13px Cairo,sans-serif;color:var(--lime);background:transparent;border:1px solid var(--line2);border-radius:8px;padding:2px 10px;cursor:pointer}.tf-btn:hover{border-color:var(--lime)}

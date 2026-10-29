@@ -16,6 +16,33 @@ if not m:
 data = json.loads(m.group(1))
 tops = data['children']
 
+# Link-health review queue: one row per catalogue URL (see 3-review-queue.json).
+review = {}
+qpath = ROOT / '3-review-queue.json'
+if qpath.is_file():
+    for r in json.loads(qpath.read_text()):
+        review[r['url']] = r
+
+def health_tag(n):
+    r = review.get(n.get('url'))
+    if not r or r.get('review_status') in (None, 'pending'):
+        return ''
+    st = r['review_status']
+    day = (r.get('last_checked') or '')[:10]
+    if st == 'ok':
+        return f'<span class="tag h-ok">الرابط مفحوص {E(day)} ✓</span>'
+    if st == 'broken':
+        return f'<span class="tag h-bad">الرابط معطّل {E(day)} — بديل موثّق قيد المراجعة</span>'
+    if st == 'server_error':
+        return f'<span class="tag h-bad">خادم المصدر يعيد خطأ {E(day)}</span>'
+    if st == 'unreachable':
+        return f'<span class="tag h-bad">تعذّر الوصول {E(day)} — قد يكون توقفًا مؤقتًا</span>'
+    if st == 'blocked':
+        return f'<span class="tag h-dim">يحجب الفحص الآلي {E(day)} — قد يعمل في المتصفح</span>'
+    if st == 'template':
+        return f'<span class="tag h-dim">صفحة نموذج عام — الاستخدام يدوي</span>'
+    return ''
+
 # Seven research paths. Each branch belongs to exactly one; unknown branches go to the last path.
 CLUSTERS = [
     ('01', 'من هو؟', 'الهوية والحسابات', 'اسم مستخدم، بريد، رقم، حساب، مجتمع.',
@@ -164,6 +191,7 @@ def tool_card(n, i, path):
         tags += '<span class="tag warn">الرابط غير متحقق منه</span>'
     if n.get('linkUnsafe'):
         tags += '<span class="tag warn">وجهة غير آمنة، الرابط معطّل</span>'
+    tags += health_tag(n)
     sub = f'<small class="path">{E(" › ".join(path))}</small>' if path else ''
     act = (f'<a class="go" href="{E(n["url"])}" target="_blank" rel="noopener noreferrer" data-osint-tool="{E(n["name"])}">افتح الأداة <span aria-hidden="true">↗</span></a>' if ok else '')
     if n.get('url') == 'https://29a.ch/photo-forensics/':
