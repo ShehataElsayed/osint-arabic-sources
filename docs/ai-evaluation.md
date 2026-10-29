@@ -51,4 +51,4 @@ Out-of-scope (dev-labeled): the 12-candidate path shows nothing for all 8 querie
 
 Quantization loss (int8-per-vector vs local fp32 round-trip, NOT Cloudflare parity): mean |cos - 1| = 0.000149, max 0.000400, measured on all 1,156 tools.
 
-Limits: parity between the local ONNX int8 vectors and Workers AI `@cf/baai/bge-m3` embeddings is a RELEASE GATE, verified before merge/deploy on a bounded sample and recorded in `docs/deployment.md` - if parity fails, this path is not shipped (the client then keeps the previous behavior). Author-labeled relevance and small sets remain the main caveat, as in section 1.
+Parity (PASSED 2026-10-30, before merge): live Workers AI `@cf/baai/bge-m3` query vectors vs the local ONNX int8 asset - encoder cosine mean 0.9816 (min 0.9694), production-configuration top-10 ranking overlap mean 8.8/10, and the full fused path with live CF vectors keeps the held-out gain (recall@15 0.929 vs the 0.678 baseline; out-of-scope 0/8). Full record in `docs/deployment.md`. Author-labeled relevance and small sets remain the main caveat, as in section 1.

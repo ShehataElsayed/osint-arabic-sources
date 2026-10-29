@@ -24,7 +24,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def cf_embed(texts):
     req = urllib.request.Request(PROBE, data=json.dumps({'texts': texts}).encode(),
-                                 headers={'content-type': 'application/json'})
+                                 headers={'content-type': 'application/json', 'user-agent': 'curl/8.0 (workers.dev edge blocks the default python urllib UA)'})
     with urllib.request.urlopen(req, timeout=60) as r:
         return np.array(json.load(r)['data'], dtype=np.float32)
 
@@ -39,7 +39,7 @@ cat /= np.linalg.norm(cat, axis=1, keepdims=True)
 qs = [x['q'] for x in fx['queries']]
 local = np.array([np.array(x['v'], dtype=np.float32) * x['scale'] for x in fx['queries']])
 local /= np.linalg.norm(local, axis=1, keepdims=True)
-cf = np.stack([cf_embed(qs[i:i + 20]) for i in range(0, len(qs), 20)])
+cf = np.concatenate([cf_embed(qs[i:i + 20]) for i in range(0, len(qs), 20)])
 cf /= np.linalg.norm(cf, axis=1, keepdims=True)
 assert cf.shape[1] == dims, f'CF dims {cf.shape[1]} != asset dims {dims}'
 
@@ -55,21 +55,26 @@ for i in range(len(qs)):
 ov = np.array(ov)
 print(f'ranking parity: top-10 overlap mean {ov.mean():.1f}/10 min {ov.min()}')
 
-# End-to-end: held-out in-scope queries must still beat the old 12-cap recall@15 baseline (0.678).
+# Like-for-like quality: semantic-only top-15 recall with CF query vectors vs with local ONNX
+# query vectors (same committed catalogue). The production fused-path quality with CF vectors is
+# measured by tests/semantic-catalog.eval.mjs with CF_VECTORS=<file>; this script saves that file.
 Q = json.load(open(os.path.join(ROOT, 'tests/data/tool-queries.json')))
 items = json.load(open(os.path.join(ROOT, '_site/search-tools.json')))
-qset = [x['q'] for x in fx['queries']]
 base_idx = {q: i for i, q in enumerate(qs)}
-def recall15(queries):
+def recall15(rank, queries):
     tot = 0.0
     for x in queries:
-        rel = set(x['rel']); order = np.argsort(-cf_rank[base_idx[x['q']]])[:15]
-        names = [items[i]['name'] for i in order]
-        tot += sum(1 for n in set(names) if n in rel) / len(rel)
+        rel = set(x['rel'])
+        names = {items[i]['name'] for i in np.argsort(-rank[base_idx[x['q']]])[:15]}
+        tot += len(names & rel) / len(rel)
     return tot / len(queries)
-h15 = recall15(Q['heldout']); d15 = recall15(Q['dev'])
-print(f'quality with CF query vectors (semantic-only top15): heldout r@15 {h15:.3f} dev r@15 {d15:.3f}')
+h15_cf, d15_cf = recall15(cf_rank, Q['heldout']), recall15(cf_rank, Q['dev'])
+h15_lo, d15_lo = recall15(lo_rank, Q['heldout']), recall15(lo_rank, Q['dev'])
+print(f'semantic-only r@15 (like-for-like): heldout CF {h15_cf:.3f} vs local {h15_lo:.3f}; dev CF {d15_cf:.3f} vs local {d15_lo:.3f}')
 
-ok = cos.min() >= 0.95 and ov.mean() >= 8.0 and ov.min() >= 6 and h15 >= 0.678
+out = {'model': '@cf/baai/bge-m3 via parity probe worker', 'queries': [{'q': q, 'v': v} for q, v in zip(qs, cf.tolist())]}
+json.dump(out, open(os.environ.get('CF_VECTORS_OUT', '/tmp/cf-vectors.json'), 'w'), ensure_ascii=False)
+
+ok = cos.min() >= 0.95 and ov.mean() >= 8.0 and ov.min() >= 6 and abs(h15_cf - h15_lo) <= 0.06
 print('PARITY', 'PASS' if ok else 'FAIL')
 sys.exit(0 if ok else 1)

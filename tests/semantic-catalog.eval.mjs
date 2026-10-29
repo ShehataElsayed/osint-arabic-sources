@@ -22,10 +22,14 @@ for (let i = 0; i < M.count; i++) {
   for (let j = 0; j < M.dims; j++) { const v = data[off + j] * s; n += v * v; }
   norms[i] = Math.sqrt(n) || 1;
 }
+// Optional production-configuration run: CF_VECTORS=<path> points at live Workers AI bge-m3
+// vectors for the same queries (captured via the parity probe worker); the eval then ranks with
+// exactly what production uses - CF query vectors x committed int8 catalogue.
+const CFV = process.env.CF_VECTORS ? new Map(JSON.parse(fs.readFileSync(process.env.CF_VECTORS, 'utf8')).queries.map(x => [x.q, x.v])) : null;
 const fxByQ = new Map(FX.queries.map(x => [x.q, x]));
 function semScores(q) {
   const f = fxByQ.get(q); if (!f) throw new Error('missing fixture for: ' + q);
-  const qv = f.v.map(x => x * f.scale);
+  const qv = CFV ? CFV.get(q) : f.v.map(x => x * f.scale);
   const qn = Math.sqrt(qv.reduce((a, x) => a + x * x, 0)) || 1;
   const scores = new Float64Array(M.count);
   for (let i = 0; i < M.count; i++) {
@@ -81,7 +85,7 @@ function metrics(set, run) {
   const n = set.length, f = v => +(v / n).toFixed(3);
   return { queries: n, 'recall@5': f(r5), 'recall@15': f(r15), 'hit@5': f(hit5), MRR: f(mrr) };
 }
-const out = { tools: items.length, floor: SEM_CATALOG_FLOOR, old_12cap: {}, new_full_catalogue: {} };
+const out = { tools: items.length, floor: SEM_CATALOG_FLOOR, query_vectors: CFV ? 'live @cf/baai/bge-m3 (production configuration)' : 'local ONNX int8 fixture', old_12cap: {}, new_full_catalogue: {} };
 for (const s of ['dev', 'heldout']) { out.old_12cap[s] = metrics(Q[s], oldPath); out.new_full_catalogue[s] = metrics(Q[s], newPath); }
 out.out_of_scope = {
   queries: Q.out_of_scope.length,
