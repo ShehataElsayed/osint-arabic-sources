@@ -18,10 +18,33 @@ class Foundation(unittest.TestCase):
         self.assertEqual(len(tree['children']),33)
         self.assertEqual(len(leaves),1171)  # 2026-10-25: +Perma.cc, +archive.today, +Google Fact Check Explorer (verified live; CourtListener dup reverted)
         self.assertTrue(all(n.get('arDescription') for n in leaves))
-    def test_no_invented_review_dates(self):
+    def test_review_queue_structure(self):
+        # 2026-10-29: the queue is now populated by the first real audit. The guard
+        # changes from "nothing reviewed" to "whatever is marked was structurally
+        # verified": known statuses only, real ISO timestamps, no future dates,
+        # and pending entries still carry no check date.
+        import datetime
         reviews=json.loads((ROOT/'3-review-queue.json').read_text())
-        self.assertEqual(len(reviews),1109)
-        self.assertTrue(all(r['last_checked'] is None and r['review_status']=='pending' for r in reviews))
+        self.assertEqual(len(reviews),1113)  # 1109 original + 4 catalogue URLs the queue had missed
+        known={'pending','ok','broken','server_error','unreachable','blocked','template'}
+        required={'url','names','last_checked','review_status','evidence_url','notes','http_status'}
+        now=datetime.datetime.now(datetime.timezone.utc)
+        for r in reviews:
+            self.assertTrue(required.issubset(set(r)),r['url'])
+            self.assertIsInstance(r['names'],list,r['url'])
+            self.assertIn(r['review_status'],known,r['url'])
+            if r['review_status']!='pending':
+                # raw observation must survive: numeric HTTP code for reachable hosts,
+                # transport subtype in notes for unreachable ones
+                if r['review_status'] in ('ok','broken','server_error','blocked') and r['http_status'] is None and '%3C' not in r['url']:
+                    self.assertIsNotNone(r['http_status'],r['url'])
+            if r['review_status']=='pending':
+                self.assertIsNone(r['last_checked'],r['url'])
+                continue
+            self.assertIsNotNone(r['last_checked'],r['url'])
+            ts=datetime.datetime.fromisoformat(r['last_checked'].replace('Z','+00:00'))
+            self.assertLessEqual(ts,now,r['url'])
+            self.assertGreaterEqual(ts,datetime.datetime(2026,10,29,tzinfo=datetime.timezone.utc),r['url'])
     def test_admin_preserved(self):
         self.assertEqual((ROOT/'site/admin.html').read_bytes(),(ROOT/'_site/admin.html').read_bytes())
     def test_required_pages(self):
