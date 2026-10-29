@@ -50,7 +50,10 @@ class Foundation(unittest.TestCase):
             self.assertLessEqual(ts,now,r['url'])
             self.assertGreaterEqual(ts,datetime.datetime(2026,10,29,tzinfo=datetime.timezone.utc),r['url'])
     def test_admin_preserved(self):
-        self.assertEqual((ROOT/'site/admin.html').read_bytes(),(ROOT/'_site/admin.html').read_bytes())
+        # Built pages carry a content-hash ?v= on local js/css refs (cache busting); strip it to compare content.
+        import re
+        bust = re.compile(rb'\?v=[a-f0-9]{8}(")').sub
+        self.assertEqual((ROOT/'site/admin.html').read_bytes(), bust(rb'\1', (ROOT/'_site/admin.html').read_bytes()))
     def test_required_pages(self):
         for f in ['index.html','admin.html','commands.html','methodology.html','verification.html','assistant.html','smart-search.html','catalog/category-01.html']:
             self.assertTrue((ROOT/'_site'/f).is_file(),f)
