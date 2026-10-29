@@ -1195,7 +1195,7 @@
       {
        "name": "Whois ARIN",
        "type": "url",
-       "url": "https://whois.arin.net/ui/advanced.jsp",
+       "url": "https://search.arin.net/",
        "description": "Official American Registry for Internet Numbers WHOIS and RDAP lookup service for IPv4, IPv6, ASNs, and organizations in the North American region.",
        "status": "live",
        "pricing": "free",
@@ -5201,7 +5201,7 @@
       {
        "name": "BinaryEdge (R)",
        "type": "url",
-       "url": "https://www.binaryedge.io/",
+       "url": "https://portal.binaryedge.io/",
        "description": "Commercial security research platform with internet-wide scanning and module-based detection.",
        "status": "live",
        "pricing": "paid",
@@ -7616,7 +7616,7 @@
       {
        "name": "Fedifinder",
        "type": "url",
-       "url": "https://fedifinder.glitch.me/",
+       "url": "https://github.com/lucahammer/fedifinder",
        "description": "Web tool that scanned Twitter profiles to find Fediverse/Mastodon handles among your contacts and exported them as CSV. The hosted instance now returns HTTP 410 and is no longer functional due to Twitter API restrictions.",
        "status": "down",
        "pricing": "free",
@@ -8799,7 +8799,7 @@
       {
        "name": "BlackPlanet.com - Member Find",
        "type": "url",
-       "url": "https://www.blackplanet.com/user_search/index.html",
+       "url": "https://www.blackplanet.com/",
        "description": "Dedicated member search tool for BlackPlanet, a social network primarily serving the African-American community. Supports direct user lookup.",
        "status": "live",
        "pricing": "free",
@@ -9839,7 +9839,7 @@
       {
        "name": "AnyWho",
        "type": "url",
-       "url": "https://www.anywho.com/whitepages",
+       "url": "https://www.anywho.com/",
        "description": "Free white pages directory providing people search by name, reverse phone lookup, and address lookup for US-based contacts.",
        "status": "live",
        "pricing": "free",
@@ -18837,7 +18837,7 @@
       {
        "name": "Blocktrail",
        "type": "url",
-       "url": "https://www.blocktrail.com/BTC",
+       "url": "https://mempool.space/",
        "description": "Bitcoin transaction analysis platform acquired by Bitmain in July 2016 and rebranded to BTC.com; original service no longer operational.",
        "status": "down",
        "pricing": "free",
@@ -21381,7 +21381,7 @@
       {
        "name": "Decalage Malware Search",
        "type": "url",
-       "url": "https://decalage.info/en/mwsearch",
+       "url": "https://decalage.info/mwsearch",
        "description": "Custom metasearch engine that indexes malware analysis databases to find malware samples containing specific strings, filenames, hashes, or IOCs.",
        "status": "live",
        "pricing": "free",
@@ -23306,7 +23306,7 @@
       {
        "name": "Faker.js",
        "type": "url",
-       "url": "https://cdn.rawgit.com/Marak/faker.js/master/examples/browser/index.html",
+       "url": "https://fakerjs.dev/",
        "description": "JavaScript library for generating massive amounts of fake data including names, addresses, companies, and more; browser demo now hosted at fakerjs.dev.",
        "status": "down",
        "pricing": "free",
@@ -23781,7 +23781,7 @@
         {
          "name": "What Browser?",
          "type": "url",
-         "url": "https://whatbrowser.org/",
+         "url": "https://www.whatsmybrowser.org/",
          "description": "Browser detection service that identifies your browser and offers guidance on updating to current versions; useful for fingerprint verification.",
          "status": "live",
          "pricing": "free",
@@ -24173,7 +24173,7 @@
       {
        "name": "The Hitchhiker’s Guide to Online Anonymity",
        "type": "url",
-       "url": "https://anonymousplanet.org/guide/",
+       "url": "https://anonymousplanet.net/guide/",
        "description": "Comprehensive, community-maintained guide to online anonymity covering threat modeling, Tor, VMs, operational security, and plausible deniability techniques.",
        "status": "live",
        "pricing": "free",
@@ -24704,7 +24704,7 @@
     {
      "name": "Plessas",
      "type": "url",
-     "url": "https://plessas.net/online-training",
+     "url": "https://plessas.net/",
      "description": "Expert-led OSINT training courses by Plessas Experts Network, from fundamentals to intensive hands-on investigation programs.",
      "status": "live",
      "pricing": "paid",
@@ -24725,7 +24725,7 @@
     {
      "name": "The OSINTion",
      "type": "url",
-     "url": "https://www.theosintion.com/courses",
+     "url": "https://academy.theosintion.com/",
      "description": "Affordable OSINT training courses by Joe Gray, including people OSINT, business investigations, and blockchain-focused instruction.",
      "status": "live",
      "pricing": "paid",
