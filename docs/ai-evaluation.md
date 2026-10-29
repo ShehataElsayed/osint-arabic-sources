@@ -53,17 +53,23 @@ Quantization loss (int8-per-vector vs local fp32 round-trip, NOT Cloudflare pari
 
 Parity (PASSED 2026-10-30, before merge): live Workers AI `@cf/baai/bge-m3` query vectors vs the local ONNX int8 asset - encoder cosine mean 0.9816 (min 0.9694), production-configuration top-10 ranking overlap mean 8.8/10, and the full fused path with live CF vectors keeps the held-out gain (recall@15 0.929 vs the 0.678 baseline; out-of-scope 0/8). Full record in `docs/deployment.md`. Author-labeled relevance and small sets remain the main caveat, as in section 1.
 
-## 3b. Fusion design correction (2026-10-30, post-review)
+## 3b. Fusion design: semantic discoveries append, never reorder (2026-10-30, post-review final)
 
-The first full-catalogue design RRF-fused the semantic ranking with the lexical candidates across the whole list. Measured on the eval sets, that DEMOTED some strong lexical hits below semantic neighbors (5 queries worse at recall@5, including a video-verification plugin dropping out of the top 5). Review verdict: not an acceptable trade.
+Review caught that whole-list RRF fusion DEMOTED strong lexical hits below semantic neighbors (measured: 9 queries lost a top-6 tool, including core verification tools). The shipped design eliminates reordering of found tools by construction:
 
-The shipped design instead: (1) lexical candidates are reranked with their semantic scores using exactly the established 12-candidate RRF math (now all candidates are scored, not just 12); (2) full-catalogue semantic discoveries (tools the keyword pass missed entirely, cosine >= 0.5, URL-deduped) are APPENDED below every candidate and can never demote one. Abstention gates unchanged. Metrics below use name-deduplicated counting (the same tool can be catalogued under several URLs; an earlier run's 1.33 recall came from that double-count). Query vectors: live `@cf/baai/bge-m3` (production configuration).
+1. The established top-12 lexical slice is reranked with per-candidate semantic scores - the worker returns exact scores for those candidates (semantic_catalog `scores` field), so this step is byte-identical to the previous 12-candidate path, including scope-gating.
+2. Full-catalogue semantic discoveries (tools the keyword pass missed entirely, cosine >= 0.5, URL-deduped, scope-clean) are APPENDED below every candidate, including scope-mismatched ones. They can fill the display only when the lexical pass found fewer than 6 tools.
+3. When lexical abstains entirely, floor-gated suggestions show ONLY if the abstention gates allow (transactional intent, capability gap and uncovered-jurisdiction abstentions hold).
+
+Per-query verification (live `@cf/baai/bge-m3` query vectors, production configuration): on all 40 in-scope queries where the lexical pass returned results, the displayed top-6 is IDENTICAL to the established path (0 reorders, 0 burials - verified tool-by-tool, not inferred from aggregates). 3 previously abstained in-scope queries now show relevant suggestions (archived copies, person-by-name, search-operators); 3 more get discoveries appended below the unchanged established order. Out-of-scope: 0/8 shown, both paths.
+
+Aggregate metrics, same query sets and counting for both paths (name-deduplicated; the counting unit is the tool NAME - distinct tools can share a name or alias, and one tool can be catalogued under several URLs, so these are close approximations, not exact measurements):
 
 | Set | Method | recall@5 | recall@15 | hit@5 | MRR |
 |---|---|---|---|---|---|
 | dev (20) | established 12-cap rerank | 0.612 | 0.695 | 0.95 | 0.745 |
-| dev (20) | rerank + appended discoveries | 0.616 | 0.763 | 0.95 | 0.720 |
+| dev (20) | + appended discoveries | 0.616 | 0.753 | 0.95 | 0.720 |
 | held-out (20) | established 12-cap rerank | 0.508 | 0.612 | 0.80 | 0.600 |
-| held-out (20) | rerank + appended discoveries | 0.537 | 0.787 | 0.90 | 0.667 |
+| held-out (20) | + appended discoveries | 0.537 | 0.787 | 0.90 | 0.670 |
 
-No metric regresses except dev MRR (-0.025, from scoring candidates 13-15 that the 12-cap never reranked); held-out hit@5 improves 0.80 -> 0.90 and recall@15 0.612 -> 0.787. Out-of-scope: 0/8 on both paths. The earlier table in section 3 used URL-deduped counting and the fused-across-list design; keep this table as the authoritative one.
+PROVENANCE, honestly: ALL 40 in-scope queries and all 8 out-of-scope queries are now development/diagnostic data - the 20 "held-out" queries were used to detect the fusion regression and fix the design, so they are no longer untouched validation. Future design changes need a freshly written query set. The guarantee that matters (no found tool buried) is structural and verified per-query above, not dependent on these aggregates.

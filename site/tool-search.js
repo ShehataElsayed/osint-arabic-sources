@@ -175,27 +175,30 @@ export function toolScopes(text) {
 }
 // Full-catalogue semantic fusion (2026-10-30 review design): the worker's semantic_catalog
 // mode ranks the WHOLE catalogue server-side; the client then
-//   1. reranks the lexical candidates with their semantic scores - exactly the established
-//      12-candidate RRF behavior (k=60), except every candidate is scored, not just 12; and
-//   2. APPENDS floor-gated semantic discoveries (tools the keyword pass missed entirely)
-//      below them, URL-deduped.
-// Semantic evidence never demotes a lexical candidate below a discovery: candidate rrf values
-// are >= 1, discovery rrf values are the raw cosine (< 1), so gateScopes' rrf sort keeps the
-// established order among found tools and appends discoveries after them.
-export function fuseSemanticCatalog(lexCands, semRanked) {
+//   1. reranks the established top-12 lexical slice with their semantic scores - byte-identical
+//      to the previous 12-candidate RRF behavior (k=60); the caller passes exactly that slice; and
+//   2. APPENDS floor-gated, scope-clean semantic discoveries (tools the keyword pass missed
+//      entirely) below every candidate.
+// Tier guarantee: NO candidate is ever demoted below a discovery, including scope-mismatched
+// candidates - gateScopes sorts by (scopeMismatch, rrf), so tiers are encoded in rrf bands:
+// clean candidates 3+rrf, mismatched candidates 2+rrf, clean discoveries their cosine (<1).
+// Discoveries that would themselves be scope-mismatched are dropped, not shown.
+export function fuseSemanticCatalog(lexCands, semRanked, query) {
   const K = 60;
+  const mismatch = t => { const miss = toolScopes(`${t.name} ${t.description}`).find(x => !toolScopes(query).includes(x) && SCOPES.find(y => y.id === x).restrictive); return !!miss; };
   const cands = (Array.isArray(lexCands) ? lexCands : []).map(c => ({ ...c }));
   const semById = new Map((Array.isArray(semRanked) ? semRanked : []).map(x => [x.id, x.s]));
   for (const c of cands) c.sem = semById.has(c.id) ? semById.get(c.id) : -1;
   cands.forEach((c, i) => { c.rrf = 1 / (K + i + 1); });
   [...cands].sort((a, b) => b.sem - a.sem).forEach((c, i) => { c.rrf += 1 / (K + i + 1); });
-  const out = cands.sort((a, b) => b.rrf - a.rrf).map(c => ({ ...c, rrf: 1 + c.rrf, discovery: false }));
+  const out = cands.sort((a, b) => b.rrf - a.rrf)
+    .map(c => ({ ...c, rrf: (mismatch(c.t) ? 2 : 3) + c.rrf, discovery: false }));
   const have = new Set(out.map(c => c.id));
   const seenUrl = new Set(out.map(c => (c.t && (c.t.url || c.t.name)) || ''));
   for (const x of Array.isArray(semRanked) ? semRanked : []) {
     if (have.has(x.id) || x.s < SEM_CATALOG_FLOOR) continue;
     const u = (x.t && (x.t.url || x.t.name)) || '';
-    if (seenUrl.has(u)) continue;
+    if (seenUrl.has(u) || mismatch(x.t)) continue;
     have.add(x.id); seenUrl.add(u);
     out.push({ t: x.t, id: x.id, sem: x.s, rrf: x.s, discovery: true });
   }

@@ -291,9 +291,10 @@ async function loadCatalogAsset(f) {
   catalogCache = { fp: m.fingerprint, count: m.count, dims: m.dims, scales, data, norms, loadedAt: Date.now() };
   return catalogCache;
 }
-export async function semanticCatalog(query, fingerprint, env, f = fetch) {
+export async function semanticCatalog(query, fingerprint, env, f = fetch, ids = []) {
   const q = String(query || '').trim().slice(0, 400);
   if (!q) return { error: 'bad_request' };
+  const wantIds = (Array.isArray(ids) ? ids : []).map(x => x | 0).filter(i => i >= 0).slice(0, 20);
   if (!hasEmbed(env)) return { error: 'off' };
   let cat;
   try { cat = await loadCatalogAsset(f); } catch { return { error: 'catalog_unavailable' }; }
@@ -310,7 +311,11 @@ export async function semanticCatalog(query, fingerprint, env, f = fetch) {
     scores[i] = d / (qn * cat.norms[i]);
   }
   const order = [...scores.keys()].sort((a, b) => scores[b] - scores[a]).slice(0, 60);
-  return { ranking: order.map(i => ({ i, s: Math.round(scores[i] * 1000) / 1000 })), count: cat.count, fingerprint: cat.fp };
+  // Exact scores for the client's lexical candidates, so its within-candidates rerank is
+  // byte-identical to the established 12-candidate path even when a candidate ranks below top-60.
+  const candScores = {};
+  for (const i of wantIds) if (i < cat.count) candScores[i] = Math.round(scores[i] * 1000) / 1000;
+  return { ranking: order.map(i => ({ i, s: Math.round(scores[i] * 1000) / 1000 })), scores: candScores, count: cat.count, fingerprint: cat.fp };
 }
 
 export const SEM_SUPPORT = 0.78; // calibrated 2026-10-25 on live gemini-embedding-001: paraphrase 0.81-0.85, related-not-supporting 0.716-0.73. bge-m3 spot check 2026-10-29 (2 paraphrase vs 2 related-not-supporting pairs: 0.894-0.944 vs 0.395-0.417) is consistent but is NOT a validated threshold // semantic retrieval floor; grounded guards still apply on top
@@ -1334,7 +1339,7 @@ export default {
     if (b?.mode === 'compose') { try { return json({ text: await compose(String(b.question || ''), b.labels, b.decision, env) }, 200, o); } catch { return json({ text: null }, 200, o); } }
     if (b?.mode === 'recommend') { try { const [rec, web] = await Promise.all([recommend(String(b.query || ''), b.candidates, env), exaWeb(String(b.query || ''), env, fetch, 3)]); return json(Array.isArray(rec) ? { picks: rec, web } : { picks: null, web, reason: rec?.error || 'off' }, 200, o); } catch { return json({ picks: null }, 200, o); } }
     if (b?.mode === 'semantic') { try { return json(await semanticScores(b.query, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
-    if (b?.mode === 'semantic_catalog') { try { return json(await semanticCatalog(b.query, b.fingerprint, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
+    if (b?.mode === 'semantic_catalog') { try { return json(await semanticCatalog(b.query, b.fingerprint, env, fetch, b.ids), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'verify') { try { return json(await verifyModel(String(b.question || ''), env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'ingest') { try { return json(await ingestUrl(String(b.url || ''), fetch, env), 200, o); } catch { return json({ error: 'fetch' }, 200, o); } }
     if (b?.mode === 'ask') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } } // evidence-first route: the draft pipeline's long JSON draft loses its claims array to token truncation on the current on-Cloudflare model (2026-10-29 probes); askAssistant stays exported for tests and future adaptation

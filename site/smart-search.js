@@ -40,17 +40,25 @@ async function semanticServer(q, cands) {
 // question text leaves the device - candidate descriptions stay in the deployed asset.
 // The manifest fingerprint guards parity: if the worker's asset does not match the deployed
 // search-tools.json, this throws and the caller falls back to the 12-candidate path.
-async function semanticCatalog(q) {
+async function semanticCatalog(q, candIds) {
   const mRes = await fetch('./tool-embeddings.json', { cache: 'force-cache' });
   if (!mRes.ok) throw new Error('asset_missing');
   const fp = (await mRes.json() || {}).fingerprint;
   if (!fp) throw new Error('asset_missing');
-  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'semantic_catalog', q, top: 12, fingerprint: fp }) });
+  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'semantic_catalog', q, top: 12, fingerprint: fp, ids: candIds || [] }) });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const j = await r.json();
   if (!j || !Array.isArray(j.ranking)) throw new Error(j && j.error || 'bad_response');
   const all = await load();
-  return j.ranking.map(x => ({ id: x.i | 0, s: x.s, t: all[x.i | 0] })).filter(x => x.t && typeof x.s === 'number');
+  const rows = j.ranking.map(x => ({ id: x.i | 0, s: x.s, t: all[x.i | 0] })).filter(x => x.t && typeof x.s === 'number');
+  // Exact scores for the lexical candidates (returned separately so a candidate ranked below the
+  // top-60 window still reranks exactly as the established 12-candidate path).
+  const have = new Set(rows.map(x => x.id));
+  for (const [id, sc] of Object.entries(j.scores || {})) {
+    const i = id | 0;
+    if (!have.has(i) && all[i]) rows.push({ id: i, s: sc, t: all[i] });
+  }
+  return rows;
 }
 function fuseRanks(scored) {
   // Reciprocal-rank fusion of the lexical order (input order) and the semantic order (k=60,
@@ -114,9 +122,12 @@ $('local').onclick = async () => {
   // and can suggest tools even when lexical search abstains entirely).
   $('status').textContent = 'جارٍ الترتيب الدلالي على كامل الدليل عبر خادم الدليل (Cloudflare Workers AI)...';
   try {
-    const rows = await semanticCatalog(last.q);
+    const rows = await semanticCatalog(last.q, (last.cands || []).slice(0, 12).map(c => c.id));
     if (last.cands.length) {
-      const fused = gateScopes(last.q, fuseSemanticCatalog(last.cands, rows));
+      const fused0 = fuseSemanticCatalog(last.cands.slice(0, 12), rows, last.q);
+      // gateScopes (label + scope sort) applies to the candidate portion ONLY - identical input,
+      // identical math to the established path; discoveries append below every candidate.
+      const fused = [...gateScopes(last.q, fused0.filter(x => !x.discovery)), ...fused0.filter(x => x.discovery)];
       showRanking(fused, 'نتائج الكلمات مع اكتشافات دلالية من كامل الدليل:', RANK_NOTE_CATALOG);
     } else if (last.txIntent || last.anchorMiss || (last.queryJuris && last.queryJuris.length)) {
       // Abstention gates hold on the full-catalogue path too: transactional requests,
@@ -126,7 +137,7 @@ $('local').onclick = async () => {
     } else {
       const above = rows.filter(x => x.s >= SEM_CATALOG_FLOOR);
       if (!above.length) { $('status').textContent = 'لا توجد نتائج من الدليل لهذا الطلب حتى بالمطابقة الدلالية.'; return; }
-      showRanking(gateScopes(last.q, above.map(x => ({ t: x.t, rrf: x.s }))), 'اقتراحات دلالية من كامل الدليل:', RANK_NOTE_CATALOG_ONLY);
+      showRanking(gateScopes(last.q, above.map(x => ({ t: x.t, rrf: x.s }))).filter(x => !x.scopeMismatch), 'اقتراحات دلالية من كامل الدليل:', RANK_NOTE_CATALOG_ONLY);
     }
     $('status').textContent = ''; return;
   } catch (e) { if (!last.cands.length) { $('status').textContent = 'لا توجد نتائج من الدليل لترتيبها دلاليًا لهذا الطلب، والترتيب الدلالي على كامل الدليل غير متاح الآن (' + e.message + ').'; return; } }
