@@ -28,3 +28,12 @@ test('built output carries the assets', () => {
   assert.ok(big('_site/tessdata/ara.traineddata.gz'), '_site missing tessdata');
   assert.ok(big('_site/duckdb/duckdb-mvp.wasm'), '_site missing duckdb wasm');
 });
+
+test('built HTML cache-busts local js/css references with a content hash', () => {
+  if (!fs.existsSync('_site/index.html')) return; // build not run in this context
+  const ss = fs.readFileSync('_site/smart-search.html', 'utf8');
+  assert.ok(/src="\.\/smart-search\.js\?v=[a-f0-9]{8}"/.test(ss), 'smart-search.js reference not cache-busted');
+  const ast = fs.readFileSync('_site/assistant.html', 'utf8');
+  assert.ok(/href="\.\/rag\.css\?v=[a-f0-9]{8}"/.test(ast), 'rag.css reference not cache-busted');
+  assert.ok(!/src="https?:\/\/[^"]*\?v=/.test(ss), 'external references must not be rewritten');
+});

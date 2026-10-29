@@ -233,3 +233,31 @@ test('diagnostics: every dropped sentence carries text, score and reason (no sil
   assert.equal(r.dropped_detail.length, 2, 'cited-fail and uncited-fail both diagnosed');
   assert.ok(r.dropped_detail.every(d => d.text && typeof d.score === 'number' && d.reason), 'text+score+reason on each');
 });
+
+test('low-tier-only sources: answer carries explicit unofficial-sources qualification for practical instructions', async () => {
+  const U3 = 'https://heat-blog-example.com/report';
+  const U4 = 'https://fisheries-notes-example.net/story';
+  const pages = { [U3]: `<p>${P1}</p><p>جملة أخرى طويلة عن موضوع مختلف تماما لا صلة لها بالسؤال المطروح هنا</p>`, [U4]: `<p>${P2}</p><p>جملة ثالثة طويلة بما يكفي لتصبح مرشحة للاقتباس الحرفي في الفحص الآلي للمصادر</p>` };
+  const f = async (url, o = {}) => {
+    const u = String(url);
+    if (u.includes('generativelanguage.googleapis.com')) {
+      const prompt = JSON.parse(o.body).contents[0].parts[0].text;
+      const wrap = text => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }) });
+      if (prompt.includes('مخطط بحث')) return wrap('{"queries":["موجات الحر"],"time_sensitive":false}');
+      if (prompt.includes('ترجم الجمل')) return wrap('{}');
+      if (prompt.includes('أنت محرر صحفي دقيق')) return wrap(JSON.stringify({ answer: `${P1} [P1].\n${P2} [P2].`, unknowns: [] }));
+      if (prompt.includes('اقترح إشكاليات')) return wrap('{"issues":[],"angles":[],"picks":[]}');
+      return wrap('{}');
+    }
+    if (u.includes('api.exa.ai/search')) return { ok: true, status: 200, json: async () => ({ results: [{ url: U3, title: 'مدونة' }, { url: U4, title: 'ملاحظات' }] }) };
+    if (u.includes('api.exa.ai')) return { ok: false, status: 500, json: async () => ({}) };
+    if (u.includes('rdap.org')) return { ok: false, status: 404, json: async () => ({}) };
+    if (u.includes('wikipedia.org') || u.includes('gdeltproject.org')) return { ok: false, status: 429, json: async () => ({}) };
+    for (const [prefix, body] of Object.entries(pages)) if (u.startsWith(prefix)) return { ok: true, status: 200, headers: { get: () => 'text/html' }, text: async () => `<html><head><title>صفحة</title></head><body>${body}</body></html>` };
+    throw new Error('unexpected fetch: ' + u);
+  };
+  const env = { ...ENV, _ledger: [] };
+  const r = await askEvidenceFirst(Q, CANDS, env, f);
+  assert.equal(r.decision, 'answer');
+  assert.ok(r.warnings.some(w => w.includes('غير رسمية') && w.includes('المصدر الرسمي')), 'unofficial-sources qualification shown');
+});

@@ -39,5 +39,31 @@ def build():
         else:
             text=text+link
         page.write_text(text)
+    bust_cache(DEST)
     return DEST
+
+def bust_cache(dest):
+    """Append a content-hash ?v= to local .js/.css references in built HTML.
+
+    GitHub Pages serves assets with max-age=600; without fingerprinting a deploy can leave
+    visitors running a stale script against a new worker for up to ten minutes (observed
+    2026-10-29: post-deploy verification ran the previous smart-search.js). Query-hash keeps
+    the plain copytree pipeline unchanged and is a no-op for external/absolute/asset-less refs.
+    """
+    import hashlib, re
+    ref = re.compile(r'((?:src|href)=")(\.?\.?/[^"?#]+\.(?:js|css))(")')
+    for page in dest.rglob('*.html'):
+        text = page.read_text()
+        def rep(m):
+            target = (page.parent / m.group(2)).resolve()
+            try:
+                target.relative_to(dest.resolve())
+            except ValueError:
+                return m.group(0)
+            if not target.is_file():
+                return m.group(0)
+            h = hashlib.sha256(target.read_bytes()).hexdigest()[:8]
+            return m.group(1) + m.group(2) + '?v=' + h + m.group(3)
+        page.write_text(ref.sub(rep, text))
+
 if __name__=='__main__':print(build())

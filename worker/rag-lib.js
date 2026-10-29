@@ -1059,6 +1059,9 @@ ${toolCands.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n')}` : 'ل
   if (noPass.length) warnings.push(`صفحات فُتحت بلا مقطع مطابق للسؤال — فتح النطاق الرسمي ليس سندًا بذاته: ${noPass.join('، ')}`);
   const years = [...new Set(factual.flatMap(v => v.clean.match(/20\d{2}/g) || []))].sort();
   if (timeSensitive && years.length) warnings.push(`الأرقام المعروضة مؤرخة (${years.join('، ')}) وقد لا تعكس القيمة الحالية لحظة النشر؛ تحقق من المصدر الرسمي مباشرة قبل الاعتماد`);
+  // Low-tier qualification: when every opened source is unknown-tier/unofficial, practical
+  // instructions (steps, tools, paths) must not read as current truth — fail-closed stays, wording qualifies.
+  if (decision !== 'insufficient' && checked.length && !checked.some(x => x.tier === 'official' || x.rel === 'high' || x.rel === 'medium')) warnings.push('مصادر هذه الإجابة كلها غير رسمية وغير مثبتة الموثوقية: أي خطوات أو تعليمات عملية فيها (أوصاف أدوات أو مسارات) نُقلت عن تلك المصادر وقد لا تعكس واجهة المنصة أو الوضع الحالي؛ تحقق من المصدر الرسمي قبل تنفيذ أي خطوة');
   if (checked.some(x => x.duplicate_of)) warnings.push('نص متطابق حرفيًا بين أكثر من مصدر مفتوح؛ لا تُعد النسخ المتطابقة مصادر مستقلة (تطابق نصي حرفي فقط، لا يُكشف شبه التطابق)');
   if (usedXl) warnings.push('بعض المطابقات أُجريت عبر ترجمة آلية إلى لغة المصدر؛ التطابق بعد الترجمة إشارة آلية لا إثبات استدلال، والمعروض هو نص المصدر الأصلي');
   warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');
