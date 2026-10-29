@@ -215,12 +215,39 @@ function renderNews(r, box) {
   card.append(el('p', 'note', 'عناوين من موجزات RSS لمصادر إخبارية (بي بي سي عربي، فرانس 24، سكاي نيوز عربية، CNN بالعربية، المصري اليوم) طابقتها خوارزمية كلمات على خادم الدليل: مواد للاكتشاف والمراجعة عند مصدرها، وليست محتوى كاملًا ولا تحققًا من صحتها.'));
   box.append(card);
 }
+// Quick news verification: matched claim reviews from the Google Fact Check API, each attributed to
+// its checker with rating/date/link; Gemini summarizes only the matched reviews. No match is shown
+// as unknown - never as proof the news is true or false. Optional: any failure just skips the card.
+function factPanel(q) {
+  return post({ mode: 'factcheck_quick', q }).then(r => (r && Array.isArray(r.matches)) ? r : null).catch(() => null);
+}
+function renderFacts(r, box) {
+  const card = el('div', 'src-card fade');
+  card.append(el('span', 'badge', 'تحقق سريع'));
+  card.append(el('h3', null, 'مراجعات تحقق مطابقة (Google Fact Check)'));
+  if (!r.matches.length) {
+    card.append(el('p', null, 'لا توجد مراجعة تحقق مطابقة لهذا الخبر في قاعدة Google Fact Check حاليًا. غياب النتيجة لا يعني أن الخبر صحيح ولا أنه كاذب — اتبع مسار التحقق اليدوي.'));
+  } else {
+    if (r.summary) card.append(el('p', null, r.summary));
+    const list = el('ol', null, 'plan-steps');
+    for (const m of r.matches) {
+      const li = el('li');
+      const a = el('a', null, (m.publisher || 'جهة تحقق') + ': ' + (m.rating || 'بلا تقييم نصي')); a.href = m.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      li.append(el('b', null, m.claim), document.createElement('br'), a, el('small', m.date ? ' ' + m.date.slice(0, 10) : ''));
+      list.append(li);
+    }
+    card.append(list);
+    card.append(el('p', 'note', 'الأحكام لجهات التحقق المذكورة بأسمائها وتواريخها، لا للدليل ولا لـGemini؛ الملخص الآلي ينقل ما في المراجعات فقط. افتح المراجعة الأصلية قبل الاعتماد، وقد لا تطابق المراجعة خبرك بدقة كاملة.'));
+  }
+  box.append(card);
+}
 async function run(q) {
   const box = $('askResult'); box.innerHTML = '';
   const spin = el('div', 'src-card fade'); spin.append(el('span', 'badge', 'يعمل الآن'));
   spin.append(el('p', 'note', 'يجهّز نموذج الذكاء الاصطناعي المسودة، ثم تفحص فحوص NewsRAG مصادرها قبل العرض — قد يستغرق الأمر حتى دقيقة.'));
   box.append(spin);
   const news = newsPanel(q);
+  const facts = factPanel(q);
   const candidates = await toolCandidates(q).catch(() => []);
   const conf = await post({ mode: 'ask', question: q, candidates });
   spin.remove();
@@ -238,6 +265,7 @@ async function run(q) {
     return;
   }
   render(conf, q);
+  const fr = await facts; if (fr) renderFacts(fr, box);
   const nr = await news; if (nr) renderNews(nr, box);
 }
 
