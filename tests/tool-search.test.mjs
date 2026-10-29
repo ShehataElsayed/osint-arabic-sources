@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildIndex, search, stem, normalize } from '../site/tool-search.js';
+import { buildIndex, search, stem, normalize, gateScopes, toolScopes } from '../site/tool-search.js';
 const items = [
   { name: 'Vessel Finder', description: 'تتبع السفن ومساراتها عبر AIS. قارن المسار بمصدر ثان قبل النشر.', url: 'https://example.org/a' },
   { name: 'Flightradar24.com', description: 'تتبع حركة الطائرات والرحلات الجوية مباشرة. البيانات قد تتأخر.', url: 'https://example.org/b' },
@@ -67,4 +67,57 @@ test('transactional intent stays non-confident and exposes no candidates for res
   // the UI contract: candidates only surface when confident, so a refusal leaves nothing to resurrect
   const shown = r.confident ? r.candidates : [];
   assert.equal(shown.length, 0);
+});
+
+test('scope gating demotes satellite map imagery for a photo-republication query', () => {
+  const cands = [
+    { t: { name: 'SatArchive', description: 'أرشيف نسخ أقدم من صور خريطة العالم بالأقمار الصناعية. قارن تواريخ الصورة نفسها.', url: 'https://a.example' }, rrf: 0.05 },
+    { t: { name: 'RevImgA', description: 'بحث عكسي عن الصور ومطابقة صورة كاملة أو جزء منها مع صفحات منشورة.', url: 'https://b.example' }, rrf: 0.04 },
+    { t: { name: 'RevImgB', description: 'البحث عن صور مشابهة أو نسخ منشورة باستخدام صورة.', url: 'https://c.example' }, rrf: 0.03 },
+  ];
+  const out = gateScopes('كيف أتحقق من صورة قديمة أُعيد نشرها؟', cands);
+  assert.equal(out[0].t.name, 'RevImgA');
+  assert.equal(out[2].t.name, 'SatArchive');
+  assert.ok(out[2].scopeMismatch, 'satellite tool must be labeled');
+  assert.equal(out[0].scopeMismatch, null);
+});
+
+test('scope gating keeps satellite tools when the query names their medium', () => {
+  const cands = [
+    { t: { name: 'SatArchive', description: 'أرشيف نسخ أقدم من صور خريطة العالم بالأقمار الصناعية.', url: 'https://a.example' }, rrf: 0.03 },
+    { t: { name: 'RevImgA', description: 'بحث عكسي عن الصور ومطابقة صورة مع صفحات منشورة.', url: 'https://b.example' }, rrf: 0.05 },
+  ];
+  const out = gateScopes('أريد صورة قمر صناعي قديمة لموقع على الخريطة', cands);
+  assert.equal(out[0].t.name, 'RevImgA', 'rrf order preserved when no mismatch');
+  assert.equal(out[1].scopeMismatch, null);
+});
+
+test('scope gating is a no-op without scope terms', () => {
+  const cands = [
+    { t: { name: 'A', description: 'بحث عن اسم مستخدم عبر المواقع.', url: 'https://a.example' }, rrf: 0.02 },
+    { t: { name: 'B', description: 'سجلات شركات وملكية.', url: 'https://b.example' }, rrf: 0.05 },
+  ];
+  const out = gateScopes('ما مواقع الشركات؟', cands);
+  assert.equal(out[0].t.name, 'B');
+  assert.ok(out.every(c => c.scopeMismatch === null));
+});
+
+test('scope gating does not demote generic multimedia tools for a photo query', () => {
+  const cands = [
+    { t: { name: 'VerifyPlugin', description: 'إضافة متصفح للتحقق من الوسائط: بحث عكسي عن الصور وفحص بيانات وصفية وتحليل إطارات الفيديو.', url: 'https://v.example' }, rrf: 0.05 },
+    { t: { name: 'MultiPlatform', description: 'منصة مشاركة الصور والفيديو الأوسع، غنية بالاستطلاع البصري.', url: 'https://p.example' }, rrf: 0.04 },
+    { t: { name: 'GenDetector', description: 'تصنيف ما إذا كانت صورة أو مادة صوتية تبدو مولدة آلياً.', url: 'https://g.example' }, rrf: 0.03 },
+  ];
+  const out = gateScopes('كيف أتحقق من صورة قديمة أُعيد نشرها؟', cands);
+  assert.ok(out.every(c => c.scopeMismatch === null), 'no multimedia tool may be demoted');
+  assert.equal(out[0].t.name, 'VerifyPlugin');
+});
+
+test('video and audio queries gate nothing', () => {
+  const cands = [
+    { t: { name: 'VidSearch', description: 'محرك للعثور على مقاطع فيديو بحسب عبارة البحث.', url: 'https://v.example' }, rrf: 0.05 },
+    { t: { name: 'ImgSearch', description: 'بحث عكسي عن الصور ومطابقة صورة مع صفحات منشورة.', url: 'https://i.example' }, rrf: 0.04 },
+  ];
+  const out = gateScopes('كيف أتحقق من فيديو منتشر؟', cands);
+  assert.ok(out.every(c => c.scopeMismatch === null));
 });

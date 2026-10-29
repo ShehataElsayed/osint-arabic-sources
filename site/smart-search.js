@@ -1,7 +1,7 @@
 import { BACKEND_URL, EXTERNAL_AI } from './rag-config.js';
 import { $, el, startTurn, typeInto, wireComposer, NOTICE } from './chat-ui.js';
 let tools, pipeline;
-import { buildIndex, search } from './tool-search.js';
+import { buildIndex, search, gateScopes } from './tool-search.js';
 let index;
 const load = async () => tools || (tools = await (await fetch('./search-tools.json')).json());
 const getIndex = items => index || (index = buildIndex(items));
@@ -18,7 +18,7 @@ async function semantic(q, cands) {
   if (!pipeline) { const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm'); pipeline = await mod.pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', { dtype: 'q8', revision: '2c4055b12046f11709e9df2c122e59ffbdc2f900' }); }
   const vs = []; for (const s of [q, ...cands.map(x => `${x.t.name}: ${x.t.description}`)]) vs.push((await pipeline(s, { pooling: 'mean', normalize: true })).data);
   const scored = cands.map((c, i) => ({ ...c, sem: vs[0].reduce((s, v, k) => s + v * vs[i + 1][k], 0) }));
-  return fuseRanks(scored);
+  return gateScopes(q, fuseRanks(scored));
 }
 // Server-side semantic scoring: the guide's Cloudflare worker embeds the query and the candidate
 // texts with bge-m3 (Workers AI) and returns one score per candidate. Throws on any failure so the
@@ -32,7 +32,7 @@ async function semanticServer(q, cands) {
   const j = await r.json();
   if (!j || !Array.isArray(j.scores) || j.scores.length !== top.length || j.scores.some(v => typeof v !== 'number')) throw new Error(j && j.error ? j.error : 'bad_response');
   const scored = top.map((c, i) => ({ ...c, sem: j.scores[i] }));
-  return fuseRanks(scored);
+  return gateScopes(q, fuseRanks(scored));
 }
 function fuseRanks(scored) {
   // Reciprocal-rank fusion of the lexical order (input order) and the semantic order (k=60,
@@ -81,7 +81,9 @@ function showRanking(r, title, note) {
   const body = startTurn($('thread'), title);
   body.replaceChildren(el('h3', title, 'answer-title'), el('p', note, 'meta-line'));
   const seen = new Set(); const deduped = r.filter(x => x.t.url && !seen.has(x.t.url) && seen.add(x.t.url));
-  deduped.slice(0, 6).forEach((x, i) => body.append(card(x.t, i)));
+  const shown = deduped.slice(0, 6);
+  shown.forEach((x, i) => body.append(card(x.t, i, x.scopeMismatch ? [['تنبيه نطاق:', 'أداة مقيدة بـ' + x.scopeMismatch + ' وسؤالك لا يذكر هذا النوع؛ رُتبت بعد الأدوات المطابقة لنوع مهمتك.']] : null)));
+  if (shown.some(x => x.scopeMismatch)) body.append(el('p', 'التشابه الدلالي يقيس قرب الوصف لا نوع المهمة؛ الأدوات المقيدة بنطاق لا يذكره سؤالك موسومة ومؤخرة.', 'meta-line fade'));
 }
 const RANK_NOTE_SERVER = 'ترتيب بديل بالتشابه الدلالي (نموذج Workers AI على خادم الدليل)؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة. أُرسل سؤالك وأوصاف الأدوات المرشحة إلى الخادم لحساب هذا الترتيب.';
 const RANK_NOTE_DEVICE = 'ترتيب بديل بالتشابه الدلالي؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة.';
