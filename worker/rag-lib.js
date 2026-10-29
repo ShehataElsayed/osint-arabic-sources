@@ -27,7 +27,7 @@ export async function factCheck(q, key, f = fetch) {
 function hasCF(env) { return !!(env && env.AI && env.CF_AI_MODEL); }
 function hasCFEmbed(env) { return !!(env && env.AI && env.CF_AI_EMBED_MODEL); }
 // Generation provider order (2026-10-30, user-requested platform-wide Gemini link): with
-// AI_PROVIDER="gemini-first" (production) every generative route tries Google Gemini first when
+// AI_PROVIDER="gemini-first" (to be enabled after current billing verification of the Gemini project) every generative route tries Google Gemini first when
 // GEMINI_API_KEY+GEMINI_MODEL are set, and falls back to Workers AI on any Gemini error so a
 // free-tier quota exhaustion degrades instead of breaking. AI_PROVIDER="cloudflare" restores the
 // strict Workers-AI-only pin (external keys unreachable). Local dev leaves AI_PROVIDER unset.
@@ -107,6 +107,9 @@ export async function recommend(query, candidates, env, f = fetch) {
 // explicitly set up in AI Studio; no billing was ever set up for this key's project.
 export async function researchPlan(question, candidates, env, f = fetch) {
   const cs = cleanCandidates(candidates);
+  // Gated behind the provider pin like every external call: while AI_PROVIDER=cloudflare (current
+  // production, pending current billing verification of the Gemini project) this route is OFF.
+  if (cfOnly(env)) return { error: 'off' };
   if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
   const q = String(question || '').trim().slice(0, 300);
   if (!q || !cs.length) return { error: 'empty' };

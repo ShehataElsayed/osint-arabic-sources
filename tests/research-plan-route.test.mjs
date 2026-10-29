@@ -19,7 +19,7 @@ const realFetch = globalThis.fetch;
 const mockGemini = handler => { globalThis.fetch = async (url, init) => { calls.push(String(url)); return handler(String(url), init); }; };
 test.after(() => { globalThis.fetch = realFetch; });
 
-const envGemini = () => ({ AI: { run: async () => { throw new Error('CF must not be called'); } }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' });
+const envGemini = () => ({ AI: { run: async () => { throw new Error('CF must not be called'); } }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' });
 const post = (body, origin = ORIGIN, env = envGemini()) => worker.fetch(new Request('https://worker.test/', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) }), env);
 
 test('route: research_plan calls Gemini, not the Cloudflare AI binding, even when AI is bound', async () => {
@@ -79,6 +79,15 @@ test('route: missing question or candidates -> reason empty; every step filtered
   assert.deepEqual(noC, { plan: null, reason: 'empty' });
   const filtered = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS })).json();
   assert.deepEqual(filtered, { plan: null, reason: 'filtered' });
+});
+
+test('route: cloudflare pin gates research_plan OFF even with a Gemini key present', async () => {
+  calls = [];
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ steps: [{ tool_id: 1, goal: 'س', how: 'ص' }] }) }));
+  const pinned = { AI: { run: async () => ({}) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  const r = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS }, ORIGIN, pinned)).json();
+  assert.deepEqual(r, { plan: null, reason: 'off' });
+  assert.equal(calls.length, 0, 'Gemini unreachable while pinned');
 });
 
 test('route: origin/method/JSON guards apply to research_plan', async () => {
