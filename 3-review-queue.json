@@ -574,15 +574,15 @@
   "http_status": 200
  },
  {
-  "url": "https://whois.arin.net/ui/advanced.jsp",
+  "url": "https://search.arin.net/",
   "names": [
    "Whois ARIN"
   ],
   "last_checked": "2026-10-29T17:27:57+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://whois.arin.net/ui/advanced.jsp, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://www.dnsstuff.com/freetools",
@@ -2432,15 +2432,15 @@
   "http_status": 200
  },
  {
-  "url": "https://www.binaryedge.io/",
+  "url": "https://portal.binaryedge.io/",
   "names": [
    "BinaryEdge (R)"
   ],
   "last_checked": "2026-10-29T17:27:57+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://www.binaryedge.io/, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://github.com/robertdavidgraham/masscan",
@@ -3909,10 +3909,10 @@
    "Facebook Photos by ID (M)"
   ],
   "last_checked": "2026-10-29T17:27:57+00:00",
-  "review_status": "broken",
+  "review_status": "template",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "pattern URL with PHOTO-ID-HERE placeholder by design",
+  "http_status": null
  },
  {
   "url": "https://lookup-id.com/",
@@ -3937,15 +3937,15 @@
   "http_status": 400
  },
  {
-  "url": "https://fedifinder.glitch.me/",
+  "url": "https://github.com/lucahammer/fedifinder",
   "names": [
    "Fedifinder"
   ],
   "last_checked": "2026-10-29T17:27:57+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 410
+  "notes": "repaired 2026-10-29 from broken https://fedifinder.glitch.me/, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://fediverse.observer/",
@@ -4498,15 +4498,15 @@
   "http_status": 200
  },
  {
-  "url": "https://www.blackplanet.com/user_search/index.html",
+  "url": "https://www.blackplanet.com/",
   "names": [
    "BlackPlanet.com - Member Find"
   ],
   "last_checked": "2026-10-29T17:28:20+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://www.blackplanet.com/user_search/index.html, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://migente.com/wp-login.php?redirect_to=https%3A%2F%2Fmigente.com%2Fuser_search%2Findex.html&bp-auth=1&action=bpnoaccess",
@@ -4982,15 +4982,15 @@
   "http_status": 200
  },
  {
-  "url": "https://www.anywho.com/whitepages",
+  "url": "https://www.anywho.com/",
   "names": [
    "AnyWho"
   ],
   "last_checked": "2026-10-29T17:28:20+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://www.anywho.com/whitepages, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://www.addresses.com/",
@@ -9416,15 +9416,15 @@
   "http_status": null
  },
  {
-  "url": "https://www.blocktrail.com/BTC",
+  "url": "https://mempool.space/",
   "names": [
    "Blocktrail"
   ],
   "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://www.blocktrail.com/BTC, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://github.com/s0md3v/Orbit",
@@ -10542,15 +10542,15 @@
   "http_status": 200
  },
  {
-  "url": "https://decalage.info/en/mwsearch",
+  "url": "https://decalage.info/mwsearch",
   "names": [
    "Decalage Malware Search"
   ],
   "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://decalage.info/en/mwsearch, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://virusshare.com/",
@@ -11581,15 +11581,15 @@
   "http_status": 200
  },
  {
-  "url": "https://cdn.rawgit.com/Marak/faker.js/master/examples/browser/index.html",
+  "url": "https://fakerjs.dev/",
   "names": [
    "Faker.js"
   ],
   "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://cdn.rawgit.com/Marak/faker.js/master/examples/browser/index.html, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://freenetproject.org/pages/download.html",
@@ -11801,15 +11801,15 @@
   "http_status": 502
  },
  {
-  "url": "https://whatbrowser.org/",
+  "url": "https://www.whatsmybrowser.org/",
   "names": [
    "What Browser?"
   ],
   "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://whatbrowser.org/, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://www.ip2proxy.com/",
@@ -11999,15 +11999,15 @@
   "http_status": 404
  },
  {
-  "url": "https://anonymousplanet.org/guide/",
+  "url": "https://anonymousplanet.net/guide/",
   "names": [
    "The Hitchhiker’s Guide to Online Anonymity"
   ],
   "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://anonymousplanet.org/guide/, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://github.com/thumpersecure/opt-out-manual-2026",
@@ -12230,26 +12230,26 @@
   "http_status": 200
  },
  {
-  "url": "https://plessas.net/online-training",
+  "url": "https://plessas.net/",
   "names": [
    "Plessas"
   ],
   "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://plessas.net/online-training, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
-  "url": "https://www.theosintion.com/courses",
+  "url": "https://academy.theosintion.com/",
   "names": [
    "The OSINTion"
   ],
   "last_checked": "2026-10-29T17:28:41+00:00",
-  "review_status": "broken",
+  "review_status": "ok",
   "evidence_url": null,
-  "notes": "",
-  "http_status": 404
+  "notes": "repaired 2026-10-29 from broken https://www.theosintion.com/courses, replacement verified HTTP 200",
+  "http_status": 200
  },
  {
   "url": "https://www.catb.org/esr/faqs/smart-questions.html",
