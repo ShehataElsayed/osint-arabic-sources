@@ -6,21 +6,30 @@ import { semanticCatalog } from '../worker/rag-lib.js';
 // --- fuseSemanticCatalog (client RRF blend of lexical candidates + full-catalogue semantic ranking) ---
 const T = id => ({ id, name: 'tool-' + id, description: 'd', url: 'https://x.example/' + id });
 
-test('fuseSemanticCatalog: semantic-only tools surface, lexical leader not buried', () => {
-  const lex = [{ t: T(1), id: 1 }, { t: T(2), id: 2 }];
-  const sem = [{ id: 9, s: 0.7, t: T(9) }, { id: 2, s: 0.6, t: T(2) }];
+test('fuseSemanticCatalog: candidates keep the established rerank, discoveries append below all candidates', () => {
+  // 3 candidates so the within-candidates RRF does not tie (2-candidate ties keep lexical order, as in the established path)
+  const lex = [{ t: T(1), id: 1 }, { t: T(2), id: 2 }, { t: T(3), id: 3 }];
+  const sem = [{ id: 9, s: 0.95, t: T(9) }, { id: 2, s: 0.9 }, { id: 3, s: 0.8 }, { id: 1, s: 0.7 }];
   const fused = fuseSemanticCatalog(lex, sem);
   const ids = fused.map(x => x.id);
-  assert.ok(ids.includes(9), 'semantic-only tool must appear');
-  assert.equal(ids[0], 2, 'tool present in both lists wins RRF');
-  // rank-1 lexical (1/61) and rank-1 semantic-only (1/61) tie; both are shown, scope-gating applies on top
-  assert.ok(Math.abs(fused.find(x => x.id === 1).rrf - fused.find(x => x.id === 9).rrf) < 1e-9);
+  assert.equal(ids[0], 2, 'strongest semantic candidate wins the within-candidates rerank (as the established 12-cap path)');
+  assert.ok(ids.includes(9), 'semantic discovery surfaces');
+  assert.ok(ids.indexOf(9) > ids.indexOf(1) && ids.indexOf(9) > ids.indexOf(2) && ids.indexOf(9) > ids.indexOf(3), 'discovery never demotes a lexical candidate');
+  assert.equal(fused.find(x => x.id === 9).discovery, true);
+});
+
+test('fuseSemanticCatalog: discoveries respect the floor and URL dedup', () => {
+  const lex = [{ t: T(1), id: 1 }];
+  const weak = { id: 5, s: SEM_CATALOG_FLOOR - 0.01, t: T(5) };
+  const dupe = { id: 6, s: 0.9, t: { ...T(6), url: 'https://x.example/1' } };
+  const fused = fuseSemanticCatalog(lex, [weak, dupe]);
+  assert.deepEqual(fused.map(x => x.id), [1], 'below-floor and same-URL discoveries are excluded');
 });
 
 test('fuseSemanticCatalog: empty inputs', () => {
   assert.deepEqual(fuseSemanticCatalog([], []), []);
   assert.equal(fuseSemanticCatalog([{ t: T(3), id: 3 }], [])[0].id, 3);
-  assert.equal(fuseSemanticCatalog([], [{ id: 4, s: 0.5, t: T(4) }])[0].id, 4);
+  assert.equal(fuseSemanticCatalog([], [{ id: 4, s: SEM_CATALOG_FLOOR + 0.1, t: T(4) }])[0].id, 4, 'discovery alone still surfaces (abstained-query path)');
 });
 
 test('SEM_CATALOG_FLOOR sits between observed OOS and in-scope tops (small-sample, see ai-evaluation.md)', () => {

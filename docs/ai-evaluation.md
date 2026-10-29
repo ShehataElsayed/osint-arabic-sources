@@ -52,3 +52,18 @@ Out-of-scope (dev-labeled): the 12-candidate path shows nothing for all 8 querie
 Quantization loss (int8-per-vector vs local fp32 round-trip, NOT Cloudflare parity): mean |cos - 1| = 0.000149, max 0.000400, measured on all 1,156 tools.
 
 Parity (PASSED 2026-10-30, before merge): live Workers AI `@cf/baai/bge-m3` query vectors vs the local ONNX int8 asset - encoder cosine mean 0.9816 (min 0.9694), production-configuration top-10 ranking overlap mean 8.8/10, and the full fused path with live CF vectors keeps the held-out gain (recall@15 0.929 vs the 0.678 baseline; out-of-scope 0/8). Full record in `docs/deployment.md`. Author-labeled relevance and small sets remain the main caveat, as in section 1.
+
+## 3b. Fusion design correction (2026-10-30, post-review)
+
+The first full-catalogue design RRF-fused the semantic ranking with the lexical candidates across the whole list. Measured on the eval sets, that DEMOTED some strong lexical hits below semantic neighbors (5 queries worse at recall@5, including a video-verification plugin dropping out of the top 5). Review verdict: not an acceptable trade.
+
+The shipped design instead: (1) lexical candidates are reranked with their semantic scores using exactly the established 12-candidate RRF math (now all candidates are scored, not just 12); (2) full-catalogue semantic discoveries (tools the keyword pass missed entirely, cosine >= 0.5, URL-deduped) are APPENDED below every candidate and can never demote one. Abstention gates unchanged. Metrics below use name-deduplicated counting (the same tool can be catalogued under several URLs; an earlier run's 1.33 recall came from that double-count). Query vectors: live `@cf/baai/bge-m3` (production configuration).
+
+| Set | Method | recall@5 | recall@15 | hit@5 | MRR |
+|---|---|---|---|---|---|
+| dev (20) | established 12-cap rerank | 0.612 | 0.695 | 0.95 | 0.745 |
+| dev (20) | rerank + appended discoveries | 0.616 | 0.763 | 0.95 | 0.720 |
+| held-out (20) | established 12-cap rerank | 0.508 | 0.612 | 0.80 | 0.600 |
+| held-out (20) | rerank + appended discoveries | 0.537 | 0.787 | 0.90 | 0.667 |
+
+No metric regresses except dev MRR (-0.025, from scoring candidates 13-15 that the 12-cap never reranked); held-out hit@5 improves 0.80 -> 0.90 and recall@15 0.612 -> 0.787. Out-of-scope: 0/8 on both paths. The earlier table in section 3 used URL-deduped counting and the fused-across-list design; keep this table as the authoritative one.

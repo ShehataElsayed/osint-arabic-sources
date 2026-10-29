@@ -173,21 +173,33 @@ export function toolScopes(text) {
   const n = ' ' + normalize(text) + ' ';
   return SCOPES.filter(s => s.terms.some(t => n.includes(t))).map(s => s.id);
 }
-// Full-catalogue semantic fusion: the worker's semantic_catalog mode ranks the WHOLE
-// catalogue server-side (precomputed bge-m3 vectors + one query embedding); the lexical
-// candidates stay the other ranking signal. RRF (k=60, same constant as fuseRanks) blends
-// the two orders: a strong lexical match cannot be buried, and a semantically strong tool
-// the keyword pass missed entirely can now surface - that is the point of the full-catalogue
-// pass. Tools present in only one list get that list's contribution alone.
+// Full-catalogue semantic fusion (2026-10-30 review design): the worker's semantic_catalog
+// mode ranks the WHOLE catalogue server-side; the client then
+//   1. reranks the lexical candidates with their semantic scores - exactly the established
+//      12-candidate RRF behavior (k=60), except every candidate is scored, not just 12; and
+//   2. APPENDS floor-gated semantic discoveries (tools the keyword pass missed entirely)
+//      below them, URL-deduped.
+// Semantic evidence never demotes a lexical candidate below a discovery: candidate rrf values
+// are >= 1, discovery rrf values are the raw cosine (< 1), so gateScopes' rrf sort keeps the
+// established order among found tools and appends discoveries after them.
 export function fuseSemanticCatalog(lexCands, semRanked) {
-  const K = 60, byId = new Map();
-  (Array.isArray(semRanked) ? semRanked : []).forEach((x, i) => { byId.set(x.id, { t: x.t, id: x.id, sem: x.s, rrf: 1 / (K + i + 1) }); });
-  (Array.isArray(lexCands) ? lexCands : []).forEach((c, i) => {
-    const e = byId.get(c.id);
-    if (e) e.rrf += 1 / (K + i + 1);
-    else byId.set(c.id, { t: c.t, id: c.id, sem: null, rrf: 1 / (K + i + 1) });
-  });
-  return [...byId.values()].sort((a, b) => b.rrf - a.rrf);
+  const K = 60;
+  const cands = (Array.isArray(lexCands) ? lexCands : []).map(c => ({ ...c }));
+  const semById = new Map((Array.isArray(semRanked) ? semRanked : []).map(x => [x.id, x.s]));
+  for (const c of cands) c.sem = semById.has(c.id) ? semById.get(c.id) : -1;
+  cands.forEach((c, i) => { c.rrf = 1 / (K + i + 1); });
+  [...cands].sort((a, b) => b.sem - a.sem).forEach((c, i) => { c.rrf += 1 / (K + i + 1); });
+  const out = cands.sort((a, b) => b.rrf - a.rrf).map(c => ({ ...c, rrf: 1 + c.rrf, discovery: false }));
+  const have = new Set(out.map(c => c.id));
+  const seenUrl = new Set(out.map(c => (c.t && (c.t.url || c.t.name)) || ''));
+  for (const x of Array.isArray(semRanked) ? semRanked : []) {
+    if (have.has(x.id) || x.s < SEM_CATALOG_FLOOR) continue;
+    const u = (x.t && (x.t.url || x.t.name)) || '';
+    if (seenUrl.has(u)) continue;
+    have.add(x.id); seenUrl.add(u);
+    out.push({ t: x.t, id: x.id, sem: x.s, rrf: x.s, discovery: true });
+  }
+  return out;
 }
 
 // Abstention floor for the full-catalogue path when the lexical pass produced NO confident

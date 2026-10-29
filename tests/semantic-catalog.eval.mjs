@@ -78,7 +78,7 @@ function metrics(set, run) {
   let r5 = 0, r15 = 0, mrr = 0, hit5 = 0;
   for (const x of set) {
     const names = run(key(x)).map(c => c.t.name), rel = new Set(x.rel);
-    const f5 = names.slice(0, 5).filter(n => rel.has(n)).length, f15 = names.filter(n => rel.has(n)).length;
+    const f5 = new Set(names.slice(0, 5).filter(n => rel.has(n))).size, f15 = new Set(names.filter(n => rel.has(n))).size;
     r5 += f5 / rel.size; r15 += f15 / rel.size; hit5 += f5 > 0 ? 1 : 0;
     const k = names.findIndex(n => rel.has(n)); mrr += k < 0 ? 0 : 1 / (k + 1);
   }
