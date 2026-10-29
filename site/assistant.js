@@ -5,6 +5,7 @@
 import { BACKEND_URL } from './rag-config.js';
 import { buildIndex, search } from './tool-search.js';
 import { buildAskReport } from './assistant-report.js';
+import { askResponseProblem, askProblemMessage } from './ask-guard.js';
 
 const $ = id => document.getElementById(id);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -199,6 +200,19 @@ async function run(q) {
   const candidates = await toolCandidates(q).catch(() => []);
   const conf = await post({ mode: 'ask', question: q, candidates });
   spin.remove();
+  // لا نعرض استجابة لا تطابق مسار الفحص (خادم قديم أو نتيجة فارغة) كأنها إجابة مفحوصة.
+  const problem = askResponseProblem(conf);
+  if (problem) {
+    const card = el('div', 'src-card fade');
+    card.append(el('span', 'badge mislead', 'تعذّرت المعالجة'));
+    const head = el('h3', null, q); head.style.margin = '12px 0 8px'; card.append(head);
+    card.append(el('p', null, askProblemMessage(problem)));
+    const tools = el('p', 'note');
+    const link = el('a', null, 'تصفّح أدوات الدليل'); link.href = './tools/index.html'; tools.append(link);
+    card.append(tools);
+    box.append(card);
+    return;
+  }
   render(conf, q);
 }
 
