@@ -2832,9 +2832,9 @@
    "Mini Instagram"
   ],
   "last_checked": "2026-10-29T17:18:46+00:00",
-  "review_status": "http_412",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": "",
+  "notes": "HTTP 412: auth/rate-limit/bot rejection; not proven dead",
   "priority": "unverified_link"
  },
  {
@@ -3219,9 +3219,9 @@
    "Facebook Live Map"
   ],
   "last_checked": "2026-10-29T17:18:46+00:00",
-  "review_status": "http_400",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": "",
+  "notes": "HTTP 400: auth/rate-limit/bot rejection; not proven dead",
   "priority": "unverified_link"
  },
  {
@@ -3537,9 +3537,9 @@
    "FB Email Search"
   ],
   "last_checked": "2026-10-29T17:18:46+00:00",
-  "review_status": "http_400",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 400: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://www.facebook.com/login/identify?ctx=recover",
@@ -3547,9 +3547,9 @@
    "Recover FB Account"
   ],
   "last_checked": "2026-10-29T17:18:46+00:00",
-  "review_status": "http_400",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 400: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://www.facebook.com/photo.php?fbid=PHOTO-ID-HERE",
@@ -3577,9 +3577,9 @@
    "FB Identify (Requires Logout)"
   ],
   "last_checked": "2026-10-29T17:18:46+00:00",
-  "review_status": "http_400",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 400: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://fedifinder.glitch.me/",
@@ -4910,9 +4910,9 @@
    "OpenCNAM API"
   ],
   "last_checked": "2026-10-29T17:18:46+00:00",
-  "review_status": "http_401",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 401: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://bhattsameer.github.io/numspy/",
@@ -6737,9 +6737,9 @@
    "Brave"
   ],
   "last_checked": "2026-10-29T17:19:07+00:00",
-  "review_status": "http_429",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 429: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://stract.com/",
@@ -7539,9 +7539,9 @@
    "Archive.is"
   ],
   "last_checked": "2026-10-29T17:19:07+00:00",
-  "review_status": "http_429",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 429: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://browsershots.org/",
@@ -7930,9 +7930,9 @@
    "Facebook (T)"
   ],
   "last_checked": "2026-10-29T17:19:07+00:00",
-  "review_status": "http_400",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 400: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://www.twitter.com/",
@@ -8000,9 +8000,9 @@
    "WhatsApp Messenger (T)"
   ],
   "last_checked": "2026-10-29T17:19:07+00:00",
-  "review_status": "http_400",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 400: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://www.kik.com/",
@@ -8610,9 +8610,9 @@
    "Blockchair"
   ],
   "last_checked": "2026-10-29T17:19:24+00:00",
-  "review_status": "http_401",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 401: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://blockscan.com/",
@@ -8761,9 +8761,9 @@
    "Zcash Block Explorer"
   ],
   "last_checked": "2026-10-29T17:19:24+00:00",
-  "review_status": "http_401",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 401: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://charlotte.craigslist.org/",
@@ -9504,9 +9504,9 @@
    "Hugging Face AI Detector"
   ],
   "last_checked": "2026-10-29T17:19:24+00:00",
-  "review_status": "http_401",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 401: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://app.illuminarty.ai/",
@@ -9825,9 +9825,9 @@
    "Uncover It"
   ],
   "last_checked": "2026-10-29T17:19:24+00:00",
-  "review_status": "http_429",
+  "review_status": "blocked",
   "evidence_url": null,
-  "notes": ""
+  "notes": "HTTP 429: auth/rate-limit/bot rejection; not proven dead"
  },
  {
   "url": "https://www.reconstructer.org/",
