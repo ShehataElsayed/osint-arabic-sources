@@ -92,6 +92,42 @@ export async function recommend(query, candidates, env, f = fetch) {
   const picks = (Array.isArray(j?.picks) ? j.picks : []).filter(x => ids.has(Number(x?.id)) && !seen.has(Number(x.id)) && seen.add(Number(x.id)) && typeof x.why === 'string' && typeof x.how === 'string' && !bad.test(x.why + x.how)).slice(0, 4).map(x => ({ id: Number(x.id), why: x.why.slice(0, 240), how: x.how.slice(0, 360) }));
   return picks.length ? picks : { error: 'filtered' };
 }
+// Research-plan assistant (user-requested Gemini link, 2026-10-30): builds an ORDERED research plan
+// from the same catalogue candidates as `recommend` - each step names one real catalogue tool, what
+// it achieves, and how to use it for this task, derived from the tool's own description. This route
+// is Gemini-only by explicit product decision (the user asked for a Gemini link for this function):
+// it never silently falls back to another provider - without GEMINI_API_KEY it returns {error:'off'}
+// and the page keeps the established recommend/lexical paths unchanged. The proposal is a plan for
+// review, not executed research and not fact verification. Free-tier safety: per Google's pricing
+// docs a project stays on the free tier (over-quota -> http_429, never a charge) unless billing is
+// explicitly set up in AI Studio; no billing was ever set up for this key's project.
+export async function researchPlan(question, candidates, env, f = fetch) {
+  const cs = cleanCandidates(candidates);
+  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
+  const q = String(question || '').trim().slice(0, 300);
+  if (!q || !cs.length) return { error: 'empty' };
+  const list = cs.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n');
+  const prompt = `أنت مخطّط بحث صحفي داخل دليل عربي للمصادر المفتوحة للصحفيين. اكتب خطة بحث عملية مرتبة تجيب على سؤال المستخدم باستخدام الأدوات المدرجة فقط. قواعد صارمة: لا تذكر أي أداة غير موجودة في القائمة، ولا تضف روابط أو عناوين مواقع، ولا تدّعِ أن الخطة نُفذت أو أنها تحقّق من الوقائع، واكتب بعربية واضحة مختصرة. لكل خطوة: tool_id رقم الأداة من القائمة، goal ما الذي تحققه الخطوة في جملة قصيرة، how كيف يستخدم الصحفي هذه الأداة لهذه المهمة تحديدًا مستمدًا من وصفها فقط (وإن لم يكفِ الوصف فاكتب: راجع صفحة الأداة في الدليل). رتّب الخطوات بترتيب العمل الصحفي (من الجمع إلى التحقق إلى التوثيق)، من 2 إلى 5 خطوات. أعد JSON فقط بالشكل {"intro":"جملة واحدة تصف الخطة","steps":[{"tool_id":رقم,"goal":"...","how":"..."}],"limits":"جملة واحدة عن حدود هذه الخطة"}.
+سؤال المستخدم: ${q}
+الأدوات المتاحة:
+${list}`;
+  let r;
+  try {
+    r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.2, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
+  } catch { return { error: 'neterr' }; }
+  if (!r.ok) return { error: 'http_' + r.status };
+  const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const ids = new Set(cs.map(x => x.id)), seen = new Set(), bad = /https?:|www\./i;
+  const steps = (Array.isArray(j?.steps) ? j.steps : [])
+    .filter(x => ids.has(Number(x?.tool_id)) && !seen.has(Number(x.tool_id)) && seen.add(Number(x.tool_id))
+      && typeof x.goal === 'string' && typeof x.how === 'string' && x.goal.trim() && x.how.trim() && !bad.test(x.goal + x.how))
+    .slice(0, 5)
+    .map(x => ({ tool_id: Number(x.tool_id), goal: x.goal.replace(/\s+/g, ' ').trim().slice(0, 160), how: x.how.replace(/\s+/g, ' ').trim().slice(0, 400) }));
+  if (!steps.length) return { error: 'filtered' };
+  const txt = (v, n) => { const t = String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n); return bad.test(t) ? '' : t; };
+  return { intro: txt(j.intro, 240), steps, limits: txt(j.limits, 240) };
+}
 // Investigative-builder assistant: turns the user's description into a target kind and form fields. It never produces commands or links;
 // the page builds commands deterministically. Identifiers (emails, phones, urls, handles) arrive already replaced by tokens.
 export const PLAN_KINDS = { person: ['name', 'org', 'city', 'extra', 'exclude', 'from', 'to'], username: ['handle'], email: ['email'], phone: ['phone'], domain: ['domain'], image: ['imageurl'], topic: ['topic', 'city', 'exclude', 'from', 'to'] };
@@ -1345,6 +1381,7 @@ export default {
     if (b?.mode === 'ask') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } } // evidence-first route: the draft pipeline's long JSON draft loses its claims array to token truncation on the current on-Cloudflare model (2026-10-29 probes); askAssistant stays exported for tests and future adaptation
     if (b?.mode === 'ask_ef') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'rag') { try { return json(await ragAsk(b.question, b.sources, b.options || {}, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
+    if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     const q = String(b?.question || '').trim().slice(0, 300); if (!q) return json({ error: 'empty' }, 400, o);
     try { return json(await answer(q, env), 200, o); } catch { return json({ error: 'upstream' }, 502, o); }

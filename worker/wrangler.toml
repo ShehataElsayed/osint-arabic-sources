@@ -11,12 +11,12 @@ binding = "AI"
 # Secret (never in this file): wrangler secret put FACTCHECK_API_KEY
 # Secrets (never in this file):
 #   wrangler secret put FACTCHECK_API_KEY     # Google Fact Check Tools API (optional; published verdicts)
-#   wrangler secret put GEMINI_API_KEY        # optional external fallback, unused while [ai] is bound
+#   wrangler secret put GEMINI_API_KEY        # used ONLY by the research_plan route (user-requested Gemini link); free tier - a project stays free unless billing is explicitly set up in AI Studio. All other routes stay pinned to Workers AI by AI_PROVIDER.
 #   wrangler secret put EXA_API_KEY           # Exa web search (optional; separate paid account, only if chosen)
 [vars]
 AI_PROVIDER = "cloudflare"               # pins production to Workers AI only; external provider keys unreachable here
 CF_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"   # live-tested 2026-10-29: Arabic fidelity/abstention/conflict probes passed
 CF_AI_EMBED_MODEL = "@cf/baai/bge-m3"        # multilingual, live-tested 2026-10-29 (1024-dim)
-GEMINI_MODEL = "gemini-3.8-flash"         # optional external fallback only (needs GEMINI_API_KEY secret)
+GEMINI_MODEL = "gemini-3.8-flash"         # research_plan route only (needs GEMINI_API_KEY secret); documented free tier: ai.google.dev/gemini-api/docs/pricing
 GEMINI_EMBED_MODEL = "gemini-embedding-2" # optional external fallback only
 # Without any provider the assistant runs retrieval-only and says so on the page.
