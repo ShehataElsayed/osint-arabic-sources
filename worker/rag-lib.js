@@ -241,6 +241,17 @@ export async function newsRss(query, env, f = fetch) {
   items.sort((a, b) => b.hits - a.hits || b.ts - a.ts);
   return { items: items.slice(0, 8).map(({ hits, ts, description, ...x }) => x), feeds_ok: results.filter(r => !r.failed).length, feeds_failed: results.filter(r => r.failed).length };
 }
+// RSS supplement for the news discovery pools (user-requested RSS on every news-search surface,
+// 2026-10-30): same curated publisher feeds as the chat news panel, normalized to the GDELT
+// candidate shape and passed through the same URL safety filters. Discovery only - items still
+// go through checkSource/open/verify like any candidate before they can support an answer.
+export async function rssArticles(query, env, f = fetch, n = 4) {
+  try {
+    const r = await newsRss(query, env, f);
+    return (r.items || []).map(a => { let host = ''; try { host = new URL(a.url).hostname; } catch { return null; } return { title: cleanText(a.title || '', 140), url: a.url, host }; })
+      .filter(a => a && a.url && a.host && safeSourceUrl(a.url) && !denied(a.url) && !wikiHost(a.url)).slice(0, n);
+  } catch { return []; }
+}
 // Investigative-builder assistant: turns the user's description into a target kind and form fields. It never produces commands or links;
 // the page builds commands deterministically. Identifiers (emails, phones, urls, handles) arrive already replaced by tokens.
 export const PLAN_KINDS = { person: ['name', 'org', 'city', 'extra', 'exclude', 'from', 'to'], username: ['handle'], email: ['email'], phone: ['phone'], domain: ['domain'], image: ['imageurl'], topic: ['topic', 'city', 'exclude', 'from', 'to'] };
@@ -878,7 +889,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
     const seen = new Set(checked.filter(x => x.exists).map(x => registrable(x.host)));
     const picks = [];
     const exaPool = env?.EXA_API_KEY ? [...(await exaWeb(keywords(q), env, f, room + 2)), ...(claims[0] ? await exaWeb(claims[0], env, f, 2) : [])] : [];
-    const pool = [...exaPool, ...(await gdeltArticles(keywords(q), f, room + 4))];
+    const pool = [...exaPool, ...(await gdeltArticles(keywords(q), f, room + 4)), ...(await rssArticles(keywords(q), env, f, 4))];
     for (const a of pool) {
       const dom = registrable(a.host);
       if (seen.has(dom) || have.has(a.url)) continue;
@@ -1089,7 +1100,7 @@ export async function askEvidenceFirst(question, candidates, env, f = fetch) {
   // 2) Discovery from the open web only — no model-named URLs. One page per registrable domain.
   const found = [], seenDom = new Set(), seenUrl = new Set();
   for (const qy of uniqQ) {
-    const batch = [...(await exaWeb(qy, env, f, 3)), ...(found.length < 4 ? await gdeltArticles(qy, f, 2) : [])];
+    const batch = [...(await exaWeb(qy, env, f, 3)), ...(found.length < 4 ? await gdeltArticles(qy, f, 2) : []), ...(await rssArticles(qy, env, f, 2))];
     for (const a of batch) {
       const dom = registrable(a.host);
       if (seenDom.has(dom) || seenUrl.has(a.url)) continue;
