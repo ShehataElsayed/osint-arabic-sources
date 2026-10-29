@@ -18,6 +18,20 @@ async function semantic(q, cands) {
   if (!pipeline) { const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm'); pipeline = await mod.pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', { dtype: 'q8', revision: '2c4055b12046f11709e9df2c122e59ffbdc2f900' }); }
   const vs = []; for (const s of [q, ...cands.map(x => `${x.t.name}: ${x.t.description}`)]) vs.push((await pipeline(s, { pooling: 'mean', normalize: true })).data);
   const scored = cands.map((c, i) => ({ ...c, sem: vs[0].reduce((s, v, k) => s + v * vs[i + 1][k], 0) }));
+  return fuseRanks(scored);
+}
+// Server-side semantic scoring: the guide's Cloudflare worker embeds the query and the candidate
+// texts with bge-m3 (Workers AI) and returns one score per candidate. Throws on any failure so the
+// caller can offer the explicit on-device fallback instead of silently downloading 140MB.
+async function semanticServer(q, cands) {
+  const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'semantic', query: q, candidates: cands.map(x => ({ text: `${x.t.name}: ${x.t.description}` })) }) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const j = await r.json();
+  if (!j || !Array.isArray(j.scores) || j.scores.length !== cands.length || j.scores.some(v => typeof v !== 'number')) throw new Error(j && j.error ? j.error : 'bad_response');
+  const scored = cands.map((c, i) => ({ ...c, sem: j.scores[i] }));
+  return fuseRanks(scored);
+}
+function fuseRanks(scored) {
   // Reciprocal-rank fusion of the lexical order (input order) and the semantic order (k=60,
   // the literature default): a strong lexical match cannot be buried by the semantic pass,
   // and semantic evidence can still promote a better fit.
@@ -60,13 +74,27 @@ async function ask(q) {
   }
 }
 wireComposer({ form: $('composer'), input: $('q'), send: $('send'), chips: [...document.querySelectorAll('.chip')], onAsk: async q => { try { await ask(q); } catch (e) { startTurn($('thread'), q).replaceChildren(el('p', 'تعذّر إكمال الطلب: ' + e.message, 'why')); } } });
+function showRanking(r, title, note) {
+  const body = startTurn($('thread'), title);
+  body.replaceChildren(el('h3', title, 'answer-title'), el('p', note, 'meta-line'));
+  const seen = new Set(); const deduped = r.filter(x => x.t.url && !seen.has(x.t.url) && seen.add(x.t.url));
+  deduped.slice(0, 6).forEach((x, i) => body.append(card(x.t, i)));
+}
+const RANK_NOTE_SERVER = 'ترتيب بديل بالتشابه الدلالي (نموذج Workers AI على خادم الدليل)؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة. أُرسل سؤالك وأوصاف الأدوات المرشحة إلى الخادم لحساب هذا الترتيب.';
+const RANK_NOTE_DEVICE = 'ترتيب بديل بالتشابه الدلالي؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة.';
 $('local').onclick = async () => {
   if (!last) { $('status').textContent = 'اسأل أولًا ثم رتّب النتائج.'; return; }
   if (!last.cands.length) { $('status').textContent = 'لا توجد نتائج من الدليل لترتيبها دلاليًا لهذا الطلب.'; return; }
+  $('local-device').hidden = true;
+  $('status').textContent = 'جارٍ الترتيب الدلالي عبر خادم الدليل (Cloudflare Workers AI)...';
+  try { const r = await semanticServer(last.q, last.cands); showRanking(r, 'ترتيب دلالي تجريبي عبر خادم الدليل:', RANK_NOTE_SERVER); $('status').textContent = ''; }
+  catch (e) { $('status').textContent = 'تعذّر الترتيب الدلالي عبر الخادم الآن (' + e.message + ')؛ نتائج الكلمات أعلاه ما زالت متاحة. يمكنك اختيار الترتيب على جهازك صراحة بالزر المجاور (تنزيل نحو 140MB مرة واحدة).'; $('local-device').hidden = false; }
+};
+$('local-device').onclick = async () => {
+  if (!last || !last.cands.length) return;
+  $('local-device').hidden = true;
   $('status').textContent = 'جارٍ تنزيل نموذج لغوي (نحو 140MB، مرة واحدة) ليعمل على جهازك...';
-  try { const r = await semantic(last.q, last.cands), body = startTurn($('thread'), 'ترتيب دلالي على جهازي'); body.replaceChildren(el('h3', 'ترتيب دلالي تجريبي من نموذج يعمل على جهازك:', 'answer-title'), el('p', 'ترتيب بديل بالتشابه الدلالي؛ ليس بالضرورة أدق من ترتيب الكلمات أعلاه، وهو اقتراح للمراجعة وليس إجابة موثقة.', 'meta-line'));
-  const seen = new Set(); const deduped = r.filter(x => x.t.url && !seen.has(x.t.url) && seen.add(x.t.url));
-  deduped.slice(0, 6).forEach((x, i) => body.append(card(x.t, i))); $('status').textContent = ''; }
+  try { const r = await semantic(last.q, last.cands); showRanking(r, 'ترتيب دلالي على جهازي:', RANK_NOTE_DEVICE); $('status').textContent = ''; }
   catch (e) { $('status').textContent = 'تعذر تشغيل النموذج على هذا الجهاز: ' + e.message; }
 };
 // Keep the fixed composer from covering page-bottom content (consent text, semantic button) on any viewport.
