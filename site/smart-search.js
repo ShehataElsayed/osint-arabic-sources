@@ -17,7 +17,14 @@ function card(t, i, extra) {
 async function semantic(q, cands) {
   if (!pipeline) { const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm'); pipeline = await mod.pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', { dtype: 'q8', revision: '2c4055b12046f11709e9df2c122e59ffbdc2f900' }); }
   const vs = []; for (const s of [q, ...cands.map(x => `${x.t.name}: ${x.t.description}`)]) vs.push((await pipeline(s, { pooling: 'mean', normalize: true })).data);
-  return cands.map((c, i) => ({ ...c, sem: vs[0].reduce((s, v, k) => s + v * vs[i + 1][k], 0) })).sort((a, b) => b.sem - a.sem);
+  const scored = cands.map((c, i) => ({ ...c, sem: vs[0].reduce((s, v, k) => s + v * vs[i + 1][k], 0) }));
+  // Reciprocal-rank fusion of the lexical order (input order) and the semantic order (k=60,
+  // the literature default): a strong lexical match cannot be buried by the semantic pass,
+  // and semantic evidence can still promote a better fit.
+  const K = 60;
+  scored.forEach((c, i) => { c.rrf = 1 / (K + i + 1); });
+  [...scored].sort((a, b) => b.sem - a.sem).forEach((c, i) => { c.rrf += 1 / (K + i + 1); });
+  return scored.sort((a, b) => b.rrf - a.rrf);
 }
 function addPlanner(body, q) {
   const pl = el('article', null, 'src-card fade'); pl.append(el('strong', 'تركيبة أدوات للقضية'), el('small', 'مخطط محلي يرتب أدوات المنصة العاملة على جهازك مع سبب كل خطوة. نموذج صغير مدرَّب على حالات اصطناعية، وترتيبه للمراجعة وليس تحققًا.')); const a = el('a', 'خطّط لقضيتي ↗'); a.href = './tools/workflows.html#planner'; a.addEventListener('click', () => { try { sessionStorage.setItem('oshai_case', q); } catch (e) { /* planner opens empty */ } }); pl.append(a); body.prepend(pl);
