@@ -27,7 +27,7 @@ export async function factCheck(q, key, f = fetch) {
 function hasCF(env) { return !!(env && env.AI && env.CF_AI_MODEL); }
 function hasCFEmbed(env) { return !!(env && env.AI && env.CF_AI_EMBED_MODEL); }
 // Generation provider order (2026-10-30, user-requested platform-wide Gemini link): with
-// AI_PROVIDER="gemini-first" (production) every generative route tries Google Gemini first when
+// AI_PROVIDER="gemini-first" (to be enabled after current billing verification of the Gemini project) every generative route tries Google Gemini first when
 // GEMINI_API_KEY+GEMINI_MODEL are set, and falls back to Workers AI on any Gemini error so a
 // free-tier quota exhaustion degrades instead of breaking. AI_PROVIDER="cloudflare" restores the
 // strict Workers-AI-only pin (external keys unreachable). Local dev leaves AI_PROVIDER unset.
@@ -107,6 +107,9 @@ export async function recommend(query, candidates, env, f = fetch) {
 // explicitly set up in AI Studio; no billing was ever set up for this key's project.
 export async function researchPlan(question, candidates, env, f = fetch) {
   const cs = cleanCandidates(candidates);
+  // Gated behind the provider pin like every external call: while AI_PROVIDER=cloudflare (current
+  // production, pending current billing verification of the Gemini project) this route is OFF.
+  if (cfOnly(env)) return { error: 'off' };
   if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
   const q = String(question || '').trim().slice(0, 300);
   if (!q || !cs.length) return { error: 'empty' };
@@ -131,6 +134,58 @@ ${list}`;
   if (!steps.length) return { error: 'filtered' };
   const txt = (v, n) => { const t = String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n); return bad.test(t) ? '' : t; };
   return { intro: txt(j.intro, 240), steps, limits: txt(j.limits, 240) };
+}
+// Quick news verification for the chat (user-requested 2026-10-30): matches the claim against the
+// Google Fact Check Claim Search API (factchecktools.googleapis.com/v1alpha1/claims:search - free,
+// API-key only, no billing SKU) and lets Gemini summarize ONLY the matched reviews with per-review
+// attribution. A claim match is a real review of that claim by a named checker - it is never a
+// verdict by us; a loose keyword hit stays the API's own relevance match; and NO match is reported
+// as unknown, never as true or false. Key: FACTCHECK_API_KEY, falling back to GEMINI_API_KEY (same
+// Google API-key infrastructure; the live probe proves the key's project has the API enabled).
+export async function factCheckQuick(question, env, f = fetch) {
+  const q = String(question || '').trim().slice(0, 300);
+  if (!q) return { error: 'bad_request' };
+  const key = env.FACTCHECK_API_KEY || env.GEMINI_API_KEY;
+  if (!key) return { error: 'off' };
+  // Direct call (not factCheck()) so an API failure is NEVER misreported to the user as "no match":
+  // empty matches here means the API answered 200 with zero matching reviews. Arabic first; when it
+  // finds nothing, retry in English (limited Arabic checker coverage - the user-facing note says so).
+  // An API error stops the search instead of silently falling through to a fake empty.
+  const search = async lang => {
+    const r = await f(`https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(q)}&languageCode=${lang}&pageSize=8&key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return { error: 'fc_http_' + r.status };
+    return { claims: (await r.json()).claims || [] };
+  };
+  let claims, coverage = 'ar';
+  try {
+    const ar = await search('ar');
+    if (ar.error) return { error: ar.error };
+    if (ar.claims.length) claims = ar.claims;
+    else {
+      const en = await search('en');
+      if (en.error) return { error: en.error };
+      claims = en.claims; coverage = claims.length ? 'en' : 'none';
+    }
+  } catch { return { error: 'neterr' }; }
+  const rows = [];
+  for (const c of claims) for (const rv of c.claimReview || [])
+    rows.push({ claim: c.text, publisher: rv.publisher?.name || rv.publisher?.site || '', rating: rv.textualRating || '', url: rv.url, date: rv.reviewDate || c.claimDate || '' });
+  const matches = rows.filter(r => /^https:\/\//.test(r.url || '')).slice(0, 6).map(r => ({
+    claim: String(r.claim || '').replace(/\s+/g, ' ').trim().slice(0, 300),
+    publisher: String(r.publisher || '').slice(0, 80),
+    rating: String(r.rating || '').slice(0, 80),
+    url: String(r.url).slice(0, 500),
+    date: String(r.date || '').slice(0, 40),
+  }));
+  let summary = null;
+  if (matches.length && !cfOnly(env) && env.GEMINI_API_KEY && env.GEMINI_MODEL) {
+    const prompt = `لخّص للصحفي في جملتين عربيتين ما تقوله مراجعات التحقق التالية عن الادعاء، مع نسبة كل حكم إلى جهته بالاسم والتاريخ، ولا تُضف أي حكم أو جهة غير مذكورة، ولا تحكم بنفسك على صحة الخبر، وإن تعارضت المراجعات فاذكر التعارض. الادعاء: ${q}\nالمراجعات:\n${matches.map((m, i) => `${i + 1}. ${m.publisher} (${m.date || 'بلا تاريخ'}): «${m.rating}» عن: ${m.claim}`).join('\n')}`;
+    try {
+      const r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 400, temperature: 0.1 } }), signal: AbortSignal.timeout(30000) });
+      if (r.ok) { const t = ((await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '').replace(/\s+/g, ' ').trim().slice(0, 500); summary = t && !/https?:|www\./i.test(t) ? t : null; }
+    } catch { /* summary optional - matches still render */ }
+  }
+  return { matches, summary, coverage };
 }
 // Live Arabic news discovery via direct publisher RSS feeds (user-requested RSS link, 2026-10-30).
 // Direct publisher feeds only: the Google News RSS terms shown in the feed itself restrict it to
@@ -1454,6 +1509,7 @@ export default {
     if (b?.mode === 'ask') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } } // evidence-first route: the draft pipeline's long JSON draft loses its claims array to token truncation on the current on-Cloudflare model (2026-10-29 probes); askAssistant stays exported for tests and future adaptation
     if (b?.mode === 'ask_ef') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'rag') { try { return json(await ragAsk(b.question, b.sources, b.options || {}, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
+    if (b?.mode === 'factcheck_quick') { try { return json(await factCheckQuick(b.q ?? b.query ?? b.question, env, fetch), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'news_rss') { try { return json(await newsRss(b.q ?? b.query ?? b.question, env, fetch), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }

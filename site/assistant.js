@@ -215,12 +215,52 @@ function renderNews(r, box) {
   card.append(el('p', 'note', 'عناوين من موجزات RSS لمصادر إخبارية (بي بي سي عربي، فرانس 24، سكاي نيوز عربية، CNN بالعربية، المصري اليوم) طابقتها خوارزمية كلمات على خادم الدليل: مواد للاكتشاف والمراجعة عند مصدرها، وليست محتوى كاملًا ولا تحققًا من صحتها.'));
   box.append(card);
 }
+// Quick news verification: matched claim reviews from the Google Fact Check API, each attributed to
+// its checker with rating/date/link; Gemini summarizes only the matched reviews. No match is shown
+// as unknown - never as proof the news is true or false. Optional: any failure just skips the card.
+function factPanel(q) {
+  // Direct fetch (not post()) so the raw error code ('off', 'fc_http_403', ...) survives for the
+  // status card; post() rewrites codes into generic localized messages.
+  return fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'factcheck_quick', q }) })
+    .then(r => r.json())
+    .then(d => (d && Array.isArray(d.matches)) ? d : { error: (d && d.error) || 'unexpected' })
+    .catch(() => ({ error: 'neterr' }));
+}
+function renderFacts(r, box) {
+  const card = el('div', 'src-card fade');
+  card.append(el('span', 'badge', 'تحقق سريع'));
+  card.append(el('h3', null, 'مراجعات تحقق مطابقة (Google Fact Check)'));
+  if (r.error) {
+    // Never silently skip: the user asked for this check, so say plainly why it did not run.
+    card.append(el('p', null, r.error === 'off'
+      ? 'خدمة التحقق السريع غير مفعّلة حاليًا: مفتاح Google Fact Check غير مهيأ على الخادم. النتيجة غير معروفة — تحقق يدويًا.'
+      : 'تعذّر الوصول إلى خدمة Google Fact Check الآن (' + r.error + '). النتيجة غير معروفة — أعد المحاولة لاحقًا أو تحقق يدويًا.'));
+    box.append(card); return;
+  }
+  if (!r.matches.length) {
+    card.append(el('p', null, 'لا توجد مراجعة تحقق مطابقة لهذا الخبر في قاعدة Google Fact Check حاليًا. غياب النتيجة لا يعني أن الخبر صحيح ولا أنه كاذب — اتبع مسار التحقق اليدوي.'));
+  } else {
+    if (r.coverage === 'en') card.append(el('p', 'note', 'لا توجد مراجعات عربية مطابقة؛ النتائج التالية من مدققين بالإنجليزية (تغطية المدققين العرب محدودة في القاعدة).'));
+    if (r.summary) card.append(el('p', null, r.summary));
+    const list = el('ol', null, 'plan-steps');
+    for (const m of r.matches) {
+      const li = el('li');
+      const a = el('a', null, (m.publisher || 'جهة تحقق') + ': ' + (m.rating || 'بلا تقييم نصي')); a.href = m.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+      li.append(el('b', null, m.claim), document.createElement('br'), a, el('small', m.date ? ' ' + m.date.slice(0, 10) : ''));
+      list.append(li);
+    }
+    card.append(list);
+    card.append(el('p', 'note', 'الأحكام لجهات التحقق المذكورة بأسمائها وتواريخها، لا للدليل ولا لـGemini؛ الملخص الآلي ينقل ما في المراجعات فقط. المطابقة تعتمد على تشابه الكلمات في قاعدة Google Fact Check وليست تأكيدًا حرفيًا لخبرك بالذات — افتح المراجعة الأصلية وقارنها بخبرك قبل الاعتماد.'));
+  }
+  box.append(card);
+}
 async function run(q) {
   const box = $('askResult'); box.innerHTML = '';
   const spin = el('div', 'src-card fade'); spin.append(el('span', 'badge', 'يعمل الآن'));
   spin.append(el('p', 'note', 'يجهّز نموذج الذكاء الاصطناعي المسودة، ثم تفحص فحوص NewsRAG مصادرها قبل العرض — قد يستغرق الأمر حتى دقيقة.'));
   box.append(spin);
   const news = newsPanel(q);
+  const facts = factPanel(q);
   const candidates = await toolCandidates(q).catch(() => []);
   const conf = await post({ mode: 'ask', question: q, candidates });
   spin.remove();
@@ -238,6 +278,7 @@ async function run(q) {
     return;
   }
   render(conf, q);
+  const fr = await facts; if (fr) renderFacts(fr, box);
   const nr = await news; if (nr) renderNews(nr, box);
 }
 

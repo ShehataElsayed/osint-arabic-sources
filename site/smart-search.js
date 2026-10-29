@@ -1,4 +1,4 @@
-import { BACKEND_URL, EXTERNAL_AI } from './rag-config.js';
+import { BACKEND_URL, EXTERNAL_AI, RESEARCH_PLAN } from './rag-config.js';
 import { $, el, startTurn, typeInto, wireComposer, NOTICE } from './chat-ui.js';
 let tools, pipeline;
 import { buildIndex, search, gateScopes, fuseSemanticCatalog, SEM_CATALOG_FLOOR } from './tool-search.js';
@@ -107,7 +107,7 @@ async function ask(q) {
   if (useExt) {
     const candPayload = cands.map(x => ({ id: x.id, name: x.t.name, description: x.t.description }));
     // Plan request runs in parallel with the recommendation request; a plan failure never blocks picks.
-    const planReq = fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'research_plan', question: q, candidates: candPayload }) }).then(r => r.ok ? r.json() : null).catch(() => null);
+    const planReq = RESEARCH_PLAN ? fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'research_plan', question: q, candidates: candPayload }) }).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null);
     try { const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'recommend', query: q, candidates: candPayload }) }); if (r.ok) { const j = await r.json(); picks = j.picks; web = Array.isArray(j.web) ? j.web : []; } } catch { /* keyword fallback */ }
     try { const pj = await planReq; if (pj && pj.plan && Array.isArray(pj.plan.steps) && pj.plan.steps.length) plan = pj.plan; } catch { /* plan optional */ }
   }
@@ -187,7 +187,7 @@ $('local-device').onclick = async () => {
 // Keep the fixed composer from covering page-bottom content (consent text, semantic button) on any viewport.
 const fitComposer = () => { const cw = document.querySelector('.composer-wrap'); if (cw) document.getElementById('chat').style.paddingBottom = (cw.offsetHeight + 24) + 'px'; };
 addEventListener('resize', fitComposer); fitComposer();
-const NOTICE_PLAN = 'يُرسل نص سؤالك إلى خادم الدليل على Cloudflare؛ يولّد نموذج Gemini من Google الترشيح وخطة البحث (فئة مجانية؛ قد تستخدم Google النص لتحسين منتجاتها وفق شروطها) مع رجوع تلقائي إلى نماذج Workers AI عند تعذّره. لا تكتب بيانات حساسة.';
+const NOTICE_PLAN = 'يُرسل نص سؤالك إلى خادم الدليل على Cloudflare؛ يُولَّد الترشيح وخطة البحث بنماذج Workers AI أو بنموذج Gemini من Google حسب مزوّد التوليد الحالي (فئات مجانية؛ عند استخدام Gemini قد تستخدم Google النص لتحسين منتجاتها وفق شروطها). لا تكتب بيانات حساسة.';
 if (EXTERNAL_AI) $('ext').addEventListener('change', e => { $('notice').textContent = e.target.checked ? NOTICE_PLAN : ''; });
 else if ($('ext')) $('ext').closest('label').hidden = true; // static-only build: external mode unavailable, not just off
 
