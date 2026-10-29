@@ -15,7 +15,7 @@ function card(t, i, extra) {
   return c;
 }
 async function semantic(q, cands) {
-  if (!pipeline) { const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm'); pipeline = await mod.pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', { dtype: 'q8' }); }
+  if (!pipeline) { const mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm'); pipeline = await mod.pipeline('feature-extraction', 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', { dtype: 'q8', revision: '2c4055b12046f11709e9df2c122e59ffbdc2f900' }); }
   const vs = []; for (const s of [q, ...cands.map(x => `${x.t.name}: ${x.t.description}`)]) vs.push((await pipeline(s, { pooling: 'mean', normalize: true })).data);
   return cands.map((c, i) => ({ ...c, sem: vs[0].reduce((s, v, k) => s + v * vs[i + 1][k], 0) })).sort((a, b) => b.sem - a.sem);
 }
@@ -60,6 +60,9 @@ $('local').onclick = async () => {
   deduped.slice(0, 6).forEach((x, i) => body.append(card(x.t, i))); $('status').textContent = ''; }
   catch (e) { $('status').textContent = 'تعذر تشغيل النموذج على هذا الجهاز: ' + e.message; }
 };
+// Keep the fixed composer from covering page-bottom content (consent text, semantic button) on any viewport.
+const fitComposer = () => { const cw = document.querySelector('.composer-wrap'); if (cw) document.getElementById('chat').style.paddingBottom = (cw.offsetHeight + 24) + 'px'; };
+addEventListener('resize', fitComposer); fitComposer();
 if (EXTERNAL_AI) $('ext').addEventListener('change', e => { $('notice').textContent = e.target.checked ? NOTICE : ''; });
 else if ($('ext')) $('ext').closest('label').hidden = true; // static-only build: external mode unavailable, not just off
 
