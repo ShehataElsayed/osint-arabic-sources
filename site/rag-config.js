@@ -1,5 +1,5 @@
 // Backend endpoint for the RAG section. Empty until the free backend is set up; the page then runs in local mode.
-export const BACKEND_URL = 'https://osint-rag.egkrkr.workers.dev';
+export const BACKEND_URL = ''; // stale worker removed for the static-only build (2026-10-29 decision): assistant runs local mode, no question text leaves the device
 // Measured line shown on the page. Source: newsrag verdict+abstention component, Misbar claims test split 2023+, 2 Oct 2026 run.
 // Replace with the Kaggle four-stage pipeline numbers when that run finishes.
 // Historical lab metrics (84.1% raw verdict accuracy, 93.2% at 60.9% coverage) belong to the old

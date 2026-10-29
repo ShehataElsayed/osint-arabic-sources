@@ -225,6 +225,12 @@ if (SERVER) {
   }));
   document.querySelectorAll('.chip').forEach(b => b.addEventListener('click', () => { $('askQ').value = b.textContent.trim(); $('askQ').focus(); }));
 } else {
-  $('mode').textContent = 'المساعد غير مفعّل في هذا النشر بعد: يلزم ضبط عنوان الخادم ومفتاح خدمة الذكاء الاصطناعي عليه.';
+  // Static-only deployment: no external backend is configured, so the server-dependent assistant is
+  // disabled here and visitors are directed to the fully on-device smart search instead.
+  $('mode').textContent = 'هذا النشر ثابت بالكامل ولا يتصل بأي خادم خارجي، لذا مساعد NewsRAG غير مفعّل هنا.';
+  const link = el('a', null, 'جرّب البحث الذكي الذي يعمل كاملًا على جهازك');
+  link.href = './smart-search.html';
+  $('mode').append(' ', link);
   $('askBtn').disabled = true;
+  document.querySelectorAll('.chip').forEach(b => b.disabled = true);
 }
