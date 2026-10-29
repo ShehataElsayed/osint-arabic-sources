@@ -25,3 +25,11 @@ test('abstains on out-of-scope requests instead of guessing', () => {
   assert.equal(search(idx, 'وصفة كبسة بالدجاج', { minScore: 1 }).confident, false);
   assert.equal(search(idx, 'سعر الذهب اليوم', { minScore: 1 }).confident, false);
 });
+test('a tool listed under several branches is recommended once per URL', () => {
+  const dupItems = [
+    { name: 'Archive.is', description: 'أرشفة صفحات الويب ولقطة محفوظة.', url: 'https://archive.is/' },
+    { name: 'Archive.is (مرآة)', description: 'أرشفة صفحات الويب ولقطة محفوظة.', url: 'https://archive.is/' }
+  ];
+  const r = search(buildIndex([...items, ...dupItems]), 'أرشفة صفحات الويب', { minScore: 1 });
+  assert.equal(r.candidates.filter(c => c.t.url === 'https://archive.is/').length, 1);
+});
