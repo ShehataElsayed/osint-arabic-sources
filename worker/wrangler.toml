@@ -14,6 +14,7 @@ binding = "AI"
 #   wrangler secret put GEMINI_API_KEY        # optional external fallback, unused while [ai] is bound
 #   wrangler secret put EXA_API_KEY           # Exa web search (optional; separate paid account, only if chosen)
 [vars]
+AI_PROVIDER = "cloudflare"               # pins production to Workers AI only; external provider keys unreachable here
 CF_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"   # live-tested 2026-10-29: Arabic fidelity/abstention/conflict probes passed
 CF_AI_EMBED_MODEL = "@cf/baai/bge-m3"        # multilingual, live-tested 2026-10-29 (1024-dim)
 GEMINI_MODEL = "gemini-3.8-flash"         # optional external fallback only (needs GEMINI_API_KEY secret)

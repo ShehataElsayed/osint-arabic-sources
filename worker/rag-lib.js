@@ -26,15 +26,19 @@ export async function factCheck(q, key, f = fetch) {
 // errors instead of billing). env.CF_AI_MODEL / env.CF_AI_EMBED_MODEL pick the models.
 function hasCF(env) { return !!(env && env.AI && env.CF_AI_MODEL); }
 function hasCFEmbed(env) { return !!(env && env.AI && env.CF_AI_EMBED_MODEL); }
-export const hasChat = env => hasCF(env) || !!(env && env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL) || !!(env && env.GEMINI_API_KEY && env.GEMINI_MODEL);
-export const hasEmbed = env => hasCFEmbed(env) || !!(env && env.GEMINI_API_KEY);
+// Production pins AI_PROVIDER=cloudflare: external paid/quota providers stay in source for local
+// development only and are UNREACHABLE there — never an automatic fallback when the binding errors
+// or is missing. Local dev leaves AI_PROVIDER unset to opt into the external keys explicitly.
+const cfOnly = env => !!(env && env.AI_PROVIDER === 'cloudflare');
+export const hasChat = env => hasCF(env) || (!cfOnly(env) && (!!(env && env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL) || !!(env && env.GEMINI_API_KEY && env.GEMINI_MODEL)));
+export const hasEmbed = env => hasCFEmbed(env) || (!cfOnly(env) && !!(env && env.GEMINI_API_KEY));
 // One bounded Workers AI chat call. Returns {text} or {error}; 'busy' when the platform signals
 // quota/rate pressure (daily free allocation exhausted or throttled), 'upstream' otherwise.
 // Empty completions (reasoning burn) degrade gracefully as 'upstream'. Output capped at 4096
 // tokens to protect the shared daily free allocation.
 async function cfChat(prompt, env, temperature, maxTokens) {
   try {
-    const j = await env.AI.run(env.CF_AI_MODEL, { messages: [{ role: 'user', content: prompt }], temperature, max_tokens: Math.min(maxTokens + 1536, 6144) }); // +1536 headroom: qwen3 spends reasoning tokens before the final content; 6144 caps the shared daily free allocation worst case
+    const j = await env.AI.run(env.CF_AI_MODEL, { messages: [{ role: 'user', content: prompt }], temperature, max_tokens: Math.min(maxTokens + 1536, 4096) }); // +1536 headroom: qwen3 spends reasoning tokens before the final content; 4096 caps the shared daily free allocation worst case
     // Workers AI returns either OpenAI-style choices[].message.content, a string .response, or —
     // when the completion parses as JSON — a parsed object in .response.
     let txt = String((j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '').trim();
@@ -139,6 +143,7 @@ async function chatText(prompt, env, f, temperature, maxTokens, jsonMode = true,
   env._calls++;
   const t0 = Date.now();
   const to = Math.max(5000, timeoutMs || Number(env?.MODEL_TIMEOUT_MS) || 60000);
+  if (cfOnly(env) && !hasCF(env)) { led?.push({ stage, ms: 0, status: 'off' }); return { error: 'off' }; }
   let r;
   try {
     if (hasCF(env)) {
@@ -225,7 +230,7 @@ export async function embedTexts(texts, env, f = fetch) {
   const list = (Array.isArray(texts) ? texts : []).map(t => String(t || '').slice(0, 1000)).filter(Boolean).slice(0, 100);
   if (!list.length) return null;
   if (hasCFEmbed(env)) return cfEmbed(list, env);
-  if (!env?.GEMINI_API_KEY) return null;
+  if (cfOnly(env) || !env?.GEMINI_API_KEY) return null;
   const model = env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
   try {
     const r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:batchEmbedContents`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ requests: list.map(t => ({ model: 'models/' + model, content: { parts: [{ text: t }] } })) }), signal: AbortSignal.timeout(20000) });
@@ -235,7 +240,7 @@ export async function embedTexts(texts, env, f = fetch) {
   } catch { return null; }
 }
 export const vcos = (a, b) => { let d = 0, na = 0, nb = 0; const n = Math.min(a.length, b.length); for (let i = 0; i < n; i++) { d += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; } return na && nb ? d / Math.sqrt(na * nb) : 0; };
-export const SEM_SUPPORT = 0.78; // calibrated 2026-10-25 on live gemini-embedding-001: paraphrase 0.81-0.85, related-not-supporting 0.716-0.73 // semantic retrieval floor; grounded guards still apply on top
+export const SEM_SUPPORT = 0.78; // calibrated 2026-10-25 on live gemini-embedding-001: paraphrase 0.81-0.85, related-not-supporting 0.716-0.73. bge-m3 spot check 2026-10-29 (2 paraphrase vs 2 related-not-supporting pairs: 0.894-0.944 vs 0.395-0.417) is consistent but is NOT a validated threshold // semantic retrieval floor; grounded guards still apply on top
 const numTokens = s => (String(s).match(/\d+(?:[.,\u066C]\d+)?%?/g) || []).map(digits).filter(x => x && x.length >= 2);
 // Grounded support evaluation on the actual passage: numbers/years from the claim must appear in the
 // passage, and negation parity must match. `score` is the retrieval similarity used to pick the passage.
@@ -536,6 +541,7 @@ export async function repairSource(src, claimText, nums, f = fetch, env = {}) {
   return null;
 }
 export async function verifyModel(question, env, f = fetch) {
+  if (String(question || '').trim().length > 300) return { error: 'too_long' };
   const q = String(question || '').trim().slice(0, 300);
   if (!hasChat(env) || !q) return { error: 'off' };
   env._calls = 0; // per-question budget
@@ -591,6 +597,7 @@ export async function answer(question, env, f = fetch) {
 // answer, checked sources, per-claim support, transparent confidence criteria, issues, angles, guide tools.
 // Confidence is an automated checklist score over declared criteria — never a truth probability.
 export async function askAssistant(question, candidates, env, f = fetch) {
+  if (String(question || '').trim().length > 400) return { error: 'too_long' };
   const q = String(question || '').trim().slice(0, 400);
   if (!hasChat(env) || !q) return { error: 'off' };
   env._deadline = Date.now() + Math.max(30000, Number(env.PIPELINE_DEADLINE_MS) || 240000);
@@ -823,6 +830,7 @@ export function filterToolPicks(picks, toolCands, q, dfmap) {
 // the passages do not cover is listed as explicit unknowns. Model calls per question: planner(1) +
 // translate(<=2) + synthesize(1) + extras(1) <= 5, inside the shared MODEL_CALL_BUDGET cap.
 export async function askEvidenceFirst(question, candidates, env, f = fetch) {
+  if (String(question || '').trim().length > 400) return { error: 'too_long' };
   const q = String(question || '').trim().slice(0, 400);
   if (!hasChat(env) || !q) return { error: 'off' };
   env._deadline = Date.now() + Math.max(30000, Number(env.PIPELINE_DEADLINE_MS) || 240000);
@@ -1085,7 +1093,7 @@ const isoDay = s => /^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? String(s) : ''
 export async function geminiEmbed(texts, env, f = fetch) {
   if (!texts.length) return null;
   if (hasCFEmbed(env)) return cfEmbed(texts.map(t => String(t || '').slice(0, 1000)), env);
-  if (!env.GEMINI_API_KEY) return null;
+  if (cfOnly(env) || !env.GEMINI_API_KEY) return null;
   const model = env.GEMINI_EMBED_MODEL || 'gemini-embedding-2';
   try {
     const r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:batchEmbedContents`, {
@@ -1133,6 +1141,7 @@ export async function ragRetrieve(question, chunks, env, f = fetch, opts = {}) {
 }
 // ask(): retrieve, optionally generate with citations, then validate citation IDs (mirrors core.py ask + Answer).
 export async function ragAsk(question, rawSources, opts, env, f = fetch) {
+  if (String(question || '').trim().length > RAG_LIMITS.question) return { error: 'too_long' }; // explicit, never silently truncated
   const q = String(question || '').trim().slice(0, RAG_LIMITS.question);
   const sources = cleanRagSources(rawSources);
   const type = claimType(q);
