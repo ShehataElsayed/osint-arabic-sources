@@ -1,12 +1,21 @@
 name = "osint-rag"
 main = "rag-worker.js"
 compatibility_date = "2026-10-01"
+
+# AI runs on Cloudflare Workers AI via this binding: no external provider, no API key, and the
+# Workers Free plan free allocation (10,000 neurons/day) errors instead of billing.
+# https://developers.cloudflare.com/workers-ai/platform/pricing/
+[ai]
+binding = "AI"
+
 # Secret (never in this file): wrangler secret put FACTCHECK_API_KEY
 # Secrets (never in this file):
 #   wrangler secret put FACTCHECK_API_KEY     # Google Fact Check Tools API (optional; published verdicts)
-#   wrangler secret put GEMINI_API_KEY        # Google AI Studio key - enables all Gemini features
+#   wrangler secret put GEMINI_API_KEY        # optional external fallback, unused while [ai] is bound
 #   wrangler secret put EXA_API_KEY           # Exa web search (optional; separate paid account, only if chosen)
-# Plain vars to set here (not secrets):
-#   GEMINI_MODEL = "gemini-3.8-flash"         # stable text model per ai.google.dev/gemini-api/docs/models (2026-10-25)
-#   GEMINI_EMBED_MODEL = "gemini-embedding-2" # per ai.google.dev/gemini-api/docs/embeddings (2026-10-25)
-# Without GEMINI_API_KEY + GEMINI_MODEL the assistant runs retrieval-only and says so on the page.
+[vars]
+CF_AI_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"   # live-tested 2026-10-29: Arabic fidelity/abstention/conflict probes passed
+CF_AI_EMBED_MODEL = "@cf/baai/bge-m3"        # multilingual, live-tested 2026-10-29 (1024-dim)
+GEMINI_MODEL = "gemini-3.8-flash"         # optional external fallback only (needs GEMINI_API_KEY secret)
+GEMINI_EMBED_MODEL = "gemini-embedding-2" # optional external fallback only
+# Without any provider the assistant runs retrieval-only and says so on the page.
