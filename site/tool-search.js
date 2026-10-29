@@ -157,3 +157,27 @@ export function baselineKeyword(q, items) {
   const terms = [...new Set(n(q).split(' ').filter(x => x.length > 3))].map(w => { const st = w.length > 4 ? w.replace(/^(ال|و|ب|ل)/, '') : w, df = docs.filter(d => d.includes(st)).length; return { st, wt: df ? Math.min(2, .6 + Math.log(items.length / df) / 3) : 0 }; });
   return items.map((t, i) => ({ t, id: i, score: terms.reduce((s, x) => s + (docs[i].includes(x.st) ? x.wt : 0), 0) })).sort((a, b) => b.score - a.score).slice(0, 24).filter(x => x.score > 0).slice(0, 15);
 }
+
+// Capability scoping (2026-10-29 live regression: a photo-republication query ranked a satellite
+// map-imagery archive first on embedding similarity alone). A tool whose own name/description
+// restricts it to satellite/map imagery mismatches a query that never invokes that medium;
+// gateScopes demotes those mismatches below scope-compatible tools and labels them. Nothing is
+// dropped, and naming the medium restores the tool. General rule over tool text - no per-name
+// handling. Only satellite/map imagery is restrictive: photo, video and audio intentionally are
+// not, because generic multimedia tools (verification plugins, platforms, deepfake scanners)
+// legitimately span them and demotion hid exactly those tools in catalogue review 2026-10-29.
+export const SCOPES = [
+  { id: 'satmap', label: 'صور الخرائط والأقمار الصناعية', restrictive: true, terms: ['قمر صناعي', 'اقمار صناعيه', 'خريطه', 'خرائط', 'فضائي', 'فضائيه', 'satellite', 'landsat'] },
+];
+export function toolScopes(text) {
+  const n = ' ' + normalize(text) + ' ';
+  return SCOPES.filter(s => s.terms.some(t => n.includes(t))).map(s => s.id);
+}
+export function gateScopes(query, scored) {
+  const qs = toolScopes(query);
+  for (const c of scored) {
+    const miss = toolScopes(`${c.t.name} ${c.t.description}`).find(s => !qs.includes(s) && SCOPES.find(x => x.id === s).restrictive);
+    c.scopeMismatch = miss ? SCOPES.find(s => s.id === miss).label : null;
+  }
+  return [...scored].sort((a, b) => ((a.scopeMismatch ? 1 : 0) - (b.scopeMismatch ? 1 : 0)) || (b.rrf - a.rrf));
+}
