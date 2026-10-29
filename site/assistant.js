@@ -193,11 +193,34 @@ function render(conf, question) {
   box.append(exportBtn);
 }
 
+// Live Arabic news discovery via publisher RSS (fetched and matched on the guide's server; the
+// question is never sent to the publishers). Headline + source + date + link only: discovery leads,
+// not fetched article content and not verified facts. Runs in parallel with the answer; any failure
+// just skips the panel.
+function newsPanel(q) {
+  return post({ mode: 'news_rss', q }).then(r => (r && Array.isArray(r.items) && r.items.length) ? r : null).catch(() => null);
+}
+function renderNews(r, box) {
+  const card = el('div', 'src-card fade');
+  card.append(el('span', 'badge', 'موجز RSS'));
+  card.append(el('h3', null, 'أخبار حديثة مرتبطة من موجزات RSS'));
+  const list = el('ol', null, 'plan-steps');
+  for (const it of r.items) {
+    const li = el('li');
+    const a = el('a', null, it.title); a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+    li.append(a, el('small', ' ' + it.source + (it.published ? ' — ' + new Date(it.published).toLocaleDateString('ar-EG', { day: 'numeric', month: 'long' }) : '')));
+    list.append(li);
+  }
+  card.append(list);
+  card.append(el('p', 'note', 'عناوين من موجزات RSS لمصادر إخبارية (بي بي سي عربي، فرانس 24، سكاي نيوز عربية، CNN بالعربية، المصري اليوم) طابقتها خوارزمية كلمات على خادم الدليل: مواد للاكتشاف والمراجعة عند مصدرها، وليست محتوى كاملًا ولا تحققًا من صحتها.'));
+  box.append(card);
+}
 async function run(q) {
   const box = $('askResult'); box.innerHTML = '';
   const spin = el('div', 'src-card fade'); spin.append(el('span', 'badge', 'يعمل الآن'));
   spin.append(el('p', 'note', 'يجهّز نموذج الذكاء الاصطناعي المسودة، ثم تفحص فحوص NewsRAG مصادرها قبل العرض — قد يستغرق الأمر حتى دقيقة.'));
   box.append(spin);
+  const news = newsPanel(q);
   const candidates = await toolCandidates(q).catch(() => []);
   const conf = await post({ mode: 'ask', question: q, candidates });
   spin.remove();
@@ -215,6 +238,7 @@ async function run(q) {
     return;
   }
   render(conf, q);
+  const nr = await news; if (nr) renderNews(nr, box);
 }
 
 if (SERVER) {
