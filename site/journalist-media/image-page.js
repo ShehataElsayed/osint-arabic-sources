@@ -1,3 +1,4 @@
+import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import{validateCase}from'../journalist-core.js';
 import{imageCase}from'./image-case-core.js';
 import{analyzeImage}from'./image-analysis.js';
@@ -53,3 +54,34 @@ $('raw-export').onclick=()=>{if(observation)download({format:'image-local-observ
 $('case-file').onchange=async()=>{const gen=++caseGeneration;caseBase=null;caseState='pending';$('case-status').textContent='تُقرأ القضية…';try{const f=$('case-file').files[0];if(!f){caseState='empty';$('case-status').textContent='ستنشأ نسخة قضية جديدة.';return}if(f.size>5*1024*1024)throw Error('أكبر من 5 MB');const text=await f.text();if(gen!==caseGeneration)return;caseBase=validateCase(JSON.parse(text));caseState='valid';$('case-status').textContent='قضية مفتوحة: '+caseBase.title}catch(e){if(gen!==caseGeneration)return;caseState='invalid';$('case-status').textContent='قضية غير صالحة: '+e.message}};
 $('case-clear').onclick=()=>{caseGeneration++;caseBase=null;caseState='empty';$('case-file').value='';$('case-status').textContent='ستنشأ نسخة قضية جديدة.'};
 $('case-export').onclick=()=>{if(!observation)return;try{if(['pending','invalid'].includes(caseState))throw Error('انتظر قراءة القضية أو أزل الملف غير الصالح');download(imageCase(observation,context(),caseBase||undefined),'image-case.json');$('case-status').textContent='نُزّلت نسخة جديدة؛ احتفظ بملفك السابق وبأصل الصورة.'}catch(e){$('case-status').textContent='لم تصدّر القضية: '+e.message+'؛ التصدير الأصلي الكامل ما زال متاحًا.'}};
+
+// AI explanation of the visible measurements (2026-10-30 all-tools AI expansion, user «تمام ضيفه ف
+// كل الأدوات»): the analysis stays fully local; this optional section sends ONLY the visible
+// measurement TEXT (never the image) to the guide worker (summarize_text route, context 'image').
+// The worker guard blocks any authenticity/manipulation verdict; description of measurements only.
+(function aiSummary(){
+  const sm0=document.getElementById('ia-summary');
+  new MutationObserver(()=>{const b=document.getElementById('ai-box'); if(b) b.hidden=sm0.hidden; if(sm0.hidden){const r=document.getElementById('ai-result'); if(r)r.hidden=true; const s=document.getElementById('ai-status'); if(s)s.textContent='';}}).observe(sm0,{attributes:true,attributeFilter:['hidden']});
+  const box=document.getElementById('ai-box'), btn=document.getElementById('ai-summarize'),
+        st=document.getElementById('ai-status'), res=document.getElementById('ai-result'),
+        prov=document.getElementById('ai-provider'), ov=document.getElementById('ai-overview'),
+        qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes');
+  if(!box||!btn)return;
+  btn.onclick=async()=>{
+    const text=((document.getElementById('ia-summary').innerText+'\n'+document.getElementById('analysis').innerText)).slice(0,11000);
+    if(text.trim().length<40){st.textContent='القياسات أقصر من أن تُشرح.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ الشرح بالذكاء الاصطناعي…';
+    try{
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text,context:'image'})});
+      const j=r.ok?await r.json():null;
+      const sm=j&&j.summary;
+      if(!sm){st.textContent='الشرح بالذكاء الاصطناعي غير متاح الآن؛ قياساتك الكاملة ظاهرة أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;
+      ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل الشرح بالذكاء الاصطناعي؛ الملخص بصياغة النموذج وصفٌ للقياسات لا حكمٌ على الصورة - راجعه أمام القياسات قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ قياساتك الكاملة ظاهرة أعلاه.'}
+    finally{btn.disabled=false}};
+})();

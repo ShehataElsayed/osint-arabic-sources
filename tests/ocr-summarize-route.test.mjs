@@ -209,3 +209,21 @@ test('route: archive overview must say fingerprint change and scope the fetched 
   assert.equal(ok.provider, 'gemini');
   assert.equal(ok.summary.key_quotes.length, 1);
 });
+
+test('route: image context blocks authenticity/manipulation verdicts, allows measurement description', async () => {
+  const metrics = 'بيانات الملف: PNG، الأبعاد 1200×630، الحجم 39 كيلوبايت. متوسط فرق القنوات: 2.31 من 255. أكبر فرق: 87 من 255. بصمة إدراكية: a3f9...';
+  for (const overview of [
+    'القياسات تثبت أن الصورة معدلة.',
+    'الصورة أصلية ولم تُعدّل.',
+    'توجد مؤشرات تلاعب واضحة في الصورة.',
+    'الصورة مزيفة على الأرجح.',
+  ]) {
+    mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview, key_quotes: [] }) }));
+    const r = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+    assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
+  }
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تشمل القياسات ملف PNG بأبعاد 1200×630 ومتوسط فرق قنوات 2.31 من 255 وأكبر فرق 87، وهي قياسات وصفية لفرق إعادة الضغط.', key_quotes: ['متوسط فرق القنوات: 2.31 من 255'] }) }));
+  const ok = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.equal(ok.provider, 'gemini');
+  assert.equal(ok.summary.key_quotes.length, 1);
+});
