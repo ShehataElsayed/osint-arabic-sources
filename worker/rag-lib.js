@@ -618,6 +618,22 @@ export function pageIdentity(raw) {
   const meta = n => { const m = raw.match(new RegExp(`<meta[^>]+(?:property|name)=["']${n}["'][^>]*content=["']([^"']{1,160})["']`, 'i')) || raw.match(new RegExp(`<meta[^>]+content=["']([^"']{1,160})["'][^>]*(?:property|name)=["']${n}["']`, 'i')); return m ? cleanText(m[1], 120) || null : null; };
   return { site_name: meta('og:site_name') || meta('application-name'), author: meta('author') || meta('article:publisher') || null, has_about: /href=["'][^"']*(about|من-نحن|%D9%85%D9%86-%D9%86%D8%AD%D9%86|about-us)[^"']*["']|>\s*(من نحن|عن الموقع|About)\s*</i.test(raw), has_contact: /href=["'][^"']*(contact|اتصل|%D8%A7%D8%AA%D8%B5%D9%84)[^"']*["']|>\s*(اتصل بنا|تواصل معنا|Contact)\s*</i.test(raw) };
 }
+// Best-effort published-date extraction from the fetched page itself (meta tags, JSON-LD,
+// <time datetime>). Returns YYYY-MM-DD or '' — never guesses: only dates the page declares.
+// English/RFC-822 dates go through Date.parse and are normalized to their UTC calendar day.
+export function pagePublishedAt(raw) {
+  const isoDate = v => {
+    const s = String(v || '').trim(); if (!s) return '';
+    const m = s.match(/(\d{4})-(\d{2})-(\d{2})/); if (m) return Number.isFinite(Date.parse(m[0])) ? m[0] : '';
+    const t = Date.parse(s); if (!Number.isFinite(t)) return '';
+    return new Date(t).toISOString().slice(0, 10);
+  };
+  const meta = n => { const m = raw.match(new RegExp(`<meta[^>]+(?:property|name)=["']${n}["'][^>]*content=["']([^"']{1,80})["']`, 'i')) || raw.match(new RegExp(`<meta[^>]+content=["']([^"']{1,80})["'][^>]*(?:property|name)=["']${n}["']`, 'i')); return m ? m[1] : ''; };
+  for (const n of ['article:published_time', 'og:published_time', 'datePublished', 'datepublished', 'pubdate', 'publishdate', 'publish_date', 'dc.date', 'dc.date.issued', 'sailthru.date']) { const d = isoDate(meta(n)); if (d) return d; }
+  const jl = raw.match(/"datePublished"\s*:\s*"([^"]{1,80})"/i); if (jl) { const d = isoDate(jl[1]); if (d) return d; }
+  const tm = raw.match(/<time[^>]+datetime=["']([^"']{1,80})["']/i); if (tm) { const d = isoDate(tm[1]); if (d) return d; }
+  return '';
+}
 // Rating of the BODY (not the claim). Tier sets the floor; identity can lift an unlisted site to "medium" only when its age and published identity are visible.
 export function reliabilityOf(tier, id, page) {
   if (tier === 'official') return 'very_high';
@@ -658,18 +674,27 @@ export function passageWindows(text, spans, maxChars = 500) {
   }
   return out;
 }
+// Reject fragments that are source code, not prose (defense-in-depth after the pre-slice
+// script strip): several code markers with little natural-language content.
+export const looksLikeCode = s => {
+  const t = String(s || '');
+  if (!t) return false;
+  const markers = (t.match(/\bfunction\b|=>|throw new\b|\bnew Error\b|\b(?:var|let|const) \w|\breturn\b|[{}]|\)\s*[;{]/g) || []).length;
+  return markers >= 2;
+};
 export function supportOf(claimText, sents, nums) {
   const scored = sents.map((x, i) => ({ x, i, s: cos(claimText, x) })).sort((a, b) => b.s - a.s);
-  const best = scored[0], similarity = best ? Math.round(best.s * 100) / 100 : 0;
+  const usable = scored.filter(c => !looksLikeCode(c.x));
+  const best = usable[0], similarity = best ? Math.round(best.s * 100) / 100 : 0;
   const want = (nums || []).map(digits).filter(Boolean);
   const win = best ? digits([sents[best.i - 1], sents[best.i], sents[best.i + 1]].filter(Boolean).join(' ')) : '';
   const numbers_ok = want.length ? want.every(n => win.includes(n)) : null;
   const negation_conflict = best ? (negCount(claimText) % 2) !== (negCount(best.x) % 2) : false;
-  return { cands: scored.slice(0, 10).map(c => c.x.slice(0, 500)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
+  return { cands: usable.slice(0, 10).map(c => c.x.slice(0, 500)), similarity, quote: best && best.s >= 0.15 ? cleanText(best.x, 300) : '', numbers_ok, negation_conflict, verified: similarity >= 0.4 && numbers_ok !== false && !negation_conflict };
 }
 export async function checkSource(src, claimText, nums, f = fetch, env = {}, altText = '') {
-  const preUrl = safeSourceUrl(src?.url); if (preUrl && wikiHost(preUrl)) { const out0 = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' }; return out0; }
-  const url = preUrl; const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '' };
+  const preUrl = safeSourceUrl(src?.url); if (preUrl && wikiHost(preUrl)) { const out0 = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '', published_at: '' }; return out0; }
+  const url = preUrl; const out = { name: cleanText(src?.name, 160), url: '', host: '', cands: [], picked: false, page: null, identity: null, rel: 'unknown', text_sha256: '', duplicate_of: 0, claimed: String(src?.url ?? '').replace(/\s+/g, '').slice(0, 300), title: '', quote: '', tier: 'unknown', exists: false, similarity: 0, numbers_ok: null, verified: false, via: '', published_at: '' };
   if (!url) return out;
   out.host = new URL(url).hostname; out.tier = tierOf(out.host);
   let rawText = '';
@@ -680,7 +705,12 @@ export async function checkSource(src, claimText, nums, f = fetch, env = {}, alt
   } catch { /* unreachable: try the search-proxy fallback */ }
   if (!rawText) { const ext = await exaFetchText(url, env, f); if (ext) { rawText = ext; out.via = 'exa'; } }
   if (rawText) {
-    const raw = rawText.slice(0, 400000); const text = raw.replace(/<(script|style|head|title|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|td|section|article|header|footer|blockquote)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
+    // Strip script/style/noscript BEFORE the size cap: slicing first can cut a paired tag's
+    // closing half and leak raw JS/CSS into quote candidates (observed on arabic.cnn.com:
+    // its consent script opens ~289k chars in and closes ~436k, past the old 400k cut, so
+    // `throw new Error("Field name must be in the format...")` surfaced as a source quote).
+    const noScript = rawText.replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, ' ').replace(/<(script|style|noscript)\b[^>]*>[\s\S]*$/gi, ' ');
+    const raw = noScript.slice(0, 400000); const text = raw.replace(/<(script|style|head|title|noscript)[\s\S]*?<\/\1>/gi, ' ').replace(/<\/?(p|div|li|ul|ol|h[1-6]|br|tr|td|section|article|header|footer|blockquote)\b[^>]*>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&amp;/g, ' ').replace(/&quot;/g, '"').replace(/&#0?39;|&apos;/g, "'");
     out.exists = true; out.url = url;
     const tm = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i); out.title = cleanText((tm ? tm[1] : '').replace(/&nbsp;|&amp;/g, ' '), 160);
     const spans = passageWindows(text, sentSpans(text));
@@ -690,7 +720,7 @@ export async function checkSource(src, claimText, nums, f = fetch, env = {}, alt
     const spanByText = new Map(spans.map(w => [w.text, { start: w.start, end: w.end }]));
     const bestSup = supAlt && supAlt.similarity > sup.similarity ? supAlt : sup;
     out.text_sha256 = await sha256Hex(raw);
-    out.page = pageIdentity(raw); out.cands = bestSup.cands; out.similarity = bestSup.similarity; out.quote = bestSup.quote;
+    out.page = pageIdentity(raw); out.published_at = pagePublishedAt(raw); out.cands = bestSup.cands; out.similarity = bestSup.similarity; out.quote = bestSup.quote;
     out.numbers_ok = bestSup.numbers_ok; out.negation_conflict = bestSup.negation_conflict; out.verified = bestSup.verified;
     out.cand_spans = bestSup.cands.map(cx => spanByText.get(cx) || null);
   }
@@ -835,7 +865,7 @@ export async function verifyModel(question, env, f = fetch) {
     { id: 'evidence', label: 'سند مستقل', status: 'na', detail: 'معرفة النموذج ليست دليلاً' },
   ];
   const failed = criteria.filter(c => c.status === 'fail').map(c => c.id);
-  const out = { type, verdict, criteria, sources: checked.map(s => ({ name: s.name, url: s.exists ? s.url : '', claimed: s.exists ? '' : s.claimed, host: s.host, exists: s.exists, title: s.title, quote: s.exists ? s.quote : '', picked: s.exists && s.picked, repaired: Boolean(s.repaired), by_search: Boolean(s.by_search), original: s.repaired ? s.original : '', rel: s.exists ? s.rel : 'unknown', identity: s.exists ? s.identity : null, page: s.exists ? s.page : null, similarity: s.similarity, verified: s.verified, tier: s.tier })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed, warnings: criteria.filter(c => c.status === 'warn').map(c => c.id) };
+  const out = { type, verdict, criteria, sources: checked.map(s => ({ name: s.name, url: s.exists ? s.url : '', claimed: s.exists ? '' : s.claimed, host: s.host, exists: s.exists, title: s.title, quote: s.exists ? s.quote : '', picked: s.exists && s.picked, repaired: Boolean(s.repaired), by_search: Boolean(s.by_search), original: s.repaired ? s.original : '', published_at: s.exists ? (s.published_at || '') : '', rel: s.exists ? s.rel : 'unknown', identity: s.exists ? s.identity : null, page: s.exists ? s.page : null, similarity: s.similarity, verified: s.verified, tier: s.tier })), validated_for_release: false, decision: failed.length ? 'abstain' : 'answer', reasons: failed, warnings: criteria.filter(c => c.status === 'warn').map(c => c.id) };
   out.answer = lead.answer;
   return out;
 }
@@ -1046,7 +1076,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   if (semantic) warnings.push('المطابقة الدلالية إشارة استرجاع آلية: قد لا تكشف استبدال الكيانات أو تناقضًا دقيقًا رغم فحوص الأرقام والنفي — راجع نص المصدر الأصلي');
   return {
     decision, ...(insufReason ? { insufficient_reason: insufReason } : {}), answer: finalAnswer, answer_qualified: qualified, claims: claimRows, completeness, confidence: { score, band, criteria: crit },
-    sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), discovered: Boolean(x.discovered), escalated: Boolean(x.escalated), via: x.exists ? (x.via || '') : '', original: (x.repaired || x.escalated) ? x.original : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
+    sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), discovered: Boolean(x.discovered), escalated: Boolean(x.escalated), via: x.exists ? (x.via || '') : '', original: (x.repaired || x.escalated) ? x.original : '', published_at: x.exists ? (x.published_at || '') : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, page: x.exists ? x.page : null })),
     issues, angles, tools: Array.isArray(tools) ? tools : [], factcheck: fcHits, time_sensitive: d.json.time_sensitive === true, warnings, generated: true
   };
 }
@@ -1127,7 +1157,7 @@ export async function askEvidenceFirst(question, candidates, env, f = fetch) {
     passages.push(p); perRef[p.ref] = (perRef[p.ref] || 0) + 1;
     if (passages.length >= 12) break;
   }
-  const srcRow = x => ({ duplicate_of: x.duplicate_of || 0, name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.quote), by_search: true, discovered: true, via: x.exists ? (x.via || '') : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, identity: x.exists ? x.identity : null, page: x.exists ? x.page : null });
+  const srcRow = x => ({ duplicate_of: x.duplicate_of || 0, name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.quote), by_search: true, discovered: true, via: x.exists ? (x.via || '') : '', published_at: x.exists ? (x.published_at || '') : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, identity: x.exists ? x.identity : null, page: x.exists ? x.page : null });
   const warnings = [];
   const baseResult = () => ({
     sources: checkedAll.map(srcRow), time_sensitive: timeSensitive, factcheck: [],
@@ -1517,8 +1547,8 @@ export default {
     if (b?.mode === 'semantic_catalog') { try { return json(await semanticCatalog(b.q ?? b.query, b.fingerprint, env, fetch, b.ids), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'verify') { try { return json(await verifyModel(String(b.question || ''), env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'ingest') { try { return json(await ingestUrl(String(b.url || ''), fetch, env), 200, o); } catch { return json({ error: 'fetch' }, 200, o); } }
-    if (b?.mode === 'ask') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } } // evidence-first route: the draft pipeline's long JSON draft loses its claims array to token truncation on the current on-Cloudflare model (2026-10-29 probes); askAssistant stays exported for tests and future adaptation
-    if (b?.mode === 'ask_ef') { try { return json(await askEvidenceFirst(b.question, b.candidates, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
+    if (b?.mode === 'ask') { try { const r = await askEvidenceFirst(b.question, b.candidates, env); console.log('ask_ledger', JSON.stringify(env._ledger || [])); return json(r, 200, o); } catch { return json({ error: 'upstream' }, 200, o); } } // evidence-first route: the draft pipeline's long JSON draft loses its claims array to token truncation on the current on-Cloudflare model (2026-10-29 probes); askAssistant stays exported for tests and future adaptation
+    if (b?.mode === 'ask_ef') { try { const r = await askEvidenceFirst(b.question, b.candidates, env); console.log('ask_ledger', JSON.stringify(env._ledger || [])); return json(r, 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'rag') { try { return json(await ragAsk(b.question, b.sources, b.options || {}, env), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'factcheck_quick') { try { return json(await factCheckQuick(b.q ?? b.query ?? b.question, env, fetch), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }
     if (b?.mode === 'news_rss') { try { return json(await newsRss(b.q ?? b.query ?? b.question, env, fetch), 200, o); } catch { return json({ error: 'upstream' }, 200, o); } }

@@ -23,3 +23,8 @@ CF_AI_EMBED_MODEL = "@cf/baai/bge-m3"        # multilingual, live-tested 2026-10
 GEMINI_MODEL = "gemini-3-flash-preview"   # live-verified 2026-10-30 with the project key: 200 in <1s. gemini-3.8-flash was the documented free pick but the live API returns 503 "high demand" (free-tier capacity, sometimes after a 45-60s hang) on every call with this key; CF Workers AI remains the automatic fallback on quota errors (429).
 GEMINI_EMBED_MODEL = "gemini-embedding-2" # optional external fallback only
 # Without any provider the assistant runs retrieval-only and says so on the page.
+
+# Workers Logs (free): the ask routes emit one ask_ledger line per request (stage, ms, status
+# only - no question text) so generation failures are diagnosable from dashboard logs.
+[observability.logs]
+enabled = true
