@@ -324,10 +324,13 @@ ${src}`;
     archive: /اختراق|اخترق|قرصن|عبث\s+بالموقع|هجوم\s+(علي|الكتروني)|تغير\s+(في\s+)?(المحتوي|المحتوى)|تغير\s+فعلي|تعديل\s+(في\s+)?المحتوي|تغيرات\s+في\s+المحتوي/,
     domain: /مشبوه|احتيال|نصب|خبيث|تصيد|موثوق|جدير\s+بالثقه|خطر\s+علي/,
     diff: /تلاعب|تزوير|تضليل|تحريف\s+متعمد|نية\s+(التضليل|الخداع)/,
-    // Image forensics: these metrics can never prove authenticity, editing, or generation -
-    // block verdict-shaped claims, not mere description of the measurements.
-    image: /مزيف|مزور|تلاعب|فوتوشوب|مولد\s+بال|الصوره\s+(اصلي|حقيقي|معدله)|تثبت|يثبت|تؤكد|يؤكد|اثبات|إثبات|بيقين|دليل\s+قاطع/,
+    // Image forensics: these metrics can never prove authenticity, editing, or generation.
+    // Absolute tokens block wherever they survive the negated-limits strip below. Proof verbs
+    // move to IMAGE_LINKED: they only block when a verdict word follows in the same breath -
+    // «يؤكد النص أنها مؤشرات تقنية» is description, «تثبت أن الصورة معدلة» is a verdict.
+    image: /مزيف|مزور|تلاعب|فوتوشوب|مولد\s+بال|الصوره\s+(اصلي|حقيقي|معدله)|دليل\s+قاطع/,
   };
+  const IMAGE_LINKED = /(تثبت|يثبت|تؤكد|يؤكد|اثبات|إثبات|بيقين)[^.,؛]{0,40}?(تلاعب|تزوير|تزييف|مزيف|مزور|معدله|معدلا|تعديل|اصاله|توليد|فوتوشوب)/;
   const contextGuard = CONTEXT_GUARDS[context];
   const overviewNorm = normAr(overview);
   // Image context (observed live 2026-10-31, reason 'filtered' on image-difference): the model
@@ -336,10 +339,9 @@ ${src}`;
   // the guard test; outside them the guard stays absolute - «ليست مزيفة» is an authenticity
   // verdict the metrics cannot support and stays blocked. Finite list, not a promise.
   const guardText = context === 'image' ? overviewNorm
-    .replace(/(لا|لن|لم|ليس|ليست|غير|دون|بدون)\s+(تثبت|يثبت|تؤكد|يؤكد|دليل|اثبات|درجه|حكم|مؤشر|برهان|كافي|كافيه)[^.,؛]{0,30}?(تلاعب|تزوير|تزييف|مزيف|مزور|تعديل|تعديلا|اصاله|توليد|فوتوشوب)/g, ' ')
-    .replace(/(لا|لن|لم)\s+(تثبت|يثبت|تؤكد|يؤكد)/g, ' ')
+    .replace(/(لا|لن|لم|ليس|ليست|غير|دون|بدون)\s+(تثبت|يثبت|تؤكد|يؤكد|تعتبر|تعد|تشكل|تستخدم|يوجد|توجد|يكون|دليل|اثبات|درجه|حكم|مؤشر|برهان|كافي|كافيه)[^.,؛]{0,30}?(تلاعب|تزوير|تزييف|مزيف|مزور|معدله|معدلا|تعديل|تعديلا|اصاله|توليد|فوتوشوب)/g, ' ')
     : overviewNorm;
-  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(guardText))) {
+  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(guardText)) || (context === 'image' && IMAGE_LINKED.test(guardText))) {
     // server-side diagnosis only: which check fired and the normalized text it saw
     console.log('summarize_filtered', JSON.stringify({ context, why: !overview ? 'empty' : bad.test(overview) ? 'url' : unsupported.test(overviewNorm) ? 'unsupported' : 'guard', text: guardText.slice(0, 500) }));
     return { error: 'filtered' };

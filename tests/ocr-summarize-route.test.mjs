@@ -247,4 +247,15 @@ test('route: image context blocks authenticity/manipulation verdicts, allows mea
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'القياسات لا تثبت تعديلًا لكن توجد مؤشرات تلاعب واضحة.', key_quotes: [] }) }));
   const smug = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
   assert.deepEqual(smug, { summary: null, reason: 'filtered', retry_after: null });
+  // Exact live overview 2026-10-31 (from server diag log, reason 'filtered'): «يؤكد النص على
+  // أنها مؤشرات تقنية... ولا تعتبر دليلًا قاطعًا على التلاعب» - description + negated limits,
+  // must pass. Proof verbs only block when a verdict word follows in the same breath.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'يتناول النص نتائج فحص فني محلي لصورة رقمية، موضحًا أبعادها وقياسات فرق القنوات اللونية الناتجة عن التحليل. كما يؤكد النص على أن هذه البيانات هي مؤشرات تقنية للمقارنة ولا تعتبر دليلًا قاطعًا على التلاعب أو التزوير بمفردها.', key_quotes: ['متوسط فرق القنوات: 2.31 من 255'] }) }));
+  const live = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.equal(live.provider, 'gemini', JSON.stringify(live));
+  assert.equal(live.summary.key_quotes.length, 1);
+  // Proof verb tied to a verdict word still fails closed.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'القياسات تثبت التعديل بوضوح في هذه الصورة.', key_quotes: [] }) }));
+  const linked = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.deepEqual(linked, { summary: null, reason: 'filtered', retry_after: null });
 });
