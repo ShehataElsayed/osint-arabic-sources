@@ -312,7 +312,7 @@ ${src}`;
   // OCR only: the model saw extracted text, never the image. Any reference to the original image,
   // its quality/damage/clarity, or any attribution of garbling to the image or the OCR process is
   // unsupported by definition - fail closed rather than show it.
-  const ocrUnsupported = /(الصوره|النسخه|الملف)\s+الاصليه?|جوده\s+(الصوره|المسح|الاستخراج)|وضوح\s+الصوره|تلف\s+في\s+الصوره|الصوره\s+[^.,؛]{0,30}تلف|التعرف\s+الضوئي|المسح\s+الضوئي|(بسبب|نتيجه|يعود\s+الي|يرجع\s+الي)[^.,؛]{0,60}(صوره|استخراج|تعرف|مسح)/;
+  const ocrUnsupported = /(الصوره|النسخه|الملف)\s+الاصليه?|جوده\s+(ال)?(صوره|مسح|استخراج|تعرف)|دقه\s+(ال)?(استخراج|تعرف)|وضوح\s+(ال)?صوره|تلف\s+في\s+(ال)?صوره|(ال)?صوره\s+[^.,؛]{0,30}تلف|تعرف\s+(ال)?ضوئي|(ال)?مسح\s+(ال)?ضوئي|اداة\s+ocr|اخطاء\s+(ال)?(تعرف|استخراج|مسح)|(بسبب|نتيجه|يعود\s+الي|يرجع\s+الي|ادى\s+الي|مما\s+ادى|مما)[^.,؛]{0,60}(صوره|استخراج|تعرف|مسح|تلف)/;
   const overviewNorm = normAr(overview);
   if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (context === 'ocr' && ocrUnsupported.test(overviewNorm))) return { error: 'filtered' };
   const srcNorm = normAr(src);
