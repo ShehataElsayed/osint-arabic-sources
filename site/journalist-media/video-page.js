@@ -1,4 +1,5 @@
 import{validateCase}from'../journalist-core.js';
+import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import{videoCase}from'./video-case-core.js';
 import{sampleTimes,stamp,outputSize,candidateTimes,meanAbsDiff,pickSceneIndices}from'./video-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
@@ -124,3 +125,34 @@ $('case-export').onclick=()=>{if(!record)return;try{if(['pending','invalid'].inc
 
 function invalidateFrames(){generation++;reviews=[];frameShots=[];ocrIndex=null;if(record){delete record.frames;delete record.ocrIndex;record.extraction='not-run'}$('frames').replaceChildren();$('vf-result').hidden=true;$('ocr-box').hidden=true;$('notes-box').hidden=true;$('case-export').disabled=true;$('save').disabled=true;$('ocr-run').disabled=true;$('file').disabled=false;$('run').disabled=!record;say('تغير إعداد الاستخراج؛ استخرج اللقطات من جديد.')}
 $('vf-count').onchange=invalidateFrames;$('vf-mode').onchange=invalidateFrames;
+
+// AI explanation of the visible extraction results (2026-10-31 all-tools AI expansion, user
+// «تمام ضيفه ف كل الأدوات»): extraction stays fully local; this optional section sends ONLY the
+// visible result TEXT (never the video or frames) to the guide worker (summarize_text route,
+// context 'video'). The worker guard blocks any authenticity/manipulation verdict; description only.
+(function aiSummary(){
+  const res0=document.getElementById('vf-result');
+  new MutationObserver(()=>{const b=document.getElementById('ai-box'); if(b) b.hidden=res0.hidden; if(res0.hidden){const r=document.getElementById('ai-result'); if(r)r.hidden=true; const s=document.getElementById('ai-status'); if(s)s.textContent='';}}).observe(res0,{attributes:true,attributeFilter:['hidden']});
+  const box=document.getElementById('ai-box'), btn=document.getElementById('ai-summarize'),
+        st=document.getElementById('ai-status'), res=document.getElementById('ai-result'),
+        prov=document.getElementById('ai-provider'), ov=document.getElementById('ai-overview'),
+        qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes');
+  if(!box||!btn)return;
+  btn.onclick=async()=>{
+    const text=((document.getElementById('meta').innerText+'\n'+document.getElementById('vf-result').innerText)).slice(0,11000);
+    if(text.trim().length<40){st.textContent='النتائج أقصر من أن تُشرح.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ الشرح بالذكاء الاصطناعي…';
+    try{
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text,context:'video'})});
+      const j=r.ok?await r.json():null;
+      const sm=j&&j.summary;
+      if(!sm){st.textContent='الشرح بالذكاء الاصطناعي غير متاح الآن؛ نتائجك الكاملة ظاهرة أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;
+      ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل الشرح بالذكاء الاصطناعي؛ الملخص بصياغة النموذج وصفٌ للنتائج لا حكمٌ على الفيديو - راجعه أمام النتائج قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتائجك الكاملة ظاهرة أعلاه.'}
+    finally{btn.disabled=false}};
+})();
