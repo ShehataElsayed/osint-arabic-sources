@@ -2,6 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import { createHash } from 'node:crypto';
 
 const big = p => fs.statSync(p).size > 1_000_000;
 
@@ -36,4 +37,16 @@ test('built HTML cache-busts local js/css references with a content hash', () =>
   const ast = fs.readFileSync('_site/assistant.html', 'utf8');
   assert.ok(/href="\.\/rag\.css\?v=[a-f0-9]{8}"/.test(ast), 'rag.css reference not cache-busted');
   assert.ok(!/src="https?:\/\/[^"]*\?v=/.test(ss), 'external references must not be rewritten');
+});
+
+test('built JS fingerprints nested relative imports and Worker URLs', () => {
+  if (!fs.existsSync('_site/journalist-media/timeline-page.js')) return; // build not run in this context
+  const tp = fs.readFileSync('_site/journalist-media/timeline-page.js', 'utf8');
+  const m = /journalist-core\.js\?v=([a-f0-9]{8})/.exec(tp);
+  assert.ok(m, 'nested journalist-core.js import not cache-busted');
+  const coreHash = createHash('sha256').update(fs.readFileSync('_site/journalist-core.js')).digest('hex').slice(0, 8);
+  assert.equal(m[1], coreHash, 'nested import hash must match target file bytes');
+  const idf = fs.readFileSync('_site/image-difference.js', 'utf8');
+  assert.ok(/new Worker\('\.\/image-difference-worker\.js\?v=[a-f0-9]{8}'/.test(idf), 'Worker URL not cache-busted');
+  assert.ok(!fs.readFileSync('_site/tesseract.min.js', 'utf8').includes('?v='), 'vendor bundle must stay untouched');
 });

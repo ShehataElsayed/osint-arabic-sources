@@ -39,8 +39,52 @@ def build():
         else:
             text=text+link
         page.write_text(text)
+    bust_js_imports(DEST)
     bust_cache(DEST)
     return DEST
+
+def bust_js_imports(dest):
+    """Fingerprint relative module specifiers inside our authored JS.
+
+    bust_cache covers HTML src/href only; nested ES imports and Worker URLs would
+    otherwise be fetched unversioned, so a deploy can leave visitors running a stale
+    dependency against new page code (observed 2026-10-30: timeline.html kept running
+    the pre-fix journalist-core.js from cache until manual cache refresh).
+    Rewrites only our authored modules (vendor bundles excluded); fingerprints the
+    target's final bytes, iterating to a fixed point for chained imports.
+    """
+    import hashlib, re
+    spec = re.compile(r"((?:from|import)\s*\(?\s*[\'\"])(\.{1,2}/[^\'\"]+?\.(?:js|mjs))([\'\"])")
+    worker = re.compile(r"(new Worker\(\s*[\'\"])(\.{1,2}/[^\'\"]+?\.(?:js|mjs))([\'\"])")
+    vendored = ('duckdb/', 'tools/py/')
+    def ours(p):
+        rel = p.relative_to(dest).as_posix()
+        return not (rel.startswith(vendored) or rel.endswith('.min.js'))
+    def rewrite(text, base):
+        def rep(m):
+            target = (base / m.group(2)).resolve()
+            try:
+                target.relative_to(dest.resolve())
+            except ValueError:
+                return m.group(0)
+            if not target.is_file():
+                return m.group(0)
+            h = hashlib.sha256(target.read_bytes()).hexdigest()[:8]
+            return m.group(1) + m.group(2) + '?v=' + h + m.group(3)
+        return worker.sub(rep, spec.sub(rep, text))
+    for _ in range(8):
+        changed = False
+        for js in sorted(dest.rglob('*.js')) + sorted(dest.rglob('*.mjs')):
+            if not ours(js):
+                continue
+            cur = js.read_text()
+            nxt = rewrite(cur, js.parent)
+            if nxt != cur:
+                js.write_text(nxt)
+                changed = True
+        if not changed:
+            return
+    raise SystemExit('bust_js_imports did not converge (circular module imports?)')
 
 def bust_cache(dest):
     """Append a content-hash ?v= to local .js/.css references in built HTML.
