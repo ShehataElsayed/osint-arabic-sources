@@ -1,4 +1,5 @@
 import {validateCase} from '../journalist-core.js';
+import {BACKEND_URL, GEMINI_NOTICE} from '../rag-config.js';
 import {timelineCase,validateEvents} from './timeline-case-core.js';
 import{dateCandidates,validDate}from'../journalist-core.js';
 import{findConflicts,findGaps}from'./timeline-review-core.js';
@@ -109,3 +110,32 @@ $('import').onchange=async()=>{const generation=++importGeneration;const f=$('im
   const checked=validateEvents(raw);if(generation!==importGeneration)return;events=checked;
   renderAxis();say('استُعيد '+events.length+' حدثًا من الملف.')}catch(e){if(generation!==importGeneration)return;say('تعذر الاستيراد: '+e.message)}};
 renderAxis();
+
+// AI event extraction (user-requested 2026-10-30): the pasted text goes to the guide's worker,
+// which calls Gemini and returns only events anchored to a verbatim quote from the source. The
+// local date detector above stays untouched. Results are review aids, not verified facts;
+// unavailable states are shown, never filled in.
+async function aiExtractEvents(){
+ const text=$('src').value.trim();
+ if(text.length<20){say('الصق نصًا لا يقل عن 20 حرفًا أولًا.');return}
+ const btn=$('ai-extract');btn.disabled=true;
+ say('يستخرج الذكاء الاصطناعي الأحداث من النص…');
+ try{
+  const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'extract_events',text:text.slice(0,12000)})});
+  const j=r.ok?await r.json():null;
+  const ev=j&&j.events;
+  if(!Array.isArray(ev)){say('الاستخراج بالذكاء الاصطناعي غير متاح الآن؛ جرّب لاحقًا أو استخدم الرصد المحلي.');return}
+  const box=$('ai-list');box.replaceChildren();
+  if(!ev.length){box.append(el('p','لم يجد النموذج أحداثًا مؤكدة في النص.'))}
+  for(const e of ev){
+   const card=el('div',undefined,'record');
+   const chip=el('span',e.date||'غير مؤرخ','en-chip');
+   card.append(chip,el('p',e.event));
+   const q=el('blockquote',e.quote);card.append(q);
+   box.append(card)}
+  $('ai-notice').textContent=GEMINI_NOTICE;
+  $('ai-result').hidden=false;
+  say('اكتمل الاستخراج بالذكاء الاصطناعي؛ راجع الأحداث قبل اعتمادها.')}
+ catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الرصد المحلي ما زال متاحًا.')}
+ finally{btn.disabled=false}}
+$('ai-extract').onclick=aiExtractEvents;

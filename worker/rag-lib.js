@@ -178,6 +178,45 @@ ${src}`;
   return { persons, organizations, places };
 }
 
+
+// AI event extraction for the timeline workbench (same 2026-10-30 user expansion). Every event
+// must carry a quote copied verbatim from the source (validated after Arabic normalization), so
+// the model can summarize a date+event but can never anchor it to text that is not there. A null
+// date means the source gave no clear date; the page renders that as undated, never a guess.
+export async function extractEvents(text, env, f = fetch) {
+  if (cfOnly(env)) return { error: 'off' };
+  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
+  const src = String(text || '').trim().slice(0, 12000);
+  if (src.length < 20) return { error: 'empty' };
+  const prompt = `أنت مستخرج أحداث داخل أداة خط زمني صحفية عربية. اقرأ النص التالي واستخرج الأحداث المذكورة فيه. قواعد صارمة: لكل حدث انسخ quote جملة واحدة من النص كما وردت حرفيًا دون أي تغيير تدعم الحدث، واكتب event وصفًا قصيرًا محايدًا للحدث من جملة المصدر فقط، وdate بصيغة YYYY-MM-DD فقط إذا حددت الجملة أو النص التاريخ صراحة أو بعبارة زمنية قابلة للحسم من سياق النص وحده، وإلا اجعل date قيمة null. لا تضف حدثًا غير موجود في النص، ولا تستنتج تواريخ من معرفتك الخارجية، ولا تذكر أحكامًا أو تقييمات. أعد JSON فقط بالشكل {"events":[{"date":"YYYY-MM-DD"|null,"event":"...","quote":"..."}]} بحد أقصى 20 حدثًا، وإن لم توجد أحداث فأعد قائمة فارغة.
+النص:
+${src}`;
+  let r;
+  try {
+    r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
+  } catch { return { error: 'neterr' }; }
+  if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status }; }
+  const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const hay = ' ' + normAr(src) + ' ';
+  const out = [], seen = new Set();
+  for (const x of (Array.isArray(j?.events) ? j.events : [])) {
+    const quote = String(x?.quote ?? '').replace(/\s+/g, ' ').trim().slice(0, 400);
+    const event = String(x?.event ?? '').replace(/\s+/g, ' ').trim().slice(0, 240);
+    const d = typeof x?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? x.date : null;
+    const nq = normAr(quote);
+    if (nq.length < 8 || !hay.includes(nq)) continue; // quote must be verbatim in the source
+    if (!event) continue;
+    const key = (d || '') + '|' + nq;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ date: d, event, quote });
+    if (out.length >= 20) break;
+  }
+  if (!out.length) return { error: 'filtered' };
+  return { events: out };
+}
+
 // Quick news verification for the chat (user-requested 2026-10-30): matches the claim against the
 // Google Fact Check Claim Search API (factchecktools.googleapis.com/v1alpha1/claims:search - free,
 // API-key only, no billing SKU) and lets Gemini summarize ONLY the matched reviews with per-review
@@ -1653,6 +1692,7 @@ export default {
         return json(payload, 200, o);
       } catch { return json({ host, identity: null, identity_status: 'unavailable' }, 200, o); }
     }
+    if (b?.mode === 'extract_events') { try { const ev = await extractEvents(b.text ?? b.question, env); return json(ev.error ? { events: null, reason: ev.error } : { events: ev.events }, 200, o); } catch { return json({ events: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error } : { entities: ee }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }

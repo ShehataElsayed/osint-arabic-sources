@@ -18,3 +18,7 @@ export const RESEARCH_PLAN = true;
 // enabled it may pass it to Google (Gemini API free tier), where Google may use content to improve
 // its products per its terms. Pages show a data-use notice while requests leave the device.
 export const EXTERNAL_AI = true;
+
+// Route-accurate notice for the Gemini-only extraction routes (extract_entities / extract_events):
+// those routes always call Google Gemini through the worker, never Workers AI.
+export const GEMINI_NOTICE = 'يُرسل النص إلى خادم الدليل على Cloudflare الذي يمرره إلى نموذج Gemini من Google (فئة مجانية؛ قد تستخدم Google النص لتحسين منتجاتها)، فلا تكتب بيانات حساسة.';
