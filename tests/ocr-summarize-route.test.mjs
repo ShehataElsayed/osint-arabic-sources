@@ -195,3 +195,17 @@ test('route: archive guard blocks hacking speculation; diff guard blocks intent 
   assert.equal(okd.provider, 'gemini');
   assert.equal(okd.summary.key_quotes.length, 1);
 });
+
+test('route: archive overview must say fingerprint change and scope the fetched sample', async () => {
+  const arc = 'نتيجة أرشيف: تقدير إجمالي اللقطات 3176. لقطات مجلوبة 200 (حد 200). أقدم لقطة مجلوبة 2025-07-31. أحدث لقطة مجلوبة 2026-07-12. نقطة تغير محتوى بين المجلوبة 5.';
+  // Live phrasing 2026-10-30: "5 نقاط تغير في المحتوى" upgrades a digest-change lead to a
+  // content-change claim - blocked.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تبدأ أقدم لقطة في 2025-07-31 وتنتهي أحدث لقطة في 2026-07-12، مع وجود 5 نقاط تغير في المحتوى.', key_quotes: [] }) }));
+  const bad = await (await post({ mode: 'summarize_text', text: arc, context: 'archive' })).json();
+  assert.deepEqual(bad, { summary: null, reason: 'filtered', retry_after: null });
+  // Correct wording: fingerprint changes scoped to the fetched sample.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تُظهر النتيجة 200 لقطة مجلوبة من أصل 3176 مقدرة، أقدمها مجلوبة في 2025-07-31 وأحدثها مجلوبة في 2026-07-12، مع 5 نقاط تغير بصمة بين المجلوبة.', key_quotes: ['أقدم لقطة مجلوبة 2025-07-31'] }) }));
+  const ok = await (await post({ mode: 'summarize_text', text: arc, context: 'archive' })).json();
+  assert.equal(ok.provider, 'gemini');
+  assert.equal(ok.summary.key_quotes.length, 1);
+});
