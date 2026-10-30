@@ -15,6 +15,7 @@ const mockGemini = handler => { globalThis.fetch = async (url, init) => { calls.
 test.after(() => { globalThis.fetch = realFetch; });
 
 const envGemini = () => ({ AI: { run: async () => { throw new Error('CF must not be called'); } }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' });
+const envGeminiOnly = () => ({ AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' });
 const post = (body, origin = ORIGIN, env = envGemini()) => worker.fetch(new Request('https://worker.test/', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) }), env);
 
 test('route: extract_events returns validated events backed by verbatim quotes', async () => {
@@ -29,6 +30,7 @@ test('route: extract_events returns validated events backed by verbatim quotes',
   assert.equal(r.events.length, 2);
   assert.equal(r.events[0].date, '2026-03-01');
   assert.equal(r.events[1].date, null, 'relative-only phrasing stays undated');
+  assert.equal(r.provider, 'gemini');
 });
 
 test('route: events whose quote is not in the source are dropped', async () => {
@@ -56,12 +58,11 @@ test('route: malformed dates become null and duplicates collapse', async () => {
 test('route: gating, http error, parse failure, and empty result fail closed', async () => {
   calls = [];
   mockGemini(async () => ({ ok: true, json: async () => ({}) }));
-  const pinned = { AI: { run: async () => ({}) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
-  const off = await (await post({ mode: 'extract_events', text: SRC }, ORIGIN, pinned)).json();
-  assert.deepEqual(off, { events: null, reason: 'off', retry_after: null });
+  const noProv = await (await post({ mode: 'extract_events', text: SRC }, ORIGIN, {})).json();
+  assert.deepEqual(noProv, { events: null, reason: 'off', retry_after: null });
   assert.equal(calls.length, 0);
   mockGemini(async () => ({ ok: false, status: 429 }));
-  assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC })).json(), { events: null, reason: 'http_429', retry_after: null });
+  assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC }, ORIGIN, envGeminiOnly())).json(), { events: null, reason: 'http_429', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ليس JSON' }] } }] }) }));
   assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC })).json(), { events: null, reason: 'parse', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ events: [] }) }));
@@ -103,7 +104,7 @@ test('route: ISO date requires exact correspondence with the anchoring raw expre
 
 test('route: 429 passes the provider Retry-After through for honest backoff', async () => {
   mockGemini(async () => ({ ok: false, status: 429, headers: { get: h => h === 'retry-after' ? '37' : null } }));
-  const r = await (await post({ mode: 'extract_events', text: SRC })).json();
+  const r = await (await post({ mode: 'extract_events', text: SRC }, ORIGIN, envGeminiOnly())).json();
   assert.equal(r.reason, 'http_429');
   assert.equal(r.retry_after, 37);
 });
@@ -115,4 +116,13 @@ test('route: origin/method/JSON guards apply to extract_events', async () => {
   assert.equal(get.status, 405);
   const malformed = await post('{not json');
   assert.equal(malformed.status, 400);
+});
+
+test('route: Gemini 429 falls back to Workers AI with verbatim validation still applied', async () => {
+  mockGemini(async () => ({ ok: false, status: 429, text: async () => 'quota', headers: { get: () => null } }));
+  const env = { AI: { run: async () => ({ response: JSON.stringify({ events: [ { date: '2026-03-01', event: 'بدأ التطبيق الفعلي', quote: 'وفي 2026-03-01 بدأ التطبيق فعليًا.' }, { date: '2099-01-01', event: 'حدث مخترع', quote: 'جملة غير موجودة إطلاقًا.' } ] }) }) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  const r = await (await post({ mode: 'extract_events', text: SRC }, ORIGIN, env)).json();
+  assert.equal(r.provider, 'workers-ai');
+  assert.equal(r.events.length, 1, 'fallback output goes through the same verbatim validation');
+  assert.equal(r.events[0].event, 'بدأ التطبيق الفعلي');
 });

@@ -21,4 +21,6 @@ export const EXTERNAL_AI = true;
 
 // Route-accurate notice for the Gemini-only extraction routes (extract_entities / extract_events):
 // those routes always call Google Gemini through the worker, never Workers AI.
-export const GEMINI_NOTICE = 'يُرسل النص إلى خادم الدليل على Cloudflare الذي يمرره إلى نموذج Gemini من Google (فئة مجانية؛ قد تستخدم Google النص لتحسين منتجاتها)، فلا تكتب بيانات حساسة.';
+export const AI_NOTICE = 'يُرسل النص إلى خادم الدليل على Cloudflare؛ يعالجه نموذج Gemini من Google أو نموذج Workers AI على Cloudflare حسب المتاح (فئات مجانية؛ عند المعالجة عبر Google قد تستخدم Google النص لتحسين منتجاتها)، فلا تكتب بيانات حساسة.';
+// Human-readable provider name for provenance labels next to AI results.
+export const aiProviderName = p => p === 'workers-ai' ? 'عبر نموذج Workers AI على Cloudflare' : 'عبر نموذج Gemini من Google';

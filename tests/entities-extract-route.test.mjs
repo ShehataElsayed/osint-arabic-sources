@@ -2,9 +2,9 @@ import test from 'node:test'; import assert from 'node:assert/strict';
 import worker from '../worker/rag-lib.js';
 
 // Route-level tests for the extract_entities dispatch in worker/rag-lib.js's default fetch handler.
-// extract_entities powers AI extraction on the entities workbench: it must call Google Gemini
-// directly (never the Cloudflare AI binding), keep ONLY names that appear verbatim in the user's
-// source text, and fail closed to { entities: null, reason } without touching other routes.
+// extract_entities powers AI extraction on the entities workbench: Gemini-first with an
+// automatic Workers AI fallback (the response reports the winning provider), keeping ONLY names
+// that appear verbatim in the user's source text, failing closed to { entities: null, reason }.
 
 const ORIGIN = 'https://shehataelsayed.github.io';
 const SRC = 'قال محمد عبد الله، المتحدث باسم وزارة الصحة المصرية، في مؤتمر صحفي بالقاهرة إن مستشفى المنيرة استقبل الحالات.';
@@ -16,6 +16,7 @@ const mockGemini = handler => { globalThis.fetch = async (url, init) => { calls.
 test.after(() => { globalThis.fetch = realFetch; });
 
 const envGemini = () => ({ AI: { run: async () => { throw new Error('CF must not be called'); } }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' });
+const envGeminiOnly = () => ({ AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' });
 const post = (body, origin = ORIGIN, env = envGemini()) => worker.fetch(new Request('https://worker.test/', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) }), env);
 
 test('route: extract_entities calls Gemini, not the Cloudflare AI binding, even when AI is bound', async () => {
@@ -27,6 +28,7 @@ test('route: extract_entities calls Gemini, not the Cloudflare AI binding, even 
   assert.deepEqual(r.entities.persons, ['محمد عبد الله']);
   assert.deepEqual(r.entities.organizations, ['وزارة الصحة المصرية']);
   assert.deepEqual(r.entities.places, ['القاهرة']);
+  assert.equal(r.provider, 'gemini');
 });
 
 test('route: names not present verbatim in the source are dropped (no invented entities)', async () => {
@@ -43,18 +45,35 @@ test('route: duplicates collapse and Arabic-normalized variants match the source
   assert.deepEqual(r.entities.persons, ['محمد عبد الله'], 'exact duplicate and alef-variant duplicate collapse to one');
 });
 
-test('route: no GEMINI_API_KEY or cloudflare pin -> entities null reason off, no external call', async () => {
+test('route: no providers configured -> entities null reason off, no external call', async () => {
   calls = [];
   mockGemini(async () => ({ ok: true, json: async () => ({}) }));
-  const env = { AI: { run: async () => ({}) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare' };
-  const r = await (await post({ mode: 'extract_entities', text: SRC }, ORIGIN, env)).json();
+  const r = await (await post({ mode: 'extract_entities', text: SRC }, ORIGIN, {})).json();
   assert.deepEqual(r, { entities: null, reason: 'off', retry_after: null });
   assert.equal(calls.length, 0, 'no Gemini and no CF call when gated');
 });
 
+test('route: cloudflare pin uses Workers AI directly and returns provider provenance', async () => {
+  calls = [];
+  mockGemini(async () => { throw new Error('Gemini must not be called when pinned'); });
+  const env = { AI: { run: async () => ({ response: JSON.stringify({ persons: ['محمد عبد الله'], organizations: [], places: [] }) }) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  const r = await (await post({ mode: 'extract_entities', text: SRC }, ORIGIN, env)).json();
+  assert.equal(calls.length, 0, 'zero Gemini calls under the cloudflare pin');
+  assert.deepEqual(r.entities.persons, ['محمد عبد الله']);
+  assert.equal(r.provider, 'workers-ai');
+});
+
+test('route: Gemini 429 falls back to Workers AI and reports the fallback provider', async () => {
+  mockGemini(async () => ({ ok: false, status: 429, text: async () => 'quota', headers: { get: () => null } }));
+  const env = { AI: { run: async () => ({ response: JSON.stringify({ persons: ['محمد عبد الله'], organizations: ['وزارة الصحة المصرية'], places: ['القاهرة'] }) }) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  const r = await (await post({ mode: 'extract_entities', text: SRC }, ORIGIN, env)).json();
+  assert.equal(r.provider, 'workers-ai');
+  assert.deepEqual(r.entities.places, ['القاهرة']);
+});
+
 test('route: http error, unparseable output, and empty result fail closed with a reason', async () => {
   mockGemini(async () => ({ ok: false, status: 429 }));
-  const r429 = await (await post({ mode: 'extract_entities', text: SRC })).json();
+  const r429 = await (await post({ mode: 'extract_entities', text: SRC }, ORIGIN, envGeminiOnly())).json();
   assert.deepEqual(r429, { entities: null, reason: 'http_429', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ليس JSON' }] } }] }) }));
   const bad = await (await post({ mode: 'extract_entities', text: SRC })).json();

@@ -111,8 +111,6 @@ export async function researchPlan(question, candidates, env, f = fetch) {
   const cs = cleanCandidates(candidates);
   // Gated behind the provider pin like every external call: while AI_PROVIDER=cloudflare (current
   // production, pending current billing verification of the Gemini project) this route is OFF.
-  if (cfOnly(env)) return { error: 'off' };
-  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
   const q = String(question || '').trim().slice(0, 300);
   if (!q || !cs.length) return { error: 'empty' };
   const list = cs.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n');
@@ -120,6 +118,8 @@ export async function researchPlan(question, candidates, env, f = fetch) {
 سؤال المستخدم: ${q}
 الأدوات المتاحة:
 ${list}`;
+  if (cfOnly(env)) return { error: 'off' };
+  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
   let r;
   try {
     r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.2, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
@@ -138,6 +138,42 @@ ${list}`;
   return { intro: txt(j.intro, 240), steps, limits: txt(j.limits, 240) };
 }
 
+
+// Shared provider path for the extract_* routes (2026-10-30, user asked for AI results, not a
+// provider): Gemini first when pinned gemini-first, with automatic fallback to Workers AI - the
+// same Cloudflare processing the pages already disclose. Every Gemini error body is logged
+// server-side for quota diagnosis and NEVER returned to clients. The winning provider is
+// returned so pages can state provenance accurately.
+async function aiExtractRaw(prompt, env, f) {
+  const pinned = cfOnly(env);
+  const canGemini = !pinned && !!(env?.GEMINI_API_KEY && env?.GEMINI_MODEL);
+  let geminiErr = null, retryAfter = null;
+  if (canGemini) {
+    let r = null;
+    try {
+      r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
+    } catch { geminiErr = 'neterr'; }
+    if (r && r.ok) {
+      const rawTxt = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+      if (rawTxt) return { raw: rawTxt, provider: 'gemini' };
+      geminiErr = 'parse';
+    } else if (r) {
+      retryAfter = Number(r.headers?.get?.('retry-after')) || null;
+      let body = ''; try { body = String(await r.text()).slice(0, 300); } catch {}
+      console.log('extract_gemini_error', r.status, body); // server-side diagnosis only
+      geminiErr = 'http_' + r.status;
+    }
+    if (!hasCF(env)) return { error: geminiErr, retry_after: retryAfter };
+  }
+  if (hasCF(env)) {
+    const c = await cfChat(prompt, env, 0.1, 2048);
+    if (c.text) return { raw: c.text, provider: 'workers-ai' };
+    if (!canGemini) return { error: c.error === 'busy' ? 'cf_busy' : 'cf_err', retry_after: null };
+    return { error: geminiErr + '+cf_' + (c.error || 'err'), retry_after: retryAfter };
+  }
+  return { error: 'off', retry_after: null };
+}
+
 // AI entity extraction for the entities workbench (user-requested 2026-10-30: "كل الأدوات خليها
 // ذكاء اصطناعي"). Gemini reads ONLY the user's pasted text and returns persons/organizations/
 // places mentioned in it. Every returned name must appear verbatim in the source text (checked
@@ -145,19 +181,14 @@ ${list}`;
 // Extraction is not identity resolution and not verification; the page labels it for human review.
 function normAr(t) { return String(t || '').toLowerCase().replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim(); }
 export async function extractEntities(text, env, f = fetch) {
-  if (cfOnly(env)) return { error: 'off' };
-  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
   const src = String(text || '').trim().slice(0, 12000);
   if (src.length < 20) return { error: 'empty' };
   const prompt = `أنت مستخرج كيانات داخل أداة صحفية عربية. اقرأ النص التالي واستخرج منه الكيانات المذكورة حرفيًا فقط. قواعد صارمة: انسخ كل اسم كما ورد في النص تمامًا دون ترجمة أو إكمال أو تصحيح، ولا تضف أي اسم غير موجود في النص، ولا تستنتج كيانات من معرفتك الخارجية، ولا تذكر أحداثًا أو أحكامًا. أعد JSON فقط بالشكل {"persons":["..."],"organizations":["..."],"places":["..."]} حيث persons أسماء أشخاص، organizations أسماء جهات ومؤسسات وأحزاب وشركات، places أسماء أماكن ومدن ودول. بدون تكرار داخل القائمة الواحدة، وبحد أقصى 30 اسمًا لكل نوع، وإن لم يوجد نوع فأعد له قائمة فارغة.
 النص:
 ${src}`;
-  let r;
-  try {
-    r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
-  } catch { return { error: 'neterr' }; }
-  if (!r.ok) { const ra = Number(r.headers?.get?.('retry-after')) || null; try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status, retry_after: ra }; }
-  const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const g = await aiExtractRaw(prompt, env, f);
+  if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
+  const raw = g.raw;
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const hay = ' ' + normAr(src) + ' ';
   const keep = (v) => {
@@ -175,7 +206,7 @@ ${src}`;
   };
   const persons = keep(j?.persons), organizations = keep(j?.organizations), places = keep(j?.places);
   if (!persons.length && !organizations.length && !places.length) return { error: 'filtered' };
-  return { persons, organizations, places };
+  return { persons, organizations, places, provider: g.provider };
 }
 
 
@@ -202,19 +233,14 @@ function groundDate(iso, rawNorm, srcNorm) {
   return false; // relative or unparseable expression: no exact correspondence
 }
 export async function extractEvents(text, env, f = fetch) {
-  if (cfOnly(env)) return { error: 'off' };
-  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
   const src = String(text || '').trim().slice(0, 12000);
   if (src.length < 20) return { error: 'empty' };
   const prompt = `أنت مستخرج أحداث داخل أداة خط زمني صحفية عربية. اقرأ النص التالي واستخرج الأحداث المذكورة فيه. قواعد صارمة: لكل حدث انسخ quote جملة واحدة من النص كما وردت حرفيًا دون أي تغيير تدعم الحدث، واكتب event وصفًا قصيرًا محايدًا للحدث من جملة المصدر فقط. وإن ورد في النص تاريخ صريح للحدث (عبارة مثل «15 يناير 2026» أو «2026-03-01» أو «01/03/2026») فانسخ العبارة كما وردت حرفيًا في date_raw واكتب date مقابلها بصيغة YYYY-MM-DD بنفس اليوم والشهر والسنة تمامًا، وإن لم توجد عبارة تاريخ صريحة فاجعل date و date_raw قيمة null ولا تستنتج تاريخًا من عبارات نسبية مثل «بعد أسبوعين» ولا من معرفتك الخارجية. لا تضف حدثًا غير موجود في النص، ولا تذكر أحكامًا أو تقييمات. أعد JSON فقط بالشكل {"events":[{"date":"YYYY-MM-DD"|null,"date_raw":"..."|null,"event":"...","quote":"..."}]} بحد أقصى 20 حدثًا، وإن لم توجد أحداث فأعد قائمة فارغة.
 النص:
 ${src}`;
-  let r;
-  try {
-    r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
-  } catch { return { error: 'neterr' }; }
-  if (!r.ok) { const ra = Number(r.headers?.get?.('retry-after')) || null; try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status, retry_after: ra }; }
-  const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const g = await aiExtractRaw(prompt, env, f);
+  if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
+  const raw = g.raw;
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const srcNorm = ' ' + normAr(src) + ' ';
   const out = [], seen = new Set();
@@ -238,7 +264,7 @@ ${src}`;
     if (out.length >= 20) break;
   }
   if (!out.length) return { error: 'filtered' };
-  return { events: out };
+  return { events: out, provider: g.provider };
 }
 
 
@@ -247,19 +273,14 @@ ${src}`;
 // validated against the source. It never returns a truth assessment - the page's stance
 // (candidate list for human verification, no verdicts) is preserved end to end.
 export async function extractClaims(text, env, f = fetch) {
-  if (cfOnly(env)) return { error: 'off' };
-  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
   const src = String(text || '').trim().slice(0, 12000);
   if (src.length < 20) return { error: 'empty' };
   const prompt = `أنت مستخرج ادعاءات داخل أداة مراجعة صحفية عربية. اقرأ النص التالي واستخرج منه الادعاءات الواقعية القابلة للتحقق (أرقام، أحداث، تصريحات منسوبة، قرارات، إحصاءات). قواعد صارمة: لكل ادعاء اكتب claim صياغة قصيرة محايدة للادعاء كما يفهم من النص فقط، وانسخ quote الجملة من النص كما وردت حرفيًا دون أي تغيير. لا تحكم أبدًا على صدق الادعاء أو كذبه، ولا تضف ادعاءً غير موجود في النص، ولا تستنتج من معرفتك الخارجية، وتجاهل الآراء والتمنيات والتوقعات غير القابلة للتحقق. أعد JSON فقط بالشكل {"claims":[{"claim":"...","quote":"..."}]} بحد أقصى 20 ادعاءً، وإن لم توجد ادعاءات قابلة للتحقق فأعد قائمة فارغة.
 النص:
 ${src}`;
-  let r;
-  try {
-    r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
-  } catch { return { error: 'neterr' }; }
-  if (!r.ok) { const ra = Number(r.headers?.get?.('retry-after')) || null; try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status, retry_after: ra }; }
-  const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const g = await aiExtractRaw(prompt, env, f);
+  if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
+  const raw = g.raw;
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const hay = ' ' + normAr(src) + ' ';
   const out = [], seen = new Set();
@@ -276,7 +297,7 @@ ${src}`;
     if (out.length >= 20) break;
   }
   if (!out.length) return { error: 'filtered' };
-  return { claims: out };
+  return { claims: out, provider: g.provider };
 }
 
 // Quick news verification for the chat (user-requested 2026-10-30): matches the claim against the
@@ -1754,9 +1775,9 @@ export default {
         return json(payload, 200, o);
       } catch { return json({ host, identity: null, identity_status: 'unavailable' }, 200, o); }
     }
-    if (b?.mode === 'extract_claims') { try { const ec = await extractClaims(b.text ?? b.question, env); return json(ec.error ? { claims: null, reason: ec.error, retry_after: ec.retry_after ?? null } : { claims: ec.claims }, 200, o); } catch { return json({ claims: null, reason: 'err' }, 200, o); } }
-    if (b?.mode === 'extract_events') { try { const ev = await extractEvents(b.text ?? b.question, env); return json(ev.error ? { events: null, reason: ev.error, retry_after: ev.retry_after ?? null } : { events: ev.events }, 200, o); } catch { return json({ events: null, reason: 'err' }, 200, o); } }
-    if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error, retry_after: ee.retry_after ?? null } : { entities: ee }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
+    if (b?.mode === 'extract_claims') { try { const ec = await extractClaims(b.text ?? b.question, env); return json(ec.error ? { claims: null, reason: ec.error, retry_after: ec.retry_after ?? null } : { claims: ec.claims, provider: ec.provider }, 200, o); } catch { return json({ claims: null, reason: 'err' }, 200, o); } }
+    if (b?.mode === 'extract_events') { try { const ev = await extractEvents(b.text ?? b.question, env); return json(ev.error ? { events: null, reason: ev.error, retry_after: ev.retry_after ?? null } : { events: ev.events, provider: ev.provider }, 200, o); } catch { return json({ events: null, reason: 'err' }, 200, o); } }
+    if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error, retry_after: ee.retry_after ?? null } : { entities: { persons: ee.persons, organizations: ee.organizations, places: ee.places }, provider: ee.provider }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     const q = String(b?.question || '').trim().slice(0, 300); if (!q) return json({ error: 'empty' }, 400, o);
