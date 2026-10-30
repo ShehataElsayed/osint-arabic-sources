@@ -236,4 +236,15 @@ test('route: image context blocks authenticity/manipulation verdicts, allows mea
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'الصورة ليست مزيفة حسب هذه القياسات.', key_quotes: [] }) }));
   const negAuth = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
   assert.deepEqual(negAuth, { summary: null, reason: 'filtered', retry_after: null });
+  // Live phrasing 2026-10-31 on image-difference: the model echoed the completion status
+  // «المناطق المضيئة ليست دليل تلاعب بمفردها» and the absolute تلاعب guard blocked it.
+  // Negated-limits wording around an evidence noun is limits language, allowed.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تعرض القياسات متوسط فرق قنوات 2.31 وأكبر فرق 87، والمناطق المضيئة ليست دليل تلاعب بمفردها.', key_quotes: ['أكبر فرق: 87 من 255'] }) }));
+  const lim = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.equal(lim.provider, 'gemini');
+  assert.equal(lim.summary.key_quotes.length, 1);
+  // A positive tampering verdict inside the same sentence still fails closed.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'القياسات لا تثبت تعديلًا لكن توجد مؤشرات تلاعب واضحة.', key_quotes: [] }) }));
+  const smug = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.deepEqual(smug, { summary: null, reason: 'filtered', retry_after: null });
 });
