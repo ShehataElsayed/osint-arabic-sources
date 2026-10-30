@@ -79,3 +79,11 @@ test('route: data context prompt frames the input as a SQL TSV result', async ()
   assert.equal(r.summary.overview, 'النتيجة تظهر ثلاثة أعمدة وعشرين صفًا.');
   assert.match(bodySeen, /TSV/, 'prompt names the TSV/SQL framing for data context');
 });
+
+test('route: prose-wrapped JSON from the fallback model is salvaged', async () => {
+  mockGemini(async () => ({ ok: false, status: 429, text: async () => 'quota', headers: { get: () => null } }));
+  const wrapped = 'إليك الملخص المطلوب:\n{"overview":"ملخص سليم من النص.", "key_quotes":[]}\nانتهى.';
+  const env = { AI: { run: async () => ({ response: wrapped }) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  const r = await (await post({ mode: 'summarize_text', text: SRC }, ORIGIN, env)).json();
+  assert.equal(r.summary.overview, 'ملخص سليم من النص.', 'JSON extracted from surrounding prose');
+});
