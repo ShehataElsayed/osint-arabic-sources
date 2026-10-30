@@ -88,7 +88,7 @@ function planCard(plan, all) {
   }
   c.append(ol);
   if (plan.limits) c.append(el('p', plan.limits, 'meta-line'));
-  c.append(el('small', 'الخطة ولّدها نموذج Gemini عبر خادم الدليل من أوصاف أدوات الدليل فقط: خطوات مقترحة للمراجعة، وليست بحثًا منفذًا ولا تحققًا من الوقائع ولا ترشيحًا مؤكدًا.'));
+  c.append(el('small', 'الخطة ولّدها نموذج ' + (plan.provider === 'workers-ai' ? 'Workers AI على Cloudflare' : 'Gemini من Google') + ' عبر خادم الدليل من أوصاف أدوات الدليل فقط: خطوات مقترحة للمراجعة، وليست بحثًا منفذًا ولا تحققًا من الوقائع ولا ترشيحًا مؤكدًا.'));
   return c;
 }
 function addPlanner(body, q) {

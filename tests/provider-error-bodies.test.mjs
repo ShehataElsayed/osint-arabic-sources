@@ -17,8 +17,9 @@ test('researchPlan consumes/cancels the error body before returning http_429', a
   const { res, state } = trackable429();
   const out = await researchPlan('سؤال تجريبي', [{ id: 1, name: 'أداة', description: 'وصف' }], { GEMINI_API_KEY: 'k', GEMINI_MODEL: 'm', AI_PROVIDER: 'gemini-first' }, async () => res);
   assert.equal(out.error, 'http_429');
-  // body.cancel() OR full text() read both release the resource; this fix uses cancel()
-  assert.equal(state.cancelled, true);
+  // body.cancel() OR a full text() read both release the resource. The shared provider path reads
+  // the body (server-side quota diagnostics), so assert the body is fully used either way.
+  assert.equal(state.cancelled || res.bodyUsed, true);
 });
 
 test('embedTexts cancels the provider error body', async () => {

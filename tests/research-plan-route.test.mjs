@@ -20,6 +20,7 @@ const mockGemini = handler => { globalThis.fetch = async (url, init) => { calls.
 test.after(() => { globalThis.fetch = realFetch; });
 
 const envGemini = () => ({ AI: { run: async () => { throw new Error('CF must not be called'); } }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' });
+const envGeminiOnly = () => ({ AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' });
 const post = (body, origin = ORIGIN, env = envGemini()) => worker.fetch(new Request('https://worker.test/', { method: 'POST', headers: { origin, 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) }), env);
 
 test('route: research_plan calls Gemini, not the Cloudflare AI binding, even when AI is bound', async () => {
@@ -28,16 +29,15 @@ test('route: research_plan calls Gemini, not the Cloudflare AI binding, even whe
   const r = await (await post({ mode: 'research_plan', question: 'كيف أراجع نسخة مؤرشفة من بيان؟', candidates: CANDS })).json();
   assert.equal(calls.length, 1);
   assert.match(calls[0], /^https:\/\/generativelanguage\.googleapis\.com\/v1beta\/models\/gemini-3\.8-flash:generateContent$/, 'Gemini endpoint with env model');
-  assert.equal(r.plan.steps.length, 1); assert.equal(r.plan.steps[0].tool_id, 1); assert.equal(r.plan.limits, 'للمراجعة');
+  assert.equal(r.plan.steps.length, 1); assert.equal(r.plan.steps[0].tool_id, 1); assert.equal(r.plan.limits, 'للمراجعة'); assert.equal(r.plan.provider, 'gemini');
 });
 
-test('route: no GEMINI_API_KEY -> plan null reason off, and no external call at all', async () => {
+test('route: no providers configured -> plan null reason off, and no external call at all', async () => {
   calls = [];
   mockGemini(async () => ({ ok: true, json: async () => ({}) }));
-  const env = { AI: { run: async () => ({}) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare' };
-  const r = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS }, ORIGIN, env)).json();
+  const r = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS }, ORIGIN, {})).json();
   assert.deepEqual(r, { plan: null, reason: 'off' });
-  assert.equal(calls.length, 0, 'no Gemini and no CF call when the key is absent');
+  assert.equal(calls.length, 0, 'no Gemini and no CF call when nothing is configured');
 });
 
 test('route: steps are validated against the actual candidate list', async () => {
@@ -64,7 +64,7 @@ test('route: plans are capped at 5 steps', async () => {
 
 test('route: Gemini http error and unparseable output fail closed with a reason', async () => {
   mockGemini(async () => ({ ok: false, status: 429 }));
-  const r429 = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS })).json();
+  const r429 = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS }, ORIGIN, envGeminiOnly())).json();
   assert.deepEqual(r429, { plan: null, reason: 'http_429' });
   mockGemini(async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ليس JSON' }] } }] }) }));
   const bad = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS })).json();
@@ -81,13 +81,22 @@ test('route: missing question or candidates -> reason empty; every step filtered
   assert.deepEqual(filtered, { plan: null, reason: 'filtered' });
 });
 
-test('route: cloudflare pin gates research_plan OFF even with a Gemini key present', async () => {
+test('route: cloudflare pin uses Workers AI directly, zero Gemini calls (user: Gemini linked with the whole platform; CF fallback disclosed)', async () => {
   calls = [];
-  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ steps: [{ tool_id: 1, goal: 'س', how: 'ص' }] }) }));
-  const pinned = { AI: { run: async () => ({}) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  mockGemini(async () => { throw new Error('Gemini must not be called when pinned'); });
+  const pinned = { AI: { run: async () => ({ response: JSON.stringify({ intro: 'خطة', steps: [{ tool_id: 1, goal: 'س', how: 'ص' }], limits: 'للمراجعة' }) }) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
   const r = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS }, ORIGIN, pinned)).json();
-  assert.deepEqual(r, { plan: null, reason: 'off' });
   assert.equal(calls.length, 0, 'Gemini unreachable while pinned');
+  assert.equal(r.plan.provider, 'workers-ai');
+  assert.equal(r.plan.steps[0].tool_id, 1);
+});
+
+test('route: Gemini 429 falls back to Workers AI with the same catalogue validation', async () => {
+  mockGemini(async () => ({ ok: false, status: 429, text: async () => 'quota', headers: { get: () => null } }));
+  const env = { AI: { run: async () => ({ response: JSON.stringify({ steps: [{ tool_id: 1, goal: 'خطوة', how: 'طريقة' }, { tool_id: 99, goal: 'مخترعة', how: 'تُحذف' }] }) }) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  const r = await (await post({ mode: 'research_plan', question: 'سؤال', candidates: CANDS }, ORIGIN, env)).json();
+  assert.equal(r.plan.provider, 'workers-ai');
+  assert.deepEqual(r.plan.steps.map(x => x.tool_id), [1], 'invented tool id dropped on the fallback path too');
 });
 
 test('route: origin/method/JSON guards apply to research_plan', async () => {

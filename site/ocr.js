@@ -1,6 +1,7 @@
 import {validateCase} from './journalist-core.js';
 import {ocrCase} from './journalist-media/ocr-case-core.js';
 import{flagSuspectTokens}from'./journalist-media/ocr-review-core.js';
+import{BACKEND_URL,aiProviderName}from'./rag-config.js';
 // OCR محلي بالكامل داخل المتصفح عبر Tesseract.js — لا يُرفع أي ملف.
 (function () {
   const $ = s => document.querySelector(s);
@@ -105,4 +106,35 @@ import{flagSuspectTokens}from'./journalist-media/ocr-review-core.js';
     try { await navigator.clipboard.writeText(out.value); status.textContent = 'نُسخ النص.'; }
     catch { out.select(); document.execCommand('copy'); status.textContent = 'نُسخ النص.'; }
   });
+})();
+
+// AI structuring of the locally extracted text (2026-10-30 all-tools AI expansion): the OCR
+// engine stays fully local; this optional section sends ONLY the visible text to the guide worker
+// (summarize_text route) for a labeled model overview + verbatim-validated key quotes.
+(function aiSummary(){
+  const box=document.getElementById('ai-box'), btn=document.getElementById('ai-summarize'),
+        st=document.getElementById('ai-status'), res=document.getElementById('ai-result'),
+        prov=document.getElementById('ai-provider'), ov=document.getElementById('ai-overview'),
+        qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes'),
+        out=document.getElementById('out');
+  if(!box||!btn||!out)return;
+  new MutationObserver(()=>{ box.hidden = out.hidden || !out.value.trim(); if(box.hidden){res.hidden=true;st.textContent='';} }).observe(out,{attributes:true,attributeFilter:['hidden']});
+  out.addEventListener('input',()=>{ box.hidden = out.hidden || !out.value.trim(); });
+  btn.onclick=async()=>{
+    const text=out.value.trim();
+    if(text.length<40){st.textContent='النص قصير جدًا للتلخيص.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ التلخيص بالذكاء الاصطناعي…';
+    try{
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text})});
+      const j=r.ok?await r.json():null;
+      const sm=j&&j.summary;
+      if(!sm){st.textContent='التلخيص بالذكاء الاصطناعي غير متاح الآن؛ النص المستخرج محليًا كامل أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;
+      ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل التلخيص بالذكاء الاصطناعي؛ الملخص بصياغة النموذج - راجعه أمام النص والصورة قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ النص المستخرج محليًا كامل أعلاه.'}
+    finally{btn.disabled=false}};
 })();
