@@ -30,8 +30,13 @@
 <section class="box en-src">
 <label for="source-title">عنوان مجموعة المصادر</label><input id="source-title" maxlength="480"><label for="source-url">رابط المصدر (اختياري؛ يطبق على الوثائق المدخلة)</label><input id="source-url" type="url" dir="ltr" maxlength="2000"><label for="src">الوثائق (افصل بينها بسطر ===)</label>
 <textarea id="src" maxlength="120000" placeholder="الصق نص الوثيقة الأولى&#10;===&#10;الصق نص الوثيقة الثانية"></textarea>
-<div class="row" style="margin-top:12px"><button id="extract">استخرج المرشحات</button><button id="export" disabled>نزّل النتيجة JSON</button></div>
+<div class="row" style="margin-top:12px"><button id="extract">استخرج المرشحات</button><button id="ai-extract">استخرج بالذكاء الاصطناعي</button><button id="export" disabled>نزّل النتيجة JSON</button></div>
 <p id="status" role="status"></p>
+</section>
+<section class="box" id="ai-result" hidden>
+<h2>كيانات مستخرجة بالذكاء الاصطناعي</h2>
+<p class="muted">استخراج آلي من النص الملصوق فقط عبر نموذج Gemini؛ يُعرض للمراجعة البشرية وليس تمييز هويات ولا تحققًا من وقائع. <span id="ai-notice"></span></p>
+<div id="ai-list"></div>
 </section>
 <section class="box" id="result" hidden>
 <h2>المرشحات والتزامن</h2>

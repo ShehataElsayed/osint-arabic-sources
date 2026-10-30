@@ -137,6 +137,47 @@ ${list}`;
   const txt = (v, n) => { const t = String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n); return bad.test(t) ? '' : t; };
   return { intro: txt(j.intro, 240), steps, limits: txt(j.limits, 240) };
 }
+
+// AI entity extraction for the entities workbench (user-requested 2026-10-30: "كل الأدوات خليها
+// ذكاء اصطناعي"). Gemini reads ONLY the user's pasted text and returns persons/organizations/
+// places mentioned in it. Every returned name must appear verbatim in the source text (checked
+// after Arabic normalization) - anything else is dropped, so the model can never invent entities.
+// Extraction is not identity resolution and not verification; the page labels it for human review.
+function normAr(t) { return String(t || '').toLowerCase().replace(/[\u064b-\u065f\u0670\u0640]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, ' ').trim(); }
+export async function extractEntities(text, env, f = fetch) {
+  if (cfOnly(env)) return { error: 'off' };
+  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
+  const src = String(text || '').trim().slice(0, 12000);
+  if (src.length < 20) return { error: 'empty' };
+  const prompt = `أنت مستخرج كيانات داخل أداة صحفية عربية. اقرأ النص التالي واستخرج منه الكيانات المذكورة حرفيًا فقط. قواعد صارمة: انسخ كل اسم كما ورد في النص تمامًا دون ترجمة أو إكمال أو تصحيح، ولا تضف أي اسم غير موجود في النص، ولا تستنتج كيانات من معرفتك الخارجية، ولا تذكر أحداثًا أو أحكامًا. أعد JSON فقط بالشكل {"persons":["..."],"organizations":["..."],"places":["..."]} حيث persons أسماء أشخاص، organizations أسماء جهات ومؤسسات وأحزاب وشركات، places أسماء أماكن ومدن ودول. بدون تكرار داخل القائمة الواحدة، وبحد أقصى 30 اسمًا لكل نوع، وإن لم يوجد نوع فأعد له قائمة فارغة.
+النص:
+${src}`;
+  let r;
+  try {
+    r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
+  } catch { return { error: 'neterr' }; }
+  if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status }; }
+  const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const hay = ' ' + normAr(src) + ' ';
+  const keep = (v) => {
+    if (!Array.isArray(v)) return [];
+    const seen = new Set(), out = [];
+    for (const x of v) {
+      const name = String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, 120);
+      const n = normAr(name);
+      if (n.length < 2 || seen.has(n)) continue;
+      if (!hay.includes(n)) continue; // not verbatim in the source: drop
+      seen.add(n); out.push(name);
+      if (out.length >= 30) break;
+    }
+    return out;
+  };
+  const persons = keep(j?.persons), organizations = keep(j?.organizations), places = keep(j?.places);
+  if (!persons.length && !organizations.length && !places.length) return { error: 'filtered' };
+  return { persons, organizations, places };
+}
+
 // Quick news verification for the chat (user-requested 2026-10-30): matches the claim against the
 // Google Fact Check Claim Search API (factchecktools.googleapis.com/v1alpha1/claims:search - free,
 // API-key only, no billing SKU) and lets Gemini summarize ONLY the matched reviews with per-review
@@ -1612,6 +1653,7 @@ export default {
         return json(payload, 200, o);
       } catch { return json({ host, identity: null, identity_status: 'unavailable' }, 200, o); }
     }
+    if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error } : { entities: ee }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     const q = String(b?.question || '').trim().slice(0, 300); if (!q) return json({ error: 'empty' }, 400, o);
