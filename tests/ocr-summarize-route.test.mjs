@@ -65,3 +65,17 @@ test('route: origin/method guards apply to summarize_text', async () => {
   const bad = await post({ mode: 'summarize_text', text: SRC }, 'https://evil.example');
   assert.equal(bad.status, 403);
 });
+
+test('route: overview asserting extraction quality/accuracy is rejected (model never saw the image)', async () => {
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'النص عن حملة تطعيم، ويبدو خاليًا من أخطاء الاستخراج.', key_quotes: [] }) }));
+  const r = await (await post({ mode: 'summarize_text', text: SRC })).json();
+  assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, 'unsupported accuracy assertion fails closed');
+});
+
+test('route: data context prompt frames the input as a SQL TSV result', async () => {
+  let bodySeen = '';
+  mockGemini(async (url, init) => { bodySeen = String(init && init.body || ''); return { ok: true, json: async () => geminiBody({ overview: 'النتيجة تظهر ثلاثة أعمدة وعشرين صفًا.', key_quotes: [] }) }; });
+  const r = await (await post({ mode: 'summarize_text', text: 'col1\tcol2\nقيمة1\tقيمة2\nقيمة3\tقيمة4\nقيمة5\tقيمة6\nقيمة7\tقيمة8', context: 'data' })).json();
+  assert.equal(r.summary.overview, 'النتيجة تظهر ثلاثة أعمدة وعشرين صفًا.');
+  assert.match(bodySeen, /TSV/, 'prompt names the TSV/SQL framing for data context');
+});

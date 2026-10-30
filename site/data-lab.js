@@ -1,4 +1,5 @@
 // مختبر بيانات محلي: SQL كامل على ملفات CSV/TSV/JSON داخل المتصفح عبر DuckDB-WASM — لا يُرفع أي ملف.
+import { BACKEND_URL, aiProviderName } from './rag-config.js';
 import * as duckdb from './duckdb/duckdb-browser.mjs';
 (function () {
   const $ = s => document.querySelector(s);
@@ -90,6 +91,7 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
       resultwrap.hidden = false;
       resultmeta.textContent = 'عدد صفوف النتيجة: ' + rows.length + (rows.length > 500 ? ' (تُعرض أول ٥٠٠ فقط)' : '') + '.';
       lastTSV = [cols.join('\t')].concat(rows.map(r => r.map(v => String(v == null ? '' : v).replace(/[\t\n]/g, ' ')).join('\t'))).join('\n');
+      window.__dlLastTSV = lastTSV; // exposed for the AI-result section (closure-local state)
       copy.hidden = false; status.textContent = 'اكتمل الاستعلام محليًا على جهازك.';
     } catch (e) {
       clearResult(); releaseDB(); previewwrap.hidden = true; // failed imports/queries never reuse incomplete state
@@ -112,4 +114,34 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
     try { await navigator.clipboard.writeText(lastTSV); status.textContent = 'نُسخت النتيجة بصيغة TSV.'; }
     catch { status.textContent = 'تعذّر النسخ التلقائي؛ حدّد الجدول وانسخه يدويًا.'; }
   });
+})();
+
+// AI explanation of the SQL result (2026-10-30 all-tools AI expansion, user «تمام ضيفه ف كل
+// الأدوات»): the query engine stays fully local; this optional section sends ONLY the visible
+// result TSV to the guide worker (summarize_text route, context 'data').
+(function aiResult(){
+  const box=document.getElementById('ai-box'), btn=document.getElementById('ai-summarize'),
+        st=document.getElementById('ai-status'), res=document.getElementById('ai-result'),
+        prov=document.getElementById('ai-provider'), ov=document.getElementById('ai-overview'),
+        qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes'),
+        resultwrap=document.getElementById('resultwrap');
+  if(!box||!btn||!resultwrap)return;
+  new MutationObserver(()=>{ box.hidden = resultwrap.hidden; if(box.hidden){res.hidden=true;st.textContent='';} }).observe(resultwrap,{attributes:true,attributeFilter:['hidden']});
+  btn.onclick=async()=>{
+    const tsv=(typeof window.__dlLastTSV==='string'?window.__dlLastTSV:'').slice(0,11000);
+    if(tsv.trim().length<40){st.textContent='النتيجة قصيرة جدًا للشرح.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ الشرح بالذكاء الاصطناعي…';
+    try{
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text:tsv,context:'data'})});
+      const j=r.ok?await r.json():null;
+      const sm=j&&j.summary;
+      if(!sm){st.textContent='الشرح بالذكاء الاصطناعي غير متاح الآن؛ نتيجتك الكاملة ظاهرة أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;
+      ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل الشرح بالذكاء الاصطناعي؛ الملخص بصياغة النموذج - راجعه أمام النتيجة قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتيجتك الكاملة ظاهرة أعلاه.'}
+    finally{btn.disabled=false}};
 })();
