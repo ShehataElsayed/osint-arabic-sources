@@ -1,4 +1,5 @@
 import {sentences,validateCase} from '../journalist-core.js';
+import {BACKEND_URL, GEMINI_NOTICE} from '../rag-config.js';
 import {claimsCase} from './claims-case-core.js';
 import{missingEvidence}from'./claims-review-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
@@ -84,3 +85,31 @@ $('detect').onclick=()=>{
  say('رُشح '+cand+' ادعاءً من '+sents.length+' جملة. تُعرض '+shown+' بطاقة؛ الجمل محفوظة حرفيًا كما وردت.')};
 $('show-plain').onchange=()=>{if(last)render()};
 $('export').onclick=()=>{if(last)download('claims-review.json',last)};
+
+// AI claim extraction (user-requested 2026-10-30): Gemini lists check-worthy claims, each
+// anchored to a verbatim quote from the pasted text. No truth assessment anywhere - same
+// stance as the local candidacy tool. Unavailable states are shown, never filled in.
+const _el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
+async function aiExtractClaims(){
+ const text=$('src').value.trim();
+ if(text.length<20){say('الصق نصًا لا يقل عن 20 حرفًا أولًا.');return}
+ const btn=$('ai-extract');btn.disabled=true;
+ say('يستخرج الذكاء الاصطناعي الادعاءات من النص…');
+ try{
+  const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'extract_claims',text:text.slice(0,12000)})});
+  const j=r.ok?await r.json():null;
+  const cl=j&&j.claims;
+  if(!Array.isArray(cl)){say('الاستخراج بالذكاء الاصطناعي غير متاح الآن؛ جرّب لاحقًا أو استخدم الترشيح المحلي.');return}
+  const box=$('ai-list');box.replaceChildren();
+  if(!cl.length){box.append(_el('p','لم يجد النموذج ادعاءات قابلة للتحقق في النص.'))}
+  for(const c of cl){
+   const card=_el('div',undefined,'record');
+   card.append(_el('p',c.claim));
+   const q=_el('blockquote',c.quote);card.append(q);
+   box.append(card)}
+  $('ai-notice').textContent=GEMINI_NOTICE;
+  $('ai-result').hidden=false;
+  say('اكتمل الاستخراج بالذكاء الاصطناعي؛ راجع الادعاءات قبل اعتمادها.')}
+ catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الترشيح المحلي ما زال متاحًا.')}
+ finally{btn.disabled=false}}
+$('ai-extract').onclick=aiExtractClaims;
