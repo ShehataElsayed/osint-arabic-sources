@@ -884,6 +884,7 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   const q = String(question || '').trim().slice(0, 400);
   if (!hasChat(env) || !q) return { error: 'off' };
   env._deadline = Date.now() + Math.max(30000, Number(env.PIPELINE_DEADLINE_MS) || 240000);
+  env._ledger = []; // per-question stage ledger (logged by the ask routes for failure diagnosis)
   env._calls = 0; // budget is per question, not per shared env object
   env._exaCalls = 0; // Exa budget is per question too
   const draftP = `أنت مساعد صحفي. أجب عن السؤال التالي إجابة مفصلة طويلة منظمة بالعربية من معرفتك: افتح بخلاصة مباشرة ثم قسّم الإجابة إلى عناوين فرعية وفقرات، وقدّم أمثلة متنوعة من سياقات وجهات مختلفة، وميّز ما هو مؤكد مما هو محل خلاف أو تحديث. إن كان السؤال عن حدث حديث جدًا أو متغير فاذكر ذلك صراحة داخل الإجابة. ثم اذكر من ثلاثة إلى ثمانية مصادر بعنوان كامل ورابط https كامل لصفحة محددة تعرف أنها موجودة فعلًا، ولا تخترع روابط ولا اقتباسات، ولا تذكر صفحات رئيسية أو بوابات عامة بل رابط صفحة المحتوى المحددة، ونوّع جهات النشر بحيث تأتي من نطاقات مستقلة قدر الإمكان. أشر إلى المصدر داخل الإجابة بصيغة [S1] [S2] بحسب ترتيب قائمتك، ولا تشر إلا إلى مصدر ذكرته. أعد JSON فقط: {"answer":"...","claims":["حتى 8 ادعاءات جوهرية قابلة للفحص من الإجابة"],"numbers":["أرقام أو تواريخ مفتاحية"],"time_sensitive":true|false,"sources":[{"name":"العنوان الكامل والجهة","url":"https://..."}]}. السؤال: ${q}`;
