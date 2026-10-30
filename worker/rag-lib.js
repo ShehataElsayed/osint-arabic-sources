@@ -288,7 +288,7 @@ ${src}`;
 // is validated verbatim against the source after Arabic normalization, so no quote can be
 // invented. No fact verification, no corroboration - OCR stays a transcription aid.
 const SUMMARIZE_CONTEXTS = {
-  ocr: 'أنت مساعد تنظيم نصوص داخل أداة OCR عربية. النص التالي استُخرج من صورة وقد يحتوي أخطاء تعرف ضوئي. لم ترَ الصورة الأصلية: لا تحكم أبدًا على جودة الاستخراج أو خلو النص من الأخطاء، وإن بدا مقطع غير مفهوم لغويًا فاذكره كغموض في النص فقط.',
+  ocr: 'أنت مساعد تنظيم نصوص داخل أداة OCR عربية. النص التالي استُخرج من صورة وقد يحتوي أخطاء تعرف ضوئي. لم ترَ الصورة الأصلية إطلاقًا: ممنوع منعًا باتًا أن تشير إلى الصورة الأصلية أو جودتها أو تلفها أو وضوحها، أو أن تنسب أي غموض في النص إلى الصورة أو إلى عملية الاستخراج أو التعرف الضوئي، أو أن تحكم على جودة الاستخراج أو خلو النص من الأخطاء. إن بدا مقطع غير مفهوم لغويًا فاذكره كغموض في النص فقط دون أي تفسير لمصدره.',
   data: 'أنت محلل بيانات داخل مختبر بيانات عربي. النص التالي نتيجة استعلام SQL بصيغة TSV من ملف بيانات المستخدم - ركّز في الملخص على ما تظهره النتيجة فعليًا (أعداد، أعمدة، أطراف القيم، أنماط) ولا تستنتج شيئًا خارجها.',
   generic: 'أنت مساعد تنظيم نصوص داخل أداة مراجعة عربية.',
 };
@@ -309,7 +309,12 @@ ${src}`;
   // The model only saw text, never the source image/data: any claim about extraction quality,
   // accuracy, or error-freeness is unsupported - fail closed rather than show it.
   const unsupported = /خال[يا]*\s*من\s+(اي\s+)?(اخطاء|خطا)|لا\s+(يحتوي|تتضمن|يوجد|توجد)[^.,؛]*خط|بدون اخطاء|دون اخطاء|بلا اخطاء|خلوه من|جوده الاستخراج|دقه الاستخراج|سليم تماما|صحيح تماما/; // matched AFTER Arabic normalization (normAr)
-  if (!overview || bad.test(overview) || unsupported.test(normAr(overview))) return { error: 'filtered' };
+  // OCR only: the model saw extracted text, never the image. Any reference to the original image,
+  // its quality/damage/clarity, or any attribution of garbling to the image or the OCR process is
+  // unsupported by definition - fail closed rather than show it.
+  const ocrUnsupported = /(الصوره|النسخه|الملف)\s+الاصليه?|جوده\s+(الصوره|المسح|الاستخراج)|وضوح\s+الصوره|تلف\s+في\s+الصوره|الصوره\s+[^.,؛]{0,30}تلف|التعرف\s+الضوئي|المسح\s+الضوئي|(بسبب|نتيجه|يعود\s+الي|يرجع\s+الي)[^.,؛]{0,60}(صوره|استخراج|تعرف|مسح)/;
+  const overviewNorm = normAr(overview);
+  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (context === 'ocr' && ocrUnsupported.test(overviewNorm))) return { error: 'filtered' };
   const srcNorm = normAr(src);
   const quotes = [...new Set((Array.isArray(j?.key_quotes) ? j.key_quotes : [])
     .map(q => String(q ?? '').replace(/\s+/g, ' ').trim())
