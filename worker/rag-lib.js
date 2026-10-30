@@ -118,7 +118,8 @@ ${list}`;
   const g = await aiExtractRaw(prompt, env, f);
   if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
   const raw = g.raw;
-  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const j = salvageJson(raw);
+  if (!j) return { error: 'parse' };
   const ids = new Set(cs.map(x => x.id)), seen = new Set(), bad = /https?:|www\./i;
   const steps = (Array.isArray(j?.steps) ? j.steps : [])
     .filter(x => ids.has(Number(x?.tool_id)) && !seen.has(Number(x.tool_id)) && seen.add(Number(x.tool_id))
@@ -130,6 +131,17 @@ ${list}`;
   return { intro: txt(j.intro, 240), steps, limits: txt(j.limits, 240), provider: g.provider };
 }
 
+
+
+// Parse a model JSON response tolerantly: strip code fences, then fall back to the outermost
+// { ... } span - smaller fallback models often wrap JSON in prose. Returns null when no JSON parses.
+function salvageJson(raw) {
+  const t = String(raw || '').replace(/^\s*```(?:json)?|```\s*$/g, '').trim();
+  try { return JSON.parse(t); } catch {}
+  const a = t.indexOf('{'), b = t.lastIndexOf('}');
+  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
+  return null;
+}
 
 // Shared provider path for the extract_* routes (2026-10-30, user asked for AI results, not a
 // provider): Gemini first when pinned gemini-first, with automatic fallback to Workers AI - the
@@ -181,7 +193,8 @@ ${src}`;
   const g = await aiExtractRaw(prompt, env, f);
   if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
   const raw = g.raw;
-  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const j = salvageJson(raw);
+  if (!j) return { error: 'parse' };
   const hay = ' ' + normAr(src) + ' ';
   const keep = (v) => {
     if (!Array.isArray(v)) return [];
@@ -233,7 +246,8 @@ ${src}`;
   const g = await aiExtractRaw(prompt, env, f);
   if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
   const raw = g.raw;
-  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const j = salvageJson(raw);
+  if (!j) return { error: 'parse' };
   const srcNorm = ' ' + normAr(src) + ' ';
   const out = [], seen = new Set();
   for (const x of (Array.isArray(j?.events) ? j.events : [])) {
@@ -281,7 +295,8 @@ ${src}`;
   const g = await aiExtractRaw(prompt, env, f);
   if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
   const raw = g.raw;
-  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const j = salvageJson(raw);
+  if (!j) return { error: 'parse' };
   const bad = /https?:|www\./i;
   const overview = String(j?.overview ?? '').replace(/\s+/g, ' ').trim().slice(0, 600);
   // The model only saw text, never the source image/data: any claim about extraction quality,
@@ -308,7 +323,8 @@ ${src}`;
   const g = await aiExtractRaw(prompt, env, f);
   if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
   const raw = g.raw;
-  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const j = salvageJson(raw);
+  if (!j) return { error: 'parse' };
   const hay = ' ' + normAr(src) + ' ';
   const out = [], seen = new Set();
   for (const x of (Array.isArray(j?.claims) ? j.claims : [])) {
@@ -470,7 +486,8 @@ export async function plan(text, env, f = fetch) {
   const rr = await chatText(prompt, env, f, 0.1, 2048);
   if (rr.error) return { error: rr.error };
   const raw = rr.text || '';
-  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const j = salvageJson(raw);
+  if (!j) return { error: 'parse' };
   return cleanPlan(j) || { error: 'filtered' };
 }
 // Model-answer gate: a JS port of the NewsRAG decision rules applied to the model's own answer.
