@@ -106,3 +106,43 @@ test('route: unparseable model output still fails closed with reason parse', asy
   const r = await (await post({ mode: 'summarize_text', text: SRC }, ORIGIN, env)).json();
   assert.deepEqual(r, { summary: null, reason: 'parse', retry_after: null });
 });
+
+test('route: OCR overview attributing garbling to the original image fails closed', async () => {
+  // The model only ever saw extracted text, never the image: blaming "damage in the original
+  // image" (observed live 2026-10-30) is an unsupported judgment and must be rejected.
+  const blame = 'يبدو أن النص يحتوي على كلمات مكسورة بسبب تلف في الصورة الأصلية.';
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: blame, key_quotes: [] }) }));
+  const r = await (await post({ mode: 'summarize_text', text: SRC, context: 'ocr' })).json();
+  assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null });
+});
+
+test('route: OCR overview referencing the original image or OCR process quality fails closed', async () => {
+  for (const overview of [
+    'جودة الاستخراج جيدة والنص واضح.',
+    'جودة الصورة منخفضة مما أثر على النص.',
+    'قد تكون الأخطاء نتيجة التعرف الضوئي على الحروف.',
+    'النص المستخرج من الصورة الأصلية يحتوي غموضًا.',
+  ]) {
+    mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview, key_quotes: [] }) }));
+    const r = await (await post({ mode: 'summarize_text', text: SRC, context: 'ocr' })).json();
+    assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
+  }
+});
+
+test('route: OCR overview describing text ambiguity WITHOUT a source attribution passes', async () => {
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'النص يحتوي مقاطع غير مفهومة لغويًا وبعض الكلمات غير المكتملة.', key_quotes: ['أعلنت وزارة الصحة المصرية اليوم عن إطلاق حملة تطعيم جديدة في المحافظات.'] }) }));
+  const r = await (await post({ mode: 'summarize_text', text: SRC, context: 'ocr' })).json();
+  assert.equal(r.provider, 'gemini');
+  assert.equal(r.summary.overview, 'النص يحتوي مقاطع غير مفهومة لغويًا وبعض الكلمات غير المكتملة.');
+  assert.equal(r.summary.key_quotes.length, 1);
+});
+
+test('route: data context mentioning damage in the CONTENT is not blocked by the OCR guard', async () => {
+  // The OCR-specific guard must not leak into other contexts: a data summary about damaged goods
+  // is legitimate content description.
+  const dataSrc = 'المنتج\tالحالة\nقمح\tتالف\nأرز\tسليم\nذرة\tتالف\nشعير\tسليم\nعدس\tسليم\nفول\tتالف';
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تظهر النتيجة 6 منتجات، نصفها تالف والنصف سليم.', key_quotes: [] }) }));
+  const r = await (await post({ mode: 'summarize_text', text: dataSrc, context: 'data' })).json();
+  assert.equal(r.provider, 'gemini');
+  assert.equal(r.summary.overview, 'تظهر النتيجة 6 منتجات، نصفها تالف والنصف سليم.');
+});
