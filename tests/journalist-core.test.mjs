@@ -23,3 +23,14 @@ test('sentence boundaries preserve decimal numbers and exact source spans',()=>{
  assert.ok(rows[2].quote.includes('12.50'));
  for(const row of rows)assert.equal(input.slice(row.start,row.end),row.quote);
 });
+
+test('explicit Arabic dates resolve day/month/year; month-only stays ambiguous',()=>{
+ const rows=dateCandidates('بدء التطبيق يوم الجمعة 30 أكتوبر 2026. طُبق في 26 أكتوبر 2023. استمر منذ أبريل الماضي. وُلد في ٥ يناير ١٩٩٠.');
+ assert.equal(rows[0].date,'30 أكتوبر 2026');assert.equal(rows[0].sortDate,'2026-10-30');
+ assert.equal(rows[1].date,'26 أكتوبر 2023');assert.equal(rows[1].sortDate,'2023-10-26');
+ assert.equal(rows[2].date,'أبريل');assert.equal(rows[2].sortDate,'');
+ assert.equal(rows[3].date,'٥ يناير ١٩٩٠');assert.equal(rows[3].sortDate,'1990-01-05');
+ assert.match(rows[0].ambiguity,/تاريخ الحدث/);assert.match(rows[2].ambiguity,/نسبي أو ملتبس/);
+ const bad=dateCandidates('الموعد 32 أكتوبر 2026.');
+ assert.equal(bad[0].sortDate,'');
+});
