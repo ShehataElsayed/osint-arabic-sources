@@ -100,17 +100,14 @@ export async function recommend(query, candidates, env, f = fetch) {
 }
 // Research-plan assistant (user-requested Gemini link, 2026-10-30): builds an ORDERED research plan
 // from the same catalogue candidates as `recommend` - each step names one real catalogue tool, what
-// it achieves, and how to use it for this task, derived from the tool's own description. This route
-// is Gemini-only by explicit product decision (the user asked for a Gemini link for this function):
-// it never silently falls back to another provider - without GEMINI_API_KEY it returns {error:'off'}
-// and the page keeps the established recommend/lexical paths unchanged. The proposal is a plan for
-// review, not executed research and not fact verification. Free-tier safety: per Google's pricing
-// docs a project stays on the free tier (over-quota -> http_429, never a charge) unless billing is
-// explicitly set up in AI Studio; no billing was ever set up for this key's project.
+// it achieves, and how to use it for this task, derived from the tool's own description. Provider:
+// Gemini-first with the shared Workers AI fallback (user's 00:58 «واربط جيمناي مع كامل المنصة»
+// and 20:12 all-tools AI intent; Cloudflare processing already disclosed; the response reports the
+// winning provider). The proposal is a plan for review, not executed research and not fact
+// verification. Free-tier safety: per Google's pricing docs a project stays on the free tier
+// (over-quota -> http_429, never a charge) unless billing is explicitly set up in AI Studio.
 export async function researchPlan(question, candidates, env, f = fetch) {
   const cs = cleanCandidates(candidates);
-  // Gated behind the provider pin like every external call: while AI_PROVIDER=cloudflare (current
-  // production, pending current billing verification of the Gemini project) this route is OFF.
   const q = String(question || '').trim().slice(0, 300);
   if (!q || !cs.length) return { error: 'empty' };
   const list = cs.map(x => `[${x.id}] ${x.name}: ${x.description}`).join('\n');
@@ -118,14 +115,9 @@ export async function researchPlan(question, candidates, env, f = fetch) {
 سؤال المستخدم: ${q}
 الأدوات المتاحة:
 ${list}`;
-  if (cfOnly(env)) return { error: 'off' };
-  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
-  let r;
-  try {
-    r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.2, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
-  } catch { return { error: 'neterr' }; }
-  if (!r.ok) { const ra = Number(r.headers?.get?.('retry-after')) || null; try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status, retry_after: ra }; }
-  const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const g = await aiExtractRaw(prompt, env, f);
+  if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
+  const raw = g.raw;
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const ids = new Set(cs.map(x => x.id)), seen = new Set(), bad = /https?:|www\./i;
   const steps = (Array.isArray(j?.steps) ? j.steps : [])
@@ -135,7 +127,7 @@ ${list}`;
     .map(x => ({ tool_id: Number(x.tool_id), goal: x.goal.replace(/\s+/g, ' ').trim().slice(0, 160), how: x.how.replace(/\s+/g, ' ').trim().slice(0, 400) }));
   if (!steps.length) return { error: 'filtered' };
   const txt = (v, n) => { const t = String(v ?? '').replace(/\s+/g, ' ').trim().slice(0, n); return bad.test(t) ? '' : t; };
-  return { intro: txt(j.intro, 240), steps, limits: txt(j.limits, 240) };
+  return { intro: txt(j.intro, 240), steps, limits: txt(j.limits, 240), provider: g.provider };
 }
 
 
@@ -267,6 +259,32 @@ ${src}`;
   return { events: out, provider: g.provider };
 }
 
+
+
+// AI text structuring for the OCR workbench (same 2026-10-30 expansion): the user has already
+// extracted text LOCALLY with Tesseract; this only summarizes/organizes that text. The overview
+// is model-generated prose (the page labels it as such, never as corroboration); every key quote
+// is validated verbatim against the source after Arabic normalization, so no quote can be
+// invented. No fact verification, no corroboration - OCR stays a transcription aid.
+export async function summarizeText(text, env, f = fetch) {
+  const src = String(text || '').trim().slice(0, 12000);
+  if (src.length < 40) return { error: 'empty' };
+  const prompt = `أنت مساعد تنظيم نصوص داخل أداة OCR عربية. النص التالي استُخرج من صورة وقد يحتوي أخطاء تعرف ضوئي. المطلوب: 1) overview ملخص من جملتين أو ثلاث بصياغتك يصف موضوع النص وأبرز ما ورد فيه، مع الإشارة لأي غموض ظاهر بسبب أخطاء الاستخراج. 2) key_quotes قائمة حتى 5 اقتباسات من أهم الجمل، منسوخة حرفيًا من النص دون أي تغيير أو تصحيح. قواعد صارمة: لا تضف معلومات غير موجودة في النص، ولا تحقق من صحة شيء، ولا تضف روابط أو مصادر خارجية، والاقتباسات حرفية تمامًا كما وردت. أعد JSON فقط بالشكل {"overview":"...","key_quotes":["..."]}.
+النص المستخرج:
+${src}`;
+  const g = await aiExtractRaw(prompt, env, f);
+  if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
+  const raw = g.raw;
+  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const bad = /https?:|www\./i;
+  const overview = String(j?.overview ?? '').replace(/\s+/g, ' ').trim().slice(0, 600);
+  if (!overview || bad.test(overview)) return { error: 'filtered' };
+  const srcNorm = normAr(src);
+  const quotes = [...new Set((Array.isArray(j?.key_quotes) ? j.key_quotes : [])
+    .map(q => String(q ?? '').replace(/\s+/g, ' ').trim())
+    .filter(q => q.length >= 8 && q.length <= 400 && !bad.test(q) && srcNorm.includes(normAr(q))))].slice(0, 5);
+  return { overview, key_quotes: quotes, provider: g.provider };
+}
 
 // AI claim extraction for the claims workbench (same 2026-10-30 expansion). Gemini lists
 // check-worthy factual claims from the pasted text ONLY, each backed by a verbatim quote
@@ -1777,6 +1795,7 @@ export default {
     }
     if (b?.mode === 'extract_claims') { try { const ec = await extractClaims(b.text ?? b.question, env); return json(ec.error ? { claims: null, reason: ec.error, retry_after: ec.retry_after ?? null } : { claims: ec.claims, provider: ec.provider }, 200, o); } catch { return json({ claims: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'extract_events') { try { const ev = await extractEvents(b.text ?? b.question, env); return json(ev.error ? { events: null, reason: ev.error, retry_after: ev.retry_after ?? null } : { events: ev.events, provider: ev.provider }, 200, o); } catch { return json({ events: null, reason: 'err' }, 200, o); } }
+    if (b?.mode === 'summarize_text') { try { const st = await summarizeText(b.text ?? b.question, env); return json(st.error ? { summary: null, reason: st.error, retry_after: st.retry_after ?? null } : { summary: { overview: st.overview, key_quotes: st.key_quotes }, provider: st.provider }, 200, o); } catch { return json({ summary: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error, retry_after: ee.retry_after ?? null } : { entities: { persons: ee.persons, organizations: ee.organizations, places: ee.places }, provider: ee.provider }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
