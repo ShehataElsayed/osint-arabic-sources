@@ -4,3 +4,5 @@
 /* Large imported cases keep the workspace usable on small screens without dropping records. */
 @media(max-width:850px){aside{max-height:70vh;overflow:auto;overscroll-behavior:contain}}
 @media print{aside{max-height:none;overflow:visible}}
+
+input[type=file]::file-selector-button{background:#26351a;color:#d1efa6;border:1px solid #4b6032;border-radius:6px;padding:7px 12px;font:inherit;cursor:pointer}
