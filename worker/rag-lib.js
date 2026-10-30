@@ -51,7 +51,7 @@ async function cfChat(prompt, env, temperature, maxTokens) {
     return txt ? { text: txt } : { error: 'upstream' };
   } catch (e) {
     const m = String((e && e.message) || e || '');
-    return { error: /429|rate|limit|quota|neuron|capacity|throttl/i.test(m) ? 'busy' : 'upstream' };
+    return { error: /429|rate|limit|quota|neuron|capacity|throttl/i.test(m) ? 'busy' : 'upstream', detail: m.slice(0, 160) };
   }
 }
 // One bounded Workers AI embedding batch. Returns one vector per input or null; never throws.
@@ -122,7 +122,7 @@ ${list}`;
   try {
     r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.2, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
   } catch { return { error: 'neterr' }; }
-  if (!r.ok) return { error: 'http_' + r.status };
+  if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status }; }
   const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const ids = new Set(cs.map(x => x.id)), seen = new Set(), bad = /https?:|www\./i;
@@ -310,15 +310,16 @@ async function chatText(prompt, env, f, temperature, maxTokens, jsonMode = true,
           led?.push({ stage, ms: Date.now() - t0, status: 'ok' });
           return { text: txt };
         }
-        led?.push({ stage: stage + '_gemini', ms: Date.now() - t0, status: 'http_' + r.status });
+        const errBody = typeof r.text === 'function' ? await r.text().catch(() => '') : ''; // consume: an unread body holds the connection slot
+        led?.push({ stage: stage + '_gemini', ms: Date.now() - t0, status: 'http_' + r.status, msg: errBody.slice(0, 160) });
         if (!hasCF(env)) return { error: 'http_' + r.status };
       } catch (e) {
-        led?.push({ stage: stage + '_gemini', ms: Date.now() - t0, status: e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'timeout' : 'neterr' });
+        led?.push({ stage: stage + '_gemini', ms: Date.now() - t0, status: e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'timeout' : 'neterr', msg: String((e && e.message) || e || '').slice(0, 160) });
         if (!hasCF(env)) return { error: 'neterr' };
       }
       // Gemini failed and Workers AI is bound: fall back so quota/instability degrades, not breaks.
       const c = await cfChat(prompt, env, temperature, maxTokens);
-      led?.push({ stage, ms: Date.now() - t0, status: 'cf_fallback_' + (c.error || 'ok') });
+      led?.push({ stage, ms: Date.now() - t0, status: 'cf_fallback_' + (c.error || 'ok'), msg: (c.detail || '').slice(0, 160) });
       return c;
     }
     if (hasCF(env)) {
@@ -328,19 +329,19 @@ async function chatText(prompt, env, f, temperature, maxTokens, jsonMode = true,
     }
     if (env.OPENROUTER_API_KEY && env.OPENROUTER_MODEL) {
       r = await f('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${env.OPENROUTER_API_KEY}` }, body: JSON.stringify({ model: env.OPENROUTER_MODEL, messages: [{ role: 'user', content: prompt }], temperature, max_tokens: maxTokens, ...(jsonMode ? { response_format: { type: 'json_object' } } : {}) }), signal: AbortSignal.timeout(to) });
-      if (!r.ok) { led?.push({ stage, ms: Date.now() - t0, status: 'http_' + r.status }); return { error: 'http_' + r.status }; }
+      if (!r.ok) { const errBody = typeof r.text === 'function' ? await r.text().catch(() => '') : ''; led?.push({ stage, ms: Date.now() - t0, status: 'http_' + r.status, msg: errBody.slice(0, 160) }); return { error: 'http_' + r.status }; }
       const j = await r.json();
       led?.push({ stage, ms: Date.now() - t0, status: 'ok' });
       return { text: j.choices?.[0]?.message?.content || '' };
     }
     r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: maxTokens, temperature, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(to) });
-    if (!r.ok) { led?.push({ stage, ms: Date.now() - t0, status: 'http_' + r.status }); return { error: 'http_' + r.status }; }
+    if (!r.ok) { const errBody = typeof r.text === 'function' ? await r.text().catch(() => '') : ''; led?.push({ stage, ms: Date.now() - t0, status: 'http_' + r.status, msg: errBody.slice(0, 160) }); return { error: 'http_' + r.status }; }
     const txt = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
     led?.push({ stage, ms: Date.now() - t0, status: 'ok' });
     return { text: txt };
   } catch (e) {
     const status = e?.name === 'TimeoutError' || e?.name === 'AbortError' ? 'timeout' : 'neterr';
-    led?.push({ stage, ms: Date.now() - t0, status });
+    led?.push({ stage, ms: Date.now() - t0, status, msg: String((e && e.message) || e || '').slice(0, 160) });
     return { error: status };
   }
 }
@@ -409,7 +410,7 @@ export async function embedTexts(texts, env, f = fetch) {
   const model = env.GEMINI_EMBED_MODEL || 'gemini-embedding-001';
   try {
     const r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:batchEmbedContents`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ requests: list.map(t => ({ model: 'models/' + model, content: { parts: [{ text: t }] } })) }), signal: AbortSignal.timeout(20000) });
-    if (!r.ok) return null;
+    if (!r.ok) { try { await r.body?.cancel(); } catch {} return null; }
     const embs = (await r.json()).embeddings || [];
     return embs.length === list.length ? embs.map(e => e.values || []) : null;
   } catch { return null; }
@@ -702,6 +703,7 @@ export async function checkSource(src, claimText, nums, f = fetch, env = {}, alt
     const r = await f(url, { headers: { accept: 'text/html,text/plain', 'user-agent': 'Mozilla/5.0 (compatible; osint-guide-check)' }, redirect: 'follow', signal: AbortSignal.timeout(6000) });
     const ct = r.headers?.get?.('content-type') || 'text/html';
     if (r.ok && /text\/(html|plain)/i.test(ct) && !wikiHost(r.url || url)) rawText = await r.text();
+    else { try { await r.body?.cancel(); } catch {} } // an unread body holds the connection slot for the next fetches
   } catch { /* unreachable: try the search-proxy fallback */ }
   if (!rawText) { const ext = await exaFetchText(url, env, f); if (ext) { rawText = ext; out.via = 'exa'; } }
   if (rawText) {
