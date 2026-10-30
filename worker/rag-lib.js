@@ -159,7 +159,7 @@ async function aiExtractRaw(prompt, env, f) {
       geminiErr = 'parse';
     } else if (r) {
       retryAfter = Number(r.headers?.get?.('retry-after')) || null;
-      let body = ''; try { body = String(await r.text()).slice(0, 300); } catch {}
+      let body = ''; try { body = String(await r.text()).slice(0, 1200); } catch {}
       console.log('extract_gemini_error', r.status, body); // server-side diagnosis only
       geminiErr = 'http_' + r.status;
     }
