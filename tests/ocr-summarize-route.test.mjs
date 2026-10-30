@@ -257,7 +257,12 @@ test('route: image context blocks authenticity/manipulation verdicts, allows mea
   // Proof verb tied to a verdict word still fails closed.
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'القياسات تثبت التعديل بوضوح في هذه الصورة.', key_quotes: [] }) }));
   const linked = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
-  assert.deepEqual(linked, { summary: null, reason: 'filtered', retry_after: null });
+  assert.deepEqual(linked, { summary: null, reason: 'filtered', retry_after: null });  // Boundary regression (caught by the video route test 2026-10-31): without a word boundary
+  // before the negation, «التغيّر» false-matches «غير» and the strip would DELETE this real
+  // verdict before the guard sees it. Finite regression coverage, not a safety guarantee.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'درجات التغيّر تثبت التعديل في هذه الصورة.', key_quotes: [] }) }));
+  const boundary = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.deepEqual(boundary, { summary: null, reason: 'filtered', retry_after: null });
   // Live phrasing 2026-10-31 on image-analysis (parent review): the source only LISTS display
   // layer names (الطبقات البصرية العميقة as available views), yet the overview implied a deep
   // layer analysis («إشارة إلى تحليل طبقات بصرية عميقة»). Executed-analysis claims about
