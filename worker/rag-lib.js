@@ -1118,6 +1118,7 @@ export async function askEvidenceFirst(question, candidates, env, f = fetch) {
   const q = String(question || '').trim().slice(0, 400);
   if (!hasChat(env) || !q) return { error: 'off' };
   env._deadline = Date.now() + Math.max(30000, Number(env.PIPELINE_DEADLINE_MS) || 240000);
+  env._ledger = []; // per-question stage ledger (logged by the ask routes for failure diagnosis)
   env._calls = 0; // budget is per question, not per shared env object
   env._exaCalls = 0; // Exa budget is per question too
   // 1) Query planner: search terms only — never URLs, never an answer. A planner failure still leaves
