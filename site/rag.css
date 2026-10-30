@@ -73,3 +73,4 @@
 
 main:has(.composer-wrap){padding-bottom:calc(var(--composer-h,150px) + 8px)}
 html:has(.composer-wrap){scroll-padding-bottom:calc(var(--composer-h,150px) + 8px)}
+.src-card .srcitem a{color:#8f1d15}.src-card .srcitem .srcmeta{display:block;color:#4e5748;margin:3px 0 4px;font-size:13px}
