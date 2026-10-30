@@ -1,4 +1,4 @@
-<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="description" content="خط زمني تفاعلي محلي: رصد التواريخ الصريحة والنسبية في نصك، تحرير الأحداث، عرضها على محور زمني مرسوم على جهازك، وتنزيلها JSON. لا رفع ولا تحويل تلقائي للتواريخ النسبية."><title>الخط الزمني التفاعلي | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
+<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self'; connect-src 'self' blob: https://osint-rag.egkrkr.workers.dev; object-src 'none'; base-uri 'none'; form-action 'none'"><meta name="description" content="خط زمني تفاعلي محلي: رصد التواريخ الصريحة والنسبية في نصك، تحرير الأحداث، عرضها على محور زمني مرسوم على جهازك، وتنزيلها JSON. لا رفع ولا تحويل تلقائي للتواريخ النسبية."><title>الخط الزمني التفاعلي | دليل المصادر المفتوحة للصحفيين العرب</title><link rel="stylesheet" href="./workbench.css"><link rel="stylesheet" href="./verification.css">
 <link rel="stylesheet" href="./shell.css"><style>.tl-conflict,.tl-gap{background:#faf9f7;color:#191c20;border:1px solid #eee7e1;border-radius:12px;padding:10px 14px;margin:10px 0}.tl-flag{font-weight:700;color:#7a3b06;margin:0 0 6px}.tl-citem{border-top:1px dashed #ddd;padding-top:6px;margin-top:6px}
 .tl-src textarea{width:100%;min-height:130px}
 .tl-cands{display:grid;gap:12px;margin-top:14px}
@@ -22,9 +22,14 @@
 <section class="box tl-src">
 <label for="source-title">عنوان المصدر</label><input id="source-title" maxlength="500"><label for="source-url">رابط المصدر (اختياري)</label><input id="source-url" type="url" dir="ltr" maxlength="2000"><label for="src">نص المصدر</label>
 <textarea id="src" maxlength="30000" placeholder="الصق النص الذي يتضمن تواريخ أو عبارات زمنية"></textarea>
-<div class="row"><button id="detect">ارصد التواريخ للمراجعة</button><button id="export" disabled>نزّل الأحداث JSON</button><label class="btn" for="import">استعد أحداث JSON</label><input id="import" type="file" accept="application/json,.json" hidden></div>
+<div class="row"><button id="detect">ارصد التواريخ للمراجعة</button><button id="ai-extract">استخرج الأحداث بالذكاء الاصطناعي</button><button id="export" disabled>نزّل الأحداث JSON</button><label class="btn" for="import">استعد أحداث JSON</label><input id="import" type="file" accept="application/json,.json" hidden></div>
 <p id="status" role="status"></p>
 <div class="tl-cands" id="cands"></div>
+</section>
+<section class="box" id="ai-result" hidden>
+<h2>أحداث مستخرجة بالذكاء الاصطناعي</h2>
+<p class="muted">استخراج آلي من النص الملصوق فقط عبر نموذج Gemini؛ كل حدث مثبت باقتباس حرفي من النص، والتاريخ الفارغ يعني أن النص لم يحدد تاريخًا قابلًا للحسم. يُعرض للمراجعة البشرية وليس تحققًا من وقائع. <span id="ai-notice"></span></p>
+<div id="ai-list"></div>
 </section>
 <section class="box tl-manual">
 <h2>حدث يدوي</h2>

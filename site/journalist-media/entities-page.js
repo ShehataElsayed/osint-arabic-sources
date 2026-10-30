@@ -1,6 +1,5 @@
 import {sentences,validateCase} from '../journalist-core.js';
-import {BACKEND_URL} from '../rag-config.js';
-import {NOTICE} from '../chat-ui.js';
+import {BACKEND_URL, GEMINI_NOTICE} from '../rag-config.js';
 
 import {entitiesCase} from './entities-case-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
@@ -171,7 +170,7 @@ async function aiExtract(){
    for(const name of arr)wrap.append(el('span',name,'en-chip'));
    box.append(wrap)}
   if(!any){box.append(el('p','لم يجد النموذج كيانات مؤكدة في النص.'))}
-  $('ai-notice').textContent=NOTICE;
+  $('ai-notice').textContent=GEMINI_NOTICE;
   $('ai-result').hidden=false;
   say('اكتمل الاستخراج بالذكاء الاصطناعي؛ راجع الأسماء قبل اعتمادها.')}
  catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الاستخراج المحلي ما زال متاحًا.')}
