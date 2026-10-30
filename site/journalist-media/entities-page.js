@@ -1,4 +1,7 @@
 import {sentences,validateCase} from '../journalist-core.js';
+import {BACKEND_URL} from '../rag-config.js';
+import {NOTICE} from '../chat-ui.js';
+
 import {entitiesCase} from './entities-case-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
@@ -143,3 +146,34 @@ function download(name,out){const a=document.createElement('a'),u=URL.createObje
 for(const id of ['src','source-title','source-url'])$(id).oninput=()=>{corpus=null;entities=[];edges=[];clusters=[];decisions=[];sel=null;$('result').hidden=true;$('export').disabled=true;$('case-export').disabled=true;say('تغير المصدر؛ أُلغيت المرشحات والقرارات السابقة. أعد الاستخراج.');};
 $('case-file').onchange=async()=>{const g=++caseGeneration;caseInvalid=true;baseCase=undefined;try{const f=$('case-file').files[0];if(!f){caseInvalid=false;$('case-status').textContent='قضية جديدة';return}if(f.size>5000000)throw Error('حد القضية5ميجابايت');const v=validateCase(JSON.parse(await f.text()));if(g!==caseGeneration)return;baseCase=v;caseInvalid=false;$('case-status').textContent='قضية مفتوحة محليًا: '+v.title}catch(e){if(g===caseGeneration)$('case-status').textContent='لم تُفتح القضية: '+e.message}};
 $('case-export').onclick=()=>{try{if(caseInvalid)throw Error('القضية غير صالحة أو لم يكتمل فتحها');if(!corpus)throw Error('استخرج أولًا');download('journalist-entities-case.json',entitiesCase(data(),baseCase));$('case-status').textContent='نُزلت نسخة جديدة؛ الأصل وحالات المراجعة السابقة لم تتغير.'}catch(e){$('case-status').textContent='لم تُصدر القضية: '+e.message+'؛ تصدير الرصد الأصلي ما زال متاحًا.'}};
+
+// AI extraction (user-requested 2026-10-30): the same pasted text goes to the guide's worker,
+// which calls Gemini and returns only names that appear verbatim in the source. The local
+// surface extractor above stays untouched and remains the fallback. Results are review aids,
+// never identity resolution or fact checks; unavailable states are shown, never filled in.
+async function aiExtract(){
+ const text=$('src').value.trim();
+ if(text.length<20){say('الصق نصًا لا يقل عن 20 حرفًا أولًا.');return}
+ const btn=$('ai-extract');btn.disabled=true;
+ say('يستخرج الذكاء الاصطناعي الكيانات من النص…');
+ try{
+  const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'extract_entities',text:text.slice(0,12000)})});
+  const j=r.ok?await r.json():null;
+  const e=j&&j.entities;
+  if(!e){say('الاستخراج بالذكاء الاصطناعي غير متاح الآن؛ جرّب لاحقًا أو استخدم الاستخراج المحلي.');return}
+  const box=$('ai-list');box.replaceChildren();
+  const groups=[['أشخاص',e.persons],['جهات',e.organizations],['أماكن',e.places]];
+  let any=false;
+  for(const[label,arr]of groups){
+   if(!Array.isArray(arr)||!arr.length)continue;any=true;
+   const h=el('h3',label+' ('+arr.length+')');box.append(h);
+   const wrap=el('div',undefined,'en-toolbar');
+   for(const name of arr)wrap.append(el('span',name,'en-chip'));
+   box.append(wrap)}
+  if(!any){box.append(el('p','لم يجد النموذج كيانات مؤكدة في النص.'))}
+  $('ai-notice').textContent=NOTICE;
+  $('ai-result').hidden=false;
+  say('اكتمل الاستخراج بالذكاء الاصطناعي؛ راجع الأسماء قبل اعتمادها.')}
+ catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الاستخراج المحلي ما زال متاحًا.')}
+ finally{btn.disabled=false}}
+$('ai-extract').onclick=aiExtract;
