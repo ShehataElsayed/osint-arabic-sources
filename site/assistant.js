@@ -4,7 +4,7 @@
 // إشكاليات، زوايا صحفية، وأدوات مناسبة من الدليل بسبب الاختيار وطريقة الاستخدام.
 import { BACKEND_URL } from './rag-config.js';
 import { buildIndex, search } from './tool-search.js';
-import { buildAskReport } from './assistant-report.js';
+import { buildAskReport, cleanQuote, decodeEntities } from './assistant-report.js';
 import { askResponseProblem, askProblemMessage } from './ask-guard.js';
 
 const $ = id => document.getElementById(id);
@@ -111,8 +111,8 @@ function render(conf, question) {
       row.append(el('span', 'st ' + (c.supported ? 'st-ok' : 'st-no'), c.supported ? 'له سند نصي' : 'لا سند نصي'));
       const body = el('div');
       body.append(el('span', null, c.text));
-      if (c.supported && c.evidence) {
-        const ev = el('blockquote', null, c.evidence); ev.style.cssText = 'margin:4px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px;font-size:14px';
+      if (c.supported && cleanQuote(c.evidence)) {
+        const ev = el('blockquote', null, cleanQuote(c.evidence)); ev.style.cssText = 'margin:4px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px;font-size:14px';
         body.append(ev);
         if (c.source_ref >= 1) { const chip = el('a', 'cite-chip', `[${c.source_ref}]`); chip.href = '#asksrc' + c.source_ref; body.append(chip); }
       }
@@ -127,7 +127,7 @@ function render(conf, question) {
     srcCard.append(el('span', 'badge', srcs.length ? `المصادر المفتوحة (${srcs.length})` : 'المصادر'));
     srcCard.append(el('p', 'note', 'ما يذكره النموذج أو يعثر عليه الاكتشاف الآلي خيوط لا تحققًا: لا يظهر هنا إلا ما فُتح فعلًا وطُابق نصه. الاكتشاف الآلي عينة مجانية محدودة بسقف يقارب عشر صفحات، مصدرًا واحدًا لكل نطاق لتنويع الجهات، وليست مسحًا شاملًا للويب.'));
     const verifiedSrc = [], otherSrc = [];
-    allSrcs.forEach((s, gi) => { if (!s.exists) return; (s.quote ? verifiedSrc : otherSrc).push([s, gi + 1]); });
+    allSrcs.forEach((s, gi) => { if (!s.exists) return; (cleanQuote(s.quote) ? verifiedSrc : otherSrc).push([s, gi + 1]); });
     const srcGroups = [
       [`مصادر داعمة باقتباس حرفي (${verifiedSrc.length})`, verifiedSrc],
       [`مصادر مفتوحة أخرى فُحصت (${otherSrc.length})`, otherSrc],
@@ -138,13 +138,13 @@ function render(conf, question) {
       list.forEach(([s, n]) => {
         const item = el('div'); item.id = 'asksrc' + n;
         item.style.cssText = 'border-inline-start:4px solid ' + TEAL + ';padding:12px 14px;background:#f7faf9;border-radius:10px;margin:10px 0';
-        const a = document.createElement('a'); a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = `[${n}] ${s.title || s.name || s.url}`;
+        const a = document.createElement('a'); a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = `[${n}] ${decodeEntities(s.title || s.name || '') || s.url}`;
         const rel = REL[s.rel] || REL.unknown;
         item.append(a, el('span', 'tier-pill ' + rel[1], rel[0]));
         if (s.discovered) item.append(el('span', 'tier-pill mid', 'اكتشاف آلي'));
         item.append(document.createElement('br'));
-        item.append(el('small', 'note', (s.name && s.name !== s.title ? s.name + ' · ' : '') + provenance(s)));
-        if (s.quote) { const q = el('blockquote', null, s.quote); q.style.cssText = 'margin:8px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px'; item.append(q); }
+        item.append(el('small', 'note', (s.name && s.name !== s.title ? decodeEntities(s.name) + ' · ' : '') + provenance(s)));
+        if (cleanQuote(s.quote)) { const q = el('blockquote', null, cleanQuote(s.quote)); q.style.cssText = 'margin:8px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px'; item.append(q); }
         srcCard.append(item);
       });
     });
@@ -204,7 +204,7 @@ function renderNews(r, box) {
   const card = el('div', 'src-card fade');
   card.append(el('span', 'badge', 'موجز RSS'));
   card.append(el('h3', null, 'أخبار حديثة مرتبطة من موجزات RSS'));
-  const list = el('ol', null, 'plan-steps');
+  const list = el('ol', 'plan-steps');
   for (const it of r.items) {
     const li = el('li');
     const a = el('a', null, it.title); a.href = it.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
@@ -242,7 +242,7 @@ function renderFacts(r, box) {
   } else {
     if (r.coverage === 'en') card.append(el('p', 'note', 'لا توجد مراجعات عربية مطابقة؛ النتائج التالية من مدققين بالإنجليزية (تغطية المدققين العرب محدودة في القاعدة).'));
     if (r.summary) card.append(el('p', null, r.summary));
-    const list = el('ol', null, 'plan-steps');
+    const list = el('ol', 'plan-steps');
     for (const m of r.matches) {
       const li = el('li');
       const a = el('a', null, (m.publisher || 'جهة تحقق') + ': ' + (m.rating || 'بلا تقييم نصي')); a.href = m.url; a.target = '_blank'; a.rel = 'noopener noreferrer';

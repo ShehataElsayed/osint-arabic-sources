@@ -1,5 +1,13 @@
 // Pure Markdown report builders for مساعد NewsRAG. No DOM, no network: fully testable.
 const line = (s = '') => String(s).replace(/\s+/g, ' ').trim();
+
+// Display guards (live defects observed 2026-10-30): never present machine/code-looking fragments
+// as verbatim source quotes, and decode HTML entities that survived upstream title extraction.
+const CODE_LIKE = /throw\s+new|function\s*\(|=>|&&|\|\||[{}<>]|querySelector|getElementById|addEventListener|\.length\)|must be in the format/i;
+export const cleanQuote = q => { q = String(q || '').trim(); return q && !CODE_LIKE.test(q) ? q : ''; };
+export const decodeEntities = (s = '') => String(s)
+  .replace(/&#(x?[0-9a-fA-F]+);/g, (m, g) => { const c = g[0].toLowerCase() === 'x' ? parseInt(g.slice(1), 16) : parseInt(g, 10); return Number.isFinite(c) && c > 0 ? String.fromCodePoint(c) : m; })
+  .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 const DISCLOSURE = 'هذا التقرير ناتج آلي مساعد للتحقق وليس دليل نشر. معرّفات الإحالة تتحقق من وجود المقطع لا من صحة الادعاء. راجع المصادر الأصلية وتواريخها وسياقها قبل أي نشر.';
 
 export function buildRagReport({ question, result, when }) {
@@ -75,7 +83,7 @@ export function buildAskReport({ question, result, catalog, when }) {
     out.push('', '## سند الادعاءات (تطابق نصي، لا إثبات استدلالي)');
     r.claims.forEach(c => {
       out.push(`- [${c.supported ? 'له سند نصي' : 'لا سند نصي'}] ${line(c.text)}`);
-      if (c.supported && c.evidence) out.push(`  السند: "${line(c.evidence)}" (المصدر [${c.source_ref}])`);
+      if (c.supported && cleanQuote(c.evidence)) out.push(`  السند: "${line(cleanQuote(c.evidence))}" (المصدر [${c.source_ref}])`);
     });
   }
   if ((conf.criteria || []).length) {
@@ -86,10 +94,10 @@ export function buildAskReport({ question, result, catalog, when }) {
   if (srcs.length) {
     out.push('', '## المصادر');
     srcs.forEach((s, i) => {
-      out.push(`### [${i + 1}] ${line(s.title || s.name || s.url || s.claimed)}`);
+      out.push(`### [${i + 1}] ${line(decodeEntities(s.title || s.name || '') || s.url || s.claimed)}`);
       out.push(`الجهة: ${TIER_LBL[s.rel] || 'غير مُقيَّمة'} (تصنيف نطاق، لا تقييم دقة) · الحالة: ${s.exists ? 'فُتح وتحقق' : 'تعذر الفتح'} · الرابط: ${s.exists ? s.url : (s.claimed || '—')}`);
       if (s.repaired && s.original) out.push(`صُحّح الرابط من: ${s.original}`);
-      if (s.exists && s.quote) out.push('> ' + line(s.quote));
+      if (s.exists && cleanQuote(s.quote)) out.push('> ' + line(cleanQuote(s.quote)));
       out.push('');
     });
   }
