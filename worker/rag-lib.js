@@ -326,15 +326,20 @@ ${src}`;
     diff: /تلاعب|تزوير|تضليل|تحريف\s+متعمد|نية\s+(التضليل|الخداع)/,
     // Image forensics: these metrics can never prove authenticity, editing, or generation -
     // block verdict-shaped claims, not mere description of the measurements.
-    // Proof tokens only count as a verdict when NOT negated: «لا تثبت» / «ليست اثبات» is the
-    // page's own limits wording (metrics never prove authenticity), not a verdict. Authenticity
-    // words (مزيف/تلاعب/أصلية...) stay blocked even negated - «ليست مزيفة» is still an
-    // authenticity claim the metrics cannot support. Finite negation list, not a promise.
-    image: /مزيف|مزور|تلاعب|فوتوشوب|مولد\s+بال|الصوره\s+(اصلي|حقيقي|معدله)|(?<!(?:لا|لن|لم|ليس|ليست|غير|دون|بدون)\s)(?:تثبت|يثبت|تؤكد|يؤكد|اثبات|إثبات|بيقين)|دليل\s+قاطع/,
+    image: /مزيف|مزور|تلاعب|فوتوشوب|مولد\s+بال|الصوره\s+(اصلي|حقيقي|معدله)|تثبت|يثبت|تؤكد|يؤكد|اثبات|إثبات|بيقين|دليل\s+قاطع/,
   };
   const contextGuard = CONTEXT_GUARDS[context];
   const overviewNorm = normAr(overview);
-  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(overviewNorm))) return { error: 'filtered' };
+  // Image context (observed live 2026-10-31, reason 'filtered' on image-difference): the model
+  // keeps echoing the page's own limits wording («لا تثبت تعديلًا», «ليست دليل تلاعب بمفردها»),
+  // which the absolute guard then blocks. Strip these finite negated-limits constructions before
+  // the guard test; outside them the guard stays absolute - «ليست مزيفة» is an authenticity
+  // verdict the metrics cannot support and stays blocked. Finite list, not a promise.
+  const guardText = context === 'image' ? overviewNorm
+    .replace(/(لا|لن|لم|ليس|ليست|غير|دون|بدون)\s+(تثبت|يثبت|تؤكد|يؤكد|دليل|اثبات|درجه|حكم|مؤشر|برهان|كافي|كافيه)[^.,؛]{0,30}?(تلاعب|تزوير|تزييف|مزيف|مزور|تعديل|تعديلا|اصاله|توليد|فوتوشوب)/g, ' ')
+    .replace(/(لا|لن|لم)\s+(تثبت|يثبت|تؤكد|يؤكد)/g, ' ')
+    : overviewNorm;
+  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(guardText))) return { error: 'filtered' };
   const srcNorm = normAr(src);
   const quotes = [...new Set((Array.isArray(j?.key_quotes) ? j.key_quotes : [])
     .map(q => String(q ?? '').replace(/\s+/g, ' ').trim())
