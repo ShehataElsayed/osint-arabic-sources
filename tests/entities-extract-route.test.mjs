@@ -48,28 +48,28 @@ test('route: no GEMINI_API_KEY or cloudflare pin -> entities null reason off, no
   mockGemini(async () => ({ ok: true, json: async () => ({}) }));
   const env = { AI: { run: async () => ({}) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare' };
   const r = await (await post({ mode: 'extract_entities', text: SRC }, ORIGIN, env)).json();
-  assert.deepEqual(r, { entities: null, reason: 'off' });
+  assert.deepEqual(r, { entities: null, reason: 'off', retry_after: null });
   assert.equal(calls.length, 0, 'no Gemini and no CF call when gated');
 });
 
 test('route: http error, unparseable output, and empty result fail closed with a reason', async () => {
   mockGemini(async () => ({ ok: false, status: 429 }));
   const r429 = await (await post({ mode: 'extract_entities', text: SRC })).json();
-  assert.deepEqual(r429, { entities: null, reason: 'http_429' });
+  assert.deepEqual(r429, { entities: null, reason: 'http_429', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ليس JSON' }] } }] }) }));
   const bad = await (await post({ mode: 'extract_entities', text: SRC })).json();
-  assert.deepEqual(bad, { entities: null, reason: 'parse' });
+  assert.deepEqual(bad, { entities: null, reason: 'parse', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ persons: ['غير موجود إطلاقا'], organizations: [], places: [] }) }));
   const filt = await (await post({ mode: 'extract_entities', text: SRC })).json();
-  assert.deepEqual(filt, { entities: null, reason: 'filtered' });
+  assert.deepEqual(filt, { entities: null, reason: 'filtered', retry_after: null });
 });
 
 test('route: missing or too-short text -> reason empty', async () => {
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ persons: [], organizations: [], places: [] }) }));
   const noT = await (await post({ mode: 'extract_entities' })).json();
-  assert.deepEqual(noT, { entities: null, reason: 'empty' });
+  assert.deepEqual(noT, { entities: null, reason: 'empty', retry_after: null });
   const short = await (await post({ mode: 'extract_entities', text: 'قصير' })).json();
-  assert.deepEqual(short, { entities: null, reason: 'empty' });
+  assert.deepEqual(short, { entities: null, reason: 'empty', retry_after: null });
 });
 
 test('route: origin/method/JSON guards apply to extract_entities', async () => {

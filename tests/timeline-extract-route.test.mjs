@@ -46,7 +46,7 @@ test('route: malformed dates become null and duplicates collapse', async () => {
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ events: [
     { date: '15/01/2026', event: 'صيغة غير ISO', quote: 'في 15 يناير 2026 أعلنت الوزارة القرار.' },
     { date: '2026-03-01', event: 'أ', quote: 'وفي 2026-03-01 بدأ التطبيق فعليًا.' },
-    { date: '2026-03-01', event: 'ب مكرر', quote: 'وفي 2026-03-01 بدأ التطبيق فعليًا.' },
+    { date: '2026-03-01', event: 'أ', quote: 'وفي 2026-03-01 بدأ التطبيق فعليًا.' },
   ] }) }));
   const r = await (await post({ mode: 'extract_events', text: SRC })).json();
   assert.equal(r.events.length, 2);
@@ -58,15 +58,15 @@ test('route: gating, http error, parse failure, and empty result fail closed', a
   mockGemini(async () => ({ ok: true, json: async () => ({}) }));
   const pinned = { AI: { run: async () => ({}) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
   const off = await (await post({ mode: 'extract_events', text: SRC }, ORIGIN, pinned)).json();
-  assert.deepEqual(off, { events: null, reason: 'off' });
+  assert.deepEqual(off, { events: null, reason: 'off', retry_after: null });
   assert.equal(calls.length, 0);
   mockGemini(async () => ({ ok: false, status: 429 }));
-  assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC })).json(), { events: null, reason: 'http_429' });
+  assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC })).json(), { events: null, reason: 'http_429', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ليس JSON' }] } }] }) }));
-  assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC })).json(), { events: null, reason: 'parse' });
+  assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC })).json(), { events: null, reason: 'parse', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ events: [] }) }));
-  assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC })).json(), { events: null, reason: 'filtered' });
-  assert.deepEqual(await (await post({ mode: 'extract_events', text: 'قصير' })).json(), { events: null, reason: 'empty' });
+  assert.deepEqual(await (await post({ mode: 'extract_events', text: SRC })).json(), { events: null, reason: 'filtered', retry_after: null });
+  assert.deepEqual(await (await post({ mode: 'extract_events', text: 'قصير' })).json(), { events: null, reason: 'empty', retry_after: null });
 });
 
 test('route: origin/method/JSON guards apply to extract_events', async () => {
@@ -78,15 +78,41 @@ test('route: origin/method/JSON guards apply to extract_events', async () => {
   assert.equal(malformed.status, 400);
 });
 
-test('route: ISO date with no year evidence in the source is nulled (never fabricated)', async () => {
+test('route: ISO date requires exact correspondence with the anchoring raw expression', async () => {
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ events: [
-    { date: '2099-12-31', event: 'سنة مخترعة', quote: 'وفي 2026-03-01 بدأ التطبيق فعليًا.' },
-    { date: '2026-01-15', event: 'تاريخ مدعوم بشهر مذكور', quote: 'في 15 يناير 2026 أعلنت الوزارة القرار.' },
-    { date: '2026-05-05', event: 'سنة موجودة لكن الاقتباس بلا عبارة زمنية', quote: 'وبعد أسبوعين نشرت الجريدة التفاصيل.' },
+    { date: '2026-01-15', date_raw: '15 يناير 2026', event: 'إعلان القرار', quote: 'في 15 يناير 2026 أعلنت الوزارة القرار.' },
+    { date: '2026-11-29', date_raw: '29 أكتوبر 2026', event: 'شهر خاطئ', quote: 'في 15 يناير 2026 أعلنت الوزارة القرار.' },
+    { date: '2026-03-01', date_raw: '3 يناير 2026', event: 'يوم وشهر متبادلان', quote: 'في 15 يناير 2026 أعلنت الوزارة القرار.' },
+    { date: '2026-02-15', date_raw: 'بعد أسبوعين', event: 'عبارة نسبية', quote: 'وبعد أسبوعين نشرت الجريدة التفاصيل.' },
+    { date: '2026-03-01', date_raw: '1 مارس 2026', event: 'عبارة غير واردة حرفيًا', quote: 'وفي 2026-03-01 بدأ التطبيق فعليًا.' },
+    { date: '2026-03-01', date_raw: '2026-03-01', event: 'ISO حرفي في المصدر', quote: 'وفي 2026-03-01 بدأ التطبيق فعليًا.' },
   ] }) }));
   const r = await (await post({ mode: 'extract_events', text: SRC })).json();
-  assert.equal(r.events.length, 3);
-  assert.equal(r.events[0].date, null, 'year 2099 absent from source: nulled');
-  assert.equal(r.events[1].date, '2026-01-15', 'year in source + month name + day digit in quote: kept');
-  assert.equal(r.events[2].date, null, 'year in source but quote has no digit/month: nulled');
+  const byEvent = Object.fromEntries(r.events.map(e => [e.event, e]));
+  assert.equal(byEvent['إعلان القرار'].date, '2026-01-15', 'exact day/month/year match: kept');
+  assert.equal(byEvent['إعلان القرار'].date_raw, '15 يناير 2026', 'raw expression preserved');
+  assert.equal(byEvent['شهر خاطئ'].date, null, 'raw says October, ISO says November: nulled');
+  assert.equal(byEvent['شهر خاطئ'].date_raw, null, 'raw expression not in source: dropped');
+  assert.equal(byEvent['يوم وشهر متبادلان'].date, null, '3 January vs March 1: nulled');
+  assert.equal(byEvent['عبارة نسبية'].date, null, 'relative expression cannot ground an ISO date');
+  assert.equal(byEvent['عبارة نسبية'].date_raw, 'بعد أسبوعين', 'raw relative text preserved for the reviewer');
+  assert.equal(byEvent['عبارة غير واردة حرفيًا'].date_raw, null, 'raw not verbatim in source: dropped');
+  assert.equal(byEvent['عبارة غير واردة حرفيًا'].date, '2026-03-01', 'ISO literal present in the source still grounds');
+  assert.equal(byEvent['ISO حرفي في المصدر'].date, '2026-03-01');
+});
+
+test('route: 429 passes the provider Retry-After through for honest backoff', async () => {
+  mockGemini(async () => ({ ok: false, status: 429, headers: { get: h => h === 'retry-after' ? '37' : null } }));
+  const r = await (await post({ mode: 'extract_events', text: SRC })).json();
+  assert.equal(r.reason, 'http_429');
+  assert.equal(r.retry_after, 37);
+});
+
+test('route: origin/method/JSON guards apply to extract_events', async () => {
+  const bad = await post({ mode: 'extract_events', text: SRC }, 'https://evil.example');
+  assert.equal(bad.status, 403);
+  const get = await worker.fetch(new Request('https://worker.test/', { method: 'GET', headers: { origin: ORIGIN } }), envGemini());
+  assert.equal(get.status, 405);
+  const malformed = await post('{not json');
+  assert.equal(malformed.status, 400);
 });
