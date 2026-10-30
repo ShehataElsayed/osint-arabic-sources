@@ -1,5 +1,5 @@
 import {validateCase} from '../journalist-core.js';
-import {BACKEND_URL, GEMINI_NOTICE} from '../rag-config.js';
+import {BACKEND_URL, AI_NOTICE, aiProviderName} from '../rag-config.js';
 import {timelineCase,validateEvents} from './timeline-case-core.js';
 import{dateCandidates,validDate}from'../journalist-core.js';
 import{findConflicts,findGaps}from'./timeline-review-core.js';
@@ -126,6 +126,7 @@ async function aiExtractEvents(){
   const ev=j&&j.events;
   if(!Array.isArray(ev)){say('الاستخراج بالذكاء الاصطناعي غير متاح الآن؛ جرّب لاحقًا أو استخدم الرصد المحلي.');return}
   const box=$('ai-list');box.replaceChildren();
+  box.append(el('p',aiProviderName(j&&j.provider),'en-provider'));
   if(!ev.length){box.append(el('p','لم يجد النموذج أحداثًا مؤكدة في النص.'))}
   for(const e of ev){
    const card=el('div',undefined,'record');
@@ -133,7 +134,7 @@ async function aiExtractEvents(){
    card.append(chip,el('p',e.event));
    const q=el('blockquote',e.quote);card.append(q);
    box.append(card)}
-  $('ai-notice').textContent=GEMINI_NOTICE;
+  $('ai-notice').textContent=AI_NOTICE;
   $('ai-result').hidden=false;
   say('اكتمل الاستخراج بالذكاء الاصطناعي؛ راجع الأحداث قبل اعتمادها.')}
  catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الرصد المحلي ما زال متاحًا.')}

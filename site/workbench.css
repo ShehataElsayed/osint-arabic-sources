@@ -31,3 +31,5 @@ details.stage>summary:hover{background:#faf4f1}
 
 /* حافظ على مساحة العنوان عند اكتمال قائمة التنقل. */
 @media(max-width:850px){.top .brand,.top .topnav{width:100%}.top .brand>div{min-width:0}}
+
+.en-provider{font-size:.78rem;color:var(--muted,#9aa);margin:0 0 .5rem}

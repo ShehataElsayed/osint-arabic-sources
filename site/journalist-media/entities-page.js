@@ -1,5 +1,5 @@
 import {sentences,validateCase} from '../journalist-core.js';
-import {BACKEND_URL, GEMINI_NOTICE} from '../rag-config.js';
+import {BACKEND_URL, AI_NOTICE, aiProviderName} from '../rag-config.js';
 
 import {entitiesCase} from './entities-case-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
@@ -161,6 +161,7 @@ async function aiExtract(){
   const e=j&&j.entities;
   if(!e){say('الاستخراج بالذكاء الاصطناعي غير متاح الآن؛ جرّب لاحقًا أو استخدم الاستخراج المحلي.');return}
   const box=$('ai-list');box.replaceChildren();
+  box.append(el('p',aiProviderName(j&&j.provider),'en-provider'));
   const groups=[['أشخاص',e.persons],['جهات',e.organizations],['أماكن',e.places]];
   let any=false;
   for(const[label,arr]of groups){
@@ -170,7 +171,7 @@ async function aiExtract(){
    for(const name of arr)wrap.append(el('span',name,'en-chip'));
    box.append(wrap)}
   if(!any){box.append(el('p','لم يجد النموذج كيانات مؤكدة في النص.'))}
-  $('ai-notice').textContent=GEMINI_NOTICE;
+  $('ai-notice').textContent=AI_NOTICE;
   $('ai-result').hidden=false;
   say('اكتمل الاستخراج بالذكاء الاصطناعي؛ راجع الأسماء قبل اعتمادها.')}
  catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الاستخراج المحلي ما زال متاحًا.')}
