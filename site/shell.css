@@ -48,7 +48,7 @@ body:has(.composer-wrap) footer{padding-bottom:150px}
  .shellnav details{position:static}
  .shellnav .menu{position:fixed;inset-inline:10px;top:auto;bottom:calc(66px + env(safe-area-inset-bottom));max-height:60vh;overflow:auto}
  body{padding-bottom:72px}
- .composer-wrap{bottom:66px!important}
+ .composer-wrap{bottom:calc(var(--shellnav-h,66px))!important}
  body:has(.composer-wrap) footer{padding-bottom:230px}
  .ym-miniplayer{bottom:72px!important}
  .tf-toast{bottom:150px}
