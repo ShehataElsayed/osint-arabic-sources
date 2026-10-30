@@ -139,7 +139,14 @@ function salvageJson(raw) {
   const t = String(raw || '').replace(/^\s*```(?:json)?|```\s*$/g, '').trim();
   try { return JSON.parse(t); } catch {}
   const a = t.indexOf('{'), b = t.lastIndexOf('}');
-  if (a >= 0 && b > a) { try { return JSON.parse(t.slice(a, b + 1)); } catch {} }
+  if (a < 0 || b <= a) return null;
+  const s = t.slice(a, b + 1);
+  try { return JSON.parse(s); } catch {}
+  // Small models often emit literal newlines/tabs inside string values (invalid JSON) and
+  // trailing commas before } or ]; both are safe to repair: raw control chars become spaces
+  // (escaped \n sequences are backslash+n, untouched) and trailing commas are dropped.
+  const repaired = s.replace(/[\u0000-\u001F]+/g, ' ').replace(/,\s*([}\]])/g, '$1');
+  try { return JSON.parse(repaired); } catch {}
   return null;
 }
 
@@ -296,7 +303,7 @@ ${src}`;
   if (g.error) return { error: g.error, retry_after: g.retry_after ?? null };
   const raw = g.raw;
   const j = salvageJson(raw);
-  if (!j) return { error: 'parse' };
+  if (!j) { console.log('summarize_parse_raw', String(raw).slice(0, 800)); return { error: 'parse' }; } // server-side diagnosis only
   const bad = /https?:|www\./i;
   const overview = String(j?.overview ?? '').replace(/\s+/g, ' ').trim().slice(0, 600);
   // The model only saw text, never the source image/data: any claim about extraction quality,

@@ -87,3 +87,22 @@ test('route: prose-wrapped JSON from the fallback model is salvaged', async () =
   const r = await (await post({ mode: 'summarize_text', text: SRC }, ORIGIN, env)).json();
   assert.equal(r.summary.overview, 'ملخص سليم من النص.', 'JSON extracted from surrounding prose');
 });
+
+test('route: model JSON with literal newlines in strings and trailing commas is salvaged', async () => {
+  // Small models (the Workers AI fallback path) often emit invalid JSON: raw newlines inside
+  // Arabic string values and trailing commas. salvageJson repairs both; quotes stay verbatim.
+  const broken = '{"overview":"ملخص أولي\nيتابع على سطرين.",\n"key_quotes":["أعلنت وزارة الصحة المصرية اليوم عن إطلاق حملة تطعيم جديدة في المحافظات.",],\n}';
+  mockGemini(async () => ({ ok: false, status: 429, text: async () => 'quota', headers: { get: () => null } }));
+  const env = { AI: { run: async () => ({ response: broken }) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  const r = await (await post({ mode: 'summarize_text', text: SRC }, ORIGIN, env)).json();
+  assert.equal(r.provider, 'workers-ai');
+  assert.equal(r.summary.overview, 'ملخص أولي يتابع على سطرين.');
+  assert.deepEqual(r.summary.key_quotes, ['أعلنت وزارة الصحة المصرية اليوم عن إطلاق حملة تطعيم جديدة في المحافظات.']);
+});
+
+test('route: unparseable model output still fails closed with reason parse', async () => {
+  mockGemini(async () => ({ ok: false, status: 429, text: async () => 'quota', headers: { get: () => null } }));
+  const env = { AI: { run: async () => ({ response: 'لا أستطيع المساعدة في هذا الطلب' }) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'gemini-first', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
+  const r = await (await post({ mode: 'summarize_text', text: SRC }, ORIGIN, env)).json();
+  assert.deepEqual(r, { summary: null, reason: 'parse', retry_after: null });
+});
