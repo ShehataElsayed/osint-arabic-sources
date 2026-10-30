@@ -199,11 +199,16 @@ ${src}`;
   const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const hay = ' ' + normAr(src) + ' ';
+  const normHay = normAr(src);
+  const MONTHS = /(يناير|فبراير|مارس|ابريل|أبريل|مايو|يونيو|يوليو|اغسطس|أغسطس|سبتمبر|اكتوبر|أكتوبر|نوفمبر|ديسمبر|كانون|شباط|اذار|آذار|نيسان|ايار|أيار|حزيران|تموز|ايلول|أيلول|تشرين)/;
   const out = [], seen = new Set();
   for (const x of (Array.isArray(j?.events) ? j.events : [])) {
     const quote = String(x?.quote ?? '').replace(/\s+/g, ' ').trim().slice(0, 400);
     const event = String(x?.event ?? '').replace(/\s+/g, ' ').trim().slice(0, 240);
-    const d = typeof x?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? x.date : null;
+    let d = typeof x?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? x.date : null;
+    // Format alone does not ground a date: keep it only when its year appears in the source AND
+    // the anchoring quote carries a date expression (digit or month name). Otherwise undated.
+    if (d && (!normHay.includes(d.slice(0, 4)) || !/[0-9٠-٩]/.test(quote) && !MONTHS.test(quote))) d = null;
     const nq = normAr(quote);
     if (nq.length < 8 || !hay.includes(nq)) continue; // quote must be verbatim in the source
     if (!event) continue;
@@ -215,6 +220,44 @@ ${src}`;
   }
   if (!out.length) return { error: 'filtered' };
   return { events: out };
+}
+
+
+// AI claim extraction for the claims workbench (same 2026-10-30 expansion). Gemini lists
+// check-worthy factual claims from the pasted text ONLY, each backed by a verbatim quote
+// validated against the source. It never returns a truth assessment - the page's stance
+// (candidate list for human verification, no verdicts) is preserved end to end.
+export async function extractClaims(text, env, f = fetch) {
+  if (cfOnly(env)) return { error: 'off' };
+  if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
+  const src = String(text || '').trim().slice(0, 12000);
+  if (src.length < 20) return { error: 'empty' };
+  const prompt = `أنت مستخرج ادعاءات داخل أداة مراجعة صحفية عربية. اقرأ النص التالي واستخرج منه الادعاءات الواقعية القابلة للتحقق (أرقام، أحداث، تصريحات منسوبة، قرارات، إحصاءات). قواعد صارمة: لكل ادعاء اكتب claim صياغة قصيرة محايدة للادعاء كما يفهم من النص فقط، وانسخ quote الجملة من النص كما وردت حرفيًا دون أي تغيير. لا تحكم أبدًا على صدق الادعاء أو كذبه، ولا تضف ادعاءً غير موجود في النص، ولا تستنتج من معرفتك الخارجية، وتجاهل الآراء والتمنيات والتوقعات غير القابلة للتحقق. أعد JSON فقط بالشكل {"claims":[{"claim":"...","quote":"..."}]} بحد أقصى 20 ادعاءً، وإن لم توجد ادعاءات قابلة للتحقق فأعد قائمة فارغة.
+النص:
+${src}`;
+  let r;
+  try {
+    r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
+  } catch { return { error: 'neterr' }; }
+  if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status }; }
+  const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
+  let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
+  const hay = ' ' + normAr(src) + ' ';
+  const out = [], seen = new Set();
+  for (const x of (Array.isArray(j?.claims) ? j.claims : [])) {
+    const quote = String(x?.quote ?? '').replace(/\s+/g, ' ').trim().slice(0, 400);
+    const claim = String(x?.claim ?? '').replace(/\s+/g, ' ').trim().slice(0, 300);
+    const nq = normAr(quote);
+    if (nq.length < 8 || !hay.includes(nq)) continue; // quote must be verbatim in the source
+    if (!claim) continue;
+    if (/صدق|صحيح|كاذب|مزيف|مضلل|حقيقي/.test(claim)) continue; // smuggled verdict: drop
+    if (seen.has(nq)) continue;
+    seen.add(nq);
+    out.push({ claim, quote });
+    if (out.length >= 20) break;
+  }
+  if (!out.length) return { error: 'filtered' };
+  return { claims: out };
 }
 
 // Quick news verification for the chat (user-requested 2026-10-30): matches the claim against the
@@ -1692,6 +1735,7 @@ export default {
         return json(payload, 200, o);
       } catch { return json({ host, identity: null, identity_status: 'unavailable' }, 200, o); }
     }
+    if (b?.mode === 'extract_claims') { try { const ec = await extractClaims(b.text ?? b.question, env); return json(ec.error ? { claims: null, reason: ec.error } : { claims: ec.claims }, 200, o); } catch { return json({ claims: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'extract_events') { try { const ev = await extractEvents(b.text ?? b.question, env); return json(ev.error ? { events: null, reason: ev.error } : { events: ev.events }, 200, o); } catch { return json({ events: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error } : { entities: ee }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }

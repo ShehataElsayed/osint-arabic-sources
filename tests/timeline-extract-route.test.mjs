@@ -77,3 +77,16 @@ test('route: origin/method/JSON guards apply to extract_events', async () => {
   const malformed = await post('{not json');
   assert.equal(malformed.status, 400);
 });
+
+test('route: ISO date with no year evidence in the source is nulled (never fabricated)', async () => {
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ events: [
+    { date: '2099-12-31', event: 'سنة مخترعة', quote: 'وفي 2026-03-01 بدأ التطبيق فعليًا.' },
+    { date: '2026-01-15', event: 'تاريخ مدعوم بشهر مذكور', quote: 'في 15 يناير 2026 أعلنت الوزارة القرار.' },
+    { date: '2026-05-05', event: 'سنة موجودة لكن الاقتباس بلا عبارة زمنية', quote: 'وبعد أسبوعين نشرت الجريدة التفاصيل.' },
+  ] }) }));
+  const r = await (await post({ mode: 'extract_events', text: SRC })).json();
+  assert.equal(r.events.length, 3);
+  assert.equal(r.events[0].date, null, 'year 2099 absent from source: nulled');
+  assert.equal(r.events[1].date, '2026-01-15', 'year in source + month name + day digit in quote: kept');
+  assert.equal(r.events[2].date, null, 'year in source but quote has no digit/month: nulled');
+});
