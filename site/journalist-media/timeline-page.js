@@ -129,7 +129,7 @@ async function aiExtractEvents(){
   if(!ev.length){box.append(el('p','لم يجد النموذج أحداثًا مؤكدة في النص.'))}
   for(const e of ev){
    const card=el('div',undefined,'record');
-   const chip=el('span',e.date||'غير مؤرخ','en-chip');
+   const chip=el('span',e.date||e.date_raw||'غير مؤرخ','en-chip');
    card.append(chip,el('p',e.event));
    const q=el('blockquote',e.quote);card.append(q);
    box.append(card)}

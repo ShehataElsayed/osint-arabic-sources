@@ -52,15 +52,15 @@ test('route: gating, http error, parse failure, empty text and empty result fail
   calls = [];
   mockGemini(async () => ({ ok: true, json: async () => ({}) }));
   const pinned = { AI: { run: async () => ({}) }, CF_AI_MODEL: '@cf/qwen/qwen3-30b-a3b-fp8', AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'test-key', GEMINI_MODEL: 'gemini-3.8-flash' };
-  assert.deepEqual(await (await post({ mode: 'extract_claims', text: SRC }, ORIGIN, pinned)).json(), { claims: null, reason: 'off' });
+  assert.deepEqual(await (await post({ mode: 'extract_claims', text: SRC }, ORIGIN, pinned)).json(), { claims: null, reason: 'off', retry_after: null });
   assert.equal(calls.length, 0);
   mockGemini(async () => ({ ok: false, status: 500 }));
-  assert.deepEqual(await (await post({ mode: 'extract_claims', text: SRC })).json(), { claims: null, reason: 'http_500' });
+  assert.deepEqual(await (await post({ mode: 'extract_claims', text: SRC })).json(), { claims: null, reason: 'http_500', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ليس JSON' }] } }] }) }));
-  assert.deepEqual(await (await post({ mode: 'extract_claims', text: SRC })).json(), { claims: null, reason: 'parse' });
-  assert.deepEqual(await (await post({ mode: 'extract_claims', text: 'قصير' })).json(), { claims: null, reason: 'empty' });
+  assert.deepEqual(await (await post({ mode: 'extract_claims', text: SRC })).json(), { claims: null, reason: 'parse', retry_after: null });
+  assert.deepEqual(await (await post({ mode: 'extract_claims', text: 'قصير' })).json(), { claims: null, reason: 'empty', retry_after: null });
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ claims: [] }) }));
-  assert.deepEqual(await (await post({ mode: 'extract_claims', text: SRC })).json(), { claims: null, reason: 'filtered' });
+  assert.deepEqual(await (await post({ mode: 'extract_claims', text: SRC })).json(), { claims: null, reason: 'filtered', retry_after: null });
 });
 
 test('route: origin/method/JSON guards apply to extract_claims', async () => {

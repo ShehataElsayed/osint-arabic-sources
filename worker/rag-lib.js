@@ -124,7 +124,7 @@ ${list}`;
   try {
     r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.2, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
   } catch { return { error: 'neterr' }; }
-  if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status }; }
+  if (!r.ok) { const ra = Number(r.headers?.get?.('retry-after')) || null; try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status, retry_after: ra }; }
   const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const ids = new Set(cs.map(x => x.id)), seen = new Set(), bad = /https?:|www\./i;
@@ -156,7 +156,7 @@ ${src}`;
   try {
     r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 2048, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
   } catch { return { error: 'neterr' }; }
-  if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status }; }
+  if (!r.ok) { const ra = Number(r.headers?.get?.('retry-after')) || null; try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status, retry_after: ra }; }
   const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const hay = ' ' + normAr(src) + ' ';
@@ -180,42 +180,61 @@ ${src}`;
 
 
 // AI event extraction for the timeline workbench (same 2026-10-30 user expansion). Every event
-// must carry a quote copied verbatim from the source (validated after Arabic normalization), so
-// the model can summarize a date+event but can never anchor it to text that is not there. A null
-// date means the source gave no clear date; the page renders that as undated, never a guess.
+// must carry a quote copied verbatim from the source (validated after Arabic normalization).
+// A resolved ISO date is kept ONLY when every component corresponds exactly to the anchoring
+// raw date expression from the source (ISO literal in the text, or an exact day/month/year
+// match against the parsed raw expression). Anything weaker keeps the raw text and nulls the
+// ISO - a formatted date is never evidence of a grounded one.
+const AR_DIGITS = '٠١٢٣٤٥٦٧٨٩';
+function arToLat(t) { return String(t || '').replace(/[٠-٩]/g, c => String(AR_DIGITS.indexOf(c))); }
+const MONTHNUM = { 'يناير': 1, 'فبراير': 2, 'مارس': 3, 'ابريل': 4, 'أبريل': 4, 'مايو': 5, 'يونيو': 6, 'يوليو': 7, 'اغسطس': 8, 'أغسطس': 8, 'سبتمبر': 9, 'اكتوبر': 10, 'أكتوبر': 10, 'نوفمبر': 11, 'ديسمبر': 12, 'كانون الثاني': 1, 'كانون ثاني': 1, 'شباط': 2, 'اذار': 3, 'آذار': 3, 'نيسان': 4, 'ايار': 5, 'أيار': 5, 'حزيران': 6, 'تموز': 7, 'آب': 8, 'اب': 8, 'ايلول': 9, 'أيلول': 9, 'تشرين الأول': 10, 'تشرين اول': 10, 'تشرين الثاني': 11, 'تشرين ثاني': 11 };
+function groundDate(iso, rawNorm, srcNorm) {
+  if (srcNorm.includes(iso)) return true; // the exact ISO string is itself in the source
+  const text = arToLat(rawNorm);
+  const [Y, M, D] = iso.split('-').map(Number);
+  let m = text.match(/(\d{1,2})\s+([ء-ي]+(?:\s+[ء-ي]+)?)\s+(\d{4})/);
+  if (m) {
+    const mon = MONTHNUM[m[2]] ?? MONTHNUM[m[2].replace(/^ال/, '')];
+    return !!mon && +m[1] === D && mon === M && +m[3] === Y;
+  }
+  m = text.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})/);
+  if (m) return +m[1] === D && +m[2] === M && +m[3] === Y;
+  return false; // relative or unparseable expression: no exact correspondence
+}
 export async function extractEvents(text, env, f = fetch) {
   if (cfOnly(env)) return { error: 'off' };
   if (!env?.GEMINI_API_KEY || !env?.GEMINI_MODEL) return { error: 'off' };
   const src = String(text || '').trim().slice(0, 12000);
   if (src.length < 20) return { error: 'empty' };
-  const prompt = `أنت مستخرج أحداث داخل أداة خط زمني صحفية عربية. اقرأ النص التالي واستخرج الأحداث المذكورة فيه. قواعد صارمة: لكل حدث انسخ quote جملة واحدة من النص كما وردت حرفيًا دون أي تغيير تدعم الحدث، واكتب event وصفًا قصيرًا محايدًا للحدث من جملة المصدر فقط، وdate بصيغة YYYY-MM-DD فقط إذا حددت الجملة أو النص التاريخ صراحة أو بعبارة زمنية قابلة للحسم من سياق النص وحده، وإلا اجعل date قيمة null. لا تضف حدثًا غير موجود في النص، ولا تستنتج تواريخ من معرفتك الخارجية، ولا تذكر أحكامًا أو تقييمات. أعد JSON فقط بالشكل {"events":[{"date":"YYYY-MM-DD"|null,"event":"...","quote":"..."}]} بحد أقصى 20 حدثًا، وإن لم توجد أحداث فأعد قائمة فارغة.
+  const prompt = `أنت مستخرج أحداث داخل أداة خط زمني صحفية عربية. اقرأ النص التالي واستخرج الأحداث المذكورة فيه. قواعد صارمة: لكل حدث انسخ quote جملة واحدة من النص كما وردت حرفيًا دون أي تغيير تدعم الحدث، واكتب event وصفًا قصيرًا محايدًا للحدث من جملة المصدر فقط. وإن ورد في النص تاريخ صريح للحدث (عبارة مثل «15 يناير 2026» أو «2026-03-01» أو «01/03/2026») فانسخ العبارة كما وردت حرفيًا في date_raw واكتب date مقابلها بصيغة YYYY-MM-DD بنفس اليوم والشهر والسنة تمامًا، وإن لم توجد عبارة تاريخ صريحة فاجعل date و date_raw قيمة null ولا تستنتج تاريخًا من عبارات نسبية مثل «بعد أسبوعين» ولا من معرفتك الخارجية. لا تضف حدثًا غير موجود في النص، ولا تذكر أحكامًا أو تقييمات. أعد JSON فقط بالشكل {"events":[{"date":"YYYY-MM-DD"|null,"date_raw":"..."|null,"event":"...","quote":"..."}]} بحد أقصى 20 حدثًا، وإن لم توجد أحداث فأعد قائمة فارغة.
 النص:
 ${src}`;
   let r;
   try {
     r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
   } catch { return { error: 'neterr' }; }
-  if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status }; }
+  if (!r.ok) { const ra = Number(r.headers?.get?.('retry-after')) || null; try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status, retry_after: ra }; }
   const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
-  const hay = ' ' + normAr(src) + ' ';
-  const normHay = normAr(src);
-  const MONTHS = /(يناير|فبراير|مارس|ابريل|أبريل|مايو|يونيو|يوليو|اغسطس|أغسطس|سبتمبر|اكتوبر|أكتوبر|نوفمبر|ديسمبر|كانون|شباط|اذار|آذار|نيسان|ايار|أيار|حزيران|تموز|ايلول|أيلول|تشرين)/;
+  const srcNorm = ' ' + normAr(src) + ' ';
   const out = [], seen = new Set();
   for (const x of (Array.isArray(j?.events) ? j.events : [])) {
     const quote = String(x?.quote ?? '').replace(/\s+/g, ' ').trim().slice(0, 400);
     const event = String(x?.event ?? '').replace(/\s+/g, ' ').trim().slice(0, 240);
-    let d = typeof x?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? x.date : null;
-    // Format alone does not ground a date: keep it only when its year appears in the source AND
-    // the anchoring quote carries a date expression (digit or month name). Otherwise undated.
-    if (d && (!normHay.includes(d.slice(0, 4)) || !/[0-9٠-٩]/.test(quote) && !MONTHS.test(quote))) d = null;
+    let dateRaw = String(x?.date_raw ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || null;
     const nq = normAr(quote);
-    if (nq.length < 8 || !hay.includes(nq)) continue; // quote must be verbatim in the source
+    if (nq.length < 8 || !srcNorm.includes(nq)) continue; // quote must be verbatim in the source
     if (!event) continue;
-    const key = (d || '') + '|' + nq;
+    if (dateRaw && !srcNorm.includes(normAr(dateRaw))) dateRaw = null; // raw expression must be verbatim too
+    let d = typeof x?.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? x.date : null;
+    if (d) {
+      const grounded = nq.includes(d) || (dateRaw && groundDate(d, normAr(dateRaw), srcNorm));
+      if (!grounded) d = null; // exact correspondence or nothing
+    }
+    const key = (d || dateRaw || '') + '|' + nq + '|' + normAr(event);
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ date: d, event, quote });
+    out.push({ date: d, date_raw: dateRaw, event, quote });
     if (out.length >= 20) break;
   }
   if (!out.length) return { error: 'filtered' };
@@ -239,7 +258,7 @@ ${src}`;
   try {
     r = await f(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(env.GEMINI_MODEL)}:generateContent`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': env.GEMINI_API_KEY }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: 4096, temperature: 0.1, responseMimeType: 'application/json' } }), signal: AbortSignal.timeout(45000) });
   } catch { return { error: 'neterr' }; }
-  if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status }; }
+  if (!r.ok) { const ra = Number(r.headers?.get?.('retry-after')) || null; try { await r.body?.cancel(); } catch {} return { error: 'http_' + r.status, retry_after: ra }; }
   const raw = (await r.json()).candidates?.[0]?.content?.parts?.[0]?.text || '';
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const hay = ' ' + normAr(src) + ' ';
@@ -1735,9 +1754,9 @@ export default {
         return json(payload, 200, o);
       } catch { return json({ host, identity: null, identity_status: 'unavailable' }, 200, o); }
     }
-    if (b?.mode === 'extract_claims') { try { const ec = await extractClaims(b.text ?? b.question, env); return json(ec.error ? { claims: null, reason: ec.error } : { claims: ec.claims }, 200, o); } catch { return json({ claims: null, reason: 'err' }, 200, o); } }
-    if (b?.mode === 'extract_events') { try { const ev = await extractEvents(b.text ?? b.question, env); return json(ev.error ? { events: null, reason: ev.error } : { events: ev.events }, 200, o); } catch { return json({ events: null, reason: 'err' }, 200, o); } }
-    if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error } : { entities: ee }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
+    if (b?.mode === 'extract_claims') { try { const ec = await extractClaims(b.text ?? b.question, env); return json(ec.error ? { claims: null, reason: ec.error, retry_after: ec.retry_after ?? null } : { claims: ec.claims }, 200, o); } catch { return json({ claims: null, reason: 'err' }, 200, o); } }
+    if (b?.mode === 'extract_events') { try { const ev = await extractEvents(b.text ?? b.question, env); return json(ev.error ? { events: null, reason: ev.error, retry_after: ev.retry_after ?? null } : { events: ev.events }, 200, o); } catch { return json({ events: null, reason: 'err' }, 200, o); } }
+    if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error, retry_after: ee.retry_after ?? null } : { entities: ee }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     const q = String(b?.question || '').trim().slice(0, 300); if (!q) return json({ error: 'empty' }, 400, o);
