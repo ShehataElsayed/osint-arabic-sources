@@ -1,3 +1,4 @@
+import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import {validateCase} from '../journalist-core.js';
 import {versionsCase} from './versions-case-core.js';
 import{numberChanges}from'./versions-numbers-core.js';
@@ -111,7 +112,7 @@ $('compare').onclick=()=>{
    const nw=el('div',undefined,'vn-new');nw.textContent=c.newText;
    card.append(old,nw);cbox.append(card)}}
  else cbox.hidden=true;
- $('result').hidden=false;
+ $('result').hidden=false;document.getElementById('ai-box')&&(document.getElementById('ai-box').hidden=false);
  last={format:'versions-diff-v1',sources:[{text:rawA,title:$('title-a').value,url:$('url-a').value},{text:rawB,title:$('title-b').value,url:$('url-b').value}],options:{ignoreWhitespace:ign},stats:{...st,similarityPct:sim},limits:'Line-based comparison; moved paragraphs appear as delete+add. Word highlights are approximate token matches.',
   ops:ops.map(o=>({type:o.t,a:o.a!==undefined?A[o.a]:undefined,b:o.b!==undefined?B[o.b]:undefined,aLine:o.a!==undefined?o.a+1:undefined,bLine:o.b!==undefined?o.b+1:undefined}))};
  $('export').disabled=false;$('case-export').disabled=false;
@@ -120,3 +121,32 @@ $('compare').onclick=()=>{
 $('export').onclick=()=>{if(!last)return;
  const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(last,null,2)],{type:'application/json'}));
  a.href=u;a.download='versions-diff.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
+
+// AI summary of the visible result (2026-10-30 all-tools AI expansion, user «تمام ضيفه ف كل
+// الأدوات»): the tool's processing stays fully local; this optional section sends ONLY the visible
+// result text to the guide worker (summarize_text route, context 'diff'). الملخص يصف ما تغيّر فقط دون افتراض نية.
+(function aiSummary(){
+  const box=document.getElementById('ai-box'), btn=document.getElementById('ai-summarize'),
+        st=document.getElementById('ai-status'), res=document.getElementById('ai-result'),
+        prov=document.getElementById('ai-provider'), ov=document.getElementById('ai-overview'),
+        qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes');
+  if(!box||!btn)return;
+  new MutationObserver(()=>{if(document.getElementById('result').hidden){box.hidden=true;res.hidden=true;st.textContent=''}}).observe(document.getElementById('result'),{attributes:true,attributeFilter:['hidden']});
+  btn.onclick=async()=>{
+    const text=(document.getElementById('result').innerText).slice(0,11000);
+    if(text.trim().length<40){st.textContent='المحتوى أقصر من أن يلخّص.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ التلخيص بالذكاء الاصطناعي…';
+    try{
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text,context:'diff'})});
+      const j=r.ok?await r.json():null;
+      const sm=j&&j.summary;
+      if(!sm){st.textContent='التلخيص بالذكاء الاصطناعي غير متاح الآن؛ نتيجتك الكاملة ظاهرة أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;
+      ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل التلخيص بالذكاء الاصطناعي؛ الملخص بصياغة النموذج - راجعه أمام النتيجة قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتيجتك الكاملة ظاهرة أعلاه.'}
+    finally{btn.disabled=false}};
+})();
