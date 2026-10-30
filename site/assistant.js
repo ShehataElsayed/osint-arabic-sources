@@ -14,6 +14,7 @@ const TEAL = '#1b7a4a', AMBER = '#b88932', RED = '#9b2218', NAVY = '#102735';
 const BAND = { high: { label: 'تغطية فحوص مرتفعة', color: TEAL }, mid: { label: 'تغطية فحوص متوسطة', color: AMBER }, low: { label: 'تغطية فحوص منخفضة', color: RED } }; // وصف تغطية الفحوص، لا حكم على صحة الإجابة
 const REL = { very_high: ['جهة رسمية — تصنيف نطاق', 'tier-official'], high: ['جهة معروفة — تصنيف نطاق', 'tier-news'], medium: ['هوية موثقة جزئيًا', 'tier-academic'], unknown: ['غير مُقيَّمة', 'tier-unknown'] };
 const TIER_TXT = { official: 'نطاق رسمي', news: 'موقع إخباري', academic: 'موقع أكاديمي', unknown: 'نطاق غير مصنف' };
+const relOf = s => s.tier === 'official' ? 'very_high' : (s.tier === 'news' || s.tier === 'academic') ? 'high' : (s.identity && s.identity.age_years != null && s.identity.age_years >= 5 && (s.page?.site_name || s.page?.has_about || s.page?.has_contact || s.identity.registrant)) ? 'medium' : 'unknown'; // mirrors worker reliabilityOf
 function provenance(s) {
   const parts = [TIER_TXT[s.tier] || TIER_TXT.unknown];
   if (s.identity && s.identity.age_years != null) parts.push(`مسجل منذ ${s.identity.age_years} ${s.identity.age_years > 2 ? 'سنوات' : 'سنة'}`);
@@ -21,6 +22,8 @@ function provenance(s) {
   if (s.page && s.page.has_about) parts.push('له صفحة تعريف');
   if (s.repaired) parts.push('صُحّح الرابط من نفس الموقع');
   if (s.by_search) parts.push('وُجد ببحث مستقل');
+  if (s.identity_status === 'skipped_budget') parts.push('فحص هوية النطاق لم يكتمل لضغط الطلبات — يُستكمل الآن');
+  if (s.repair_skipped) parts.push('لم تُحاول استعادة الرابط لضغط الطلبات');
   return parts.join(' · ');
 }
 const CRIT_DOT = s => s >= 1 ? 'dot-1' : s >= 0.5 ? 'dot-half' : 'dot-0';
@@ -132,6 +135,7 @@ function render(conf, question) {
       [`مصادر داعمة باقتباس حرفي (${verifiedSrc.length})`, verifiedSrc],
       [`مصادر مفتوحة أخرى فُحصت (${otherSrc.length})`, otherSrc],
     ];
+    const lazyIds = [];
     srcGroups.forEach(([label, list]) => {
       if (!list.length) return;
       if (srcGroups.filter(g => g[1].length).length > 1) { const gh = el('h4', null, label); gh.style.cssText = 'margin:14px 0 4px;font-size:15px'; srcCard.append(gh); }
@@ -140,13 +144,24 @@ function render(conf, question) {
         item.style.cssText = 'border-inline-start:4px solid ' + TEAL + ';padding:12px 14px;background:#f7faf9;border-radius:10px;margin:10px 0';
         const a = document.createElement('a'); a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = `[${n}] ${decodeEntities(s.title || s.name || '') || s.url}`;
         const rel = REL[s.rel] || REL.unknown;
-        item.append(a, el('span', 'tier-pill ' + rel[1], rel[0]));
+        const pill = el('span', 'tier-pill ' + rel[1], rel[0]);
+        item.append(a, pill);
         if (s.discovered) item.append(el('span', 'tier-pill mid', 'اكتشاف آلي'));
         item.append(document.createElement('br'));
-        item.append(el('small', 'srcmeta', (s.name && s.name !== s.title ? decodeEntities(s.name) + ' · ' : '') + provenance(s) + (s.published_at ? ' · نُشر: ' + s.published_at : '')));
+        const meta = el('small', 'srcmeta', (s.name && s.name !== s.title ? decodeEntities(s.name) + ' · ' : '') + provenance(s) + (s.published_at ? ' · نُشر: ' + s.published_at : ''));
+        item.append(meta);
+        if (SERVER && s.exists && s.identity_status === 'skipped_budget' && s.host) lazyIds.push({ s, meta, pill });
         if (cleanQuote(s.quote)) { const q = el('blockquote', null, cleanQuote(s.quote)); q.style.cssText = 'margin:8px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px'; item.append(q); }
         srcCard.append(item);
       });
+    });
+    lazyIds.forEach(({ s, meta, pill }) => {
+      post({ mode: 'source_identity', host: s.host }).then(d => {
+        if (!d || !d.identity) { meta.textContent = meta.textContent.replace('يُستكمل الآن', 'تعذّر استكماله'); return; }
+        s.identity = d.identity; s.identity_status = 'checked';
+        const nr = REL[relOf(s)] || REL.unknown; pill.className = 'tier-pill ' + nr[1]; pill.textContent = nr[0];
+        meta.textContent = (s.name && s.name !== s.title ? decodeEntities(s.name) + ' · ' : '') + provenance(s) + (s.published_at ? ' · نُشر: ' + s.published_at : '');
+      }).catch(() => { meta.textContent = meta.textContent.replace('يُستكمل الآن', 'تعذّر استكماله'); });
     });
     const failed = allSrcs.filter(s => !s.exists && s.claimed);
     if (failed.length) srcCard.append(el('p', 'note', 'تعذر فتح ' + failed.length + ' من المصادر التي ذكرها النموذج فاستُبعدت من الإحالات.'));
