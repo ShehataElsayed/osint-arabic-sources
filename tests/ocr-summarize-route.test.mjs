@@ -258,4 +258,16 @@ test('route: image context blocks authenticity/manipulation verdicts, allows mea
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'القياسات تثبت التعديل بوضوح في هذه الصورة.', key_quotes: [] }) }));
   const linked = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
   assert.deepEqual(linked, { summary: null, reason: 'filtered', retry_after: null });
+  // Live phrasing 2026-10-31 on image-analysis (parent review): the source only LISTS display
+  // layer names (الطبقات البصرية العميقة as available views), yet the overview implied a deep
+  // layer analysis («إشارة إلى تحليل طبقات بصرية عميقة»). Executed-analysis claims about
+  // merely-listed layers fail closed; naming the layers as available views is allowed.
+  const withLayers = metrics + ' الطبقات المتاحة للعرض: فرق إعادة الضغط، الضوضاء، النسخ، التدرج، المستويات، المدرج، PCA.';
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تعرض النتيجة قياسات الملف بالإضافة إلى إشارة إلى تحليل طبقات بصرية عميقة.', key_quotes: [] }) }));
+  const deep = await (await post({ mode: 'summarize_text', text: withLayers, context: 'image' })).json();
+  assert.deepEqual(deep, { summary: null, reason: 'filtered', retry_after: null });
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تشمل القياسات المنفذة أبعاد الملف 1200×630 ومتوسط فرق القنوات 2.31، مع طبقات عرض متاحة مثل خريطة الضوضاء لم تُذكر نتائجها هنا.', key_quotes: ['متوسط فرق القنوات: 2.31 من 255'] }) }));
+  const listed = await (await post({ mode: 'summarize_text', text: withLayers, context: 'image' })).json();
+  assert.equal(listed.provider, 'gemini', JSON.stringify(listed));
+  assert.equal(listed.summary.key_quotes.length, 1);
 });
