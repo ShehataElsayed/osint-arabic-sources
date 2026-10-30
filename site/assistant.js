@@ -143,7 +143,7 @@ function render(conf, question) {
         item.append(a, el('span', 'tier-pill ' + rel[1], rel[0]));
         if (s.discovered) item.append(el('span', 'tier-pill mid', 'اكتشاف آلي'));
         item.append(document.createElement('br'));
-        item.append(el('small', 'srcmeta', (s.name && s.name !== s.title ? decodeEntities(s.name) + ' · ' : '') + provenance(s)));
+        item.append(el('small', 'srcmeta', (s.name && s.name !== s.title ? decodeEntities(s.name) + ' · ' : '') + provenance(s) + (s.published_at ? ' · نُشر: ' + s.published_at : '')));
         if (cleanQuote(s.quote)) { const q = el('blockquote', null, cleanQuote(s.quote)); q.style.cssText = 'margin:8px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px'; item.append(q); }
         srcCard.append(item);
       });
