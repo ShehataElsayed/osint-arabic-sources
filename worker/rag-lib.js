@@ -294,6 +294,7 @@ const SUMMARIZE_CONTEXTS = {
   domain: 'أنت مساعد تنظيم سجلات داخل أداة ملف نطاق عربية. النص التالي سجلات تقنية لنطاق (DNS وRDAP وتواريخ تسجيل). صف السجلات كما وردت فقط؛ لا تحكم أبدًا على موثوقية النطاق أو أمانه أو نية مشغّله، فهذا خارج ما تظهره السجلات، وتذكّر أن إخفاء البيانات للخصوصية ليس مؤشرًا بذاته.',
   diff: 'أنت مساعد تنظيم مقارنات داخل أداة مقارنة نسخ عربية. النص التالي نتيجة مقارنة نسختين نصيتين (أسطر وإحصاءات تغيّر). صف ما تغيّر فقط كما يظهر؛ لا تفترض نية التغيير أو هدفه ولا تحكم على أي من النسختين.',
   image: 'أنت مساعد تنظيم قياسات داخل أداة فحص صورة عربية. النص التالي قياسات وبيانات وصفية خرجت من فحص محلي لصورة (بيانات ملف وبنية ضغط وقياسات فرق إعادة ضغط وبصمات). صف القياسات كما وردت فقط؛ ممنوع منعًا باتًا أي حكم على أصالة الصورة أو تعديلها أو تزييفها أو توليدها - هذه القياسات لا تثبت شيئًا من ذلك، والسطوع في فرق الضغط قد ينتج عن حواف طبيعية أو إعادة حفظ أو اختلاف جودة. النص قد يذكر أسماء طبقات عرض متاحة في الأداة (مثل خريطة الضوضاء أو الطبقات البصرية العميقة): هذه أسماء خيارات عرض لا قياسات منفذة بالضرورة - ميّز بوضوح بين القياسات المنفذة بأرقامها الصريحة وبين أسماء الطبقات المتاحة، وممنوع أن تدّعي أن طبقة أو تحليلًا نُفِّذ أو أظهر نتيجة ما لم يرد في النص كقياس منفذ بنتيجة صريحة.',
+  video: 'أنت مساعد تنظيم نتائج داخل أداة لقطات فيديو عربية. النص التالي نتائج استخراج لقطات محلي من فيديو (بيانات ملف وبصمة ومواضع لقطات ودرجات تغيّر مرصودة ونص مستخرج إن وُجد). صف النتائج كما وردت فقط؛ ممنوع منعًا باتًا أي حكم على أصالة الفيديو أو تعديله أو تركيبه أو توليده - درجات التغيّر مؤشرات مراجعة لا تثبت شيئًا من ذلك، وقد تنتج عن حركة طبيعية أو ضغط أو انتقالات مشهد. ميّز بين النتائج المنفذة فعلًا الظاهرة بأرقامها وبين أسماء خيارات أو أدوات متاحة لم تُنفَّذ.',
   generic: 'أنت مساعد تنظيم نصوص داخل أداة مراجعة عربية.',
 };
 export async function summarizeText(text, env, f = fetch, context = 'generic') {
@@ -332,8 +333,11 @@ ${src}`;
     // 2026-10-31 - the page only LISTS display-layer names; no deep analysis runs. Finite
     // known-bad phrasing, not a promise.
     image: /مزيف|مزور|تلاعب|فوتوشوب|مولد\s+بال|الصوره\s+(اصلي|حقيقي|معدله)|دليل\s+قاطع|تحليل\s+طبقات|تحليل\s+عميق|تحليلات\s+عميقه/,
+    // Video frames: same authenticity domain as image - scene-change scores are review
+    // indicators, never proof of editing or generation.
+    video: /مزيف|مزور|تلاعب|تركيب|فوتوشوب|مولد\s+بال|(الفيديو|المقطع)\s+(اصلي|حقيقي|معدل|معدله|مركب)|دليل\s+قاطع|تحليل\s+عميق|تحليلات\s+عميقه/,
   };
-  const IMAGE_LINKED = /(تثبت|يثبت|تؤكد|يؤكد|اثبات|إثبات|بيقين)[^.,؛]{0,40}?(تلاعب|تزوير|تزييف|مزيف|مزور|معدله|معدلا|تعديل|اصاله|توليد|فوتوشوب)/;
+  const IMAGE_LINKED = /(تثبت|يثبت|تؤكد|يؤكد|اثبات|إثبات|بيقين)[^.,؛]{0,40}?(تلاعب|تزوير|تزييف|مزيف|مزور|معدله|معدلا|تعديل|تركيب|اصاله|توليد|فوتوشوب)/;
   const contextGuard = CONTEXT_GUARDS[context];
   const overviewNorm = normAr(overview);
   // Image context (observed live 2026-10-31, reason 'filtered' on image-difference): the model
@@ -341,10 +345,13 @@ ${src}`;
   // which the absolute guard then blocks. Strip these finite negated-limits constructions before
   // the guard test; outside them the guard stays absolute - «ليست مزيفة» is an authenticity
   // verdict the metrics cannot support and stays blocked. Finite list, not a promise.
-  const guardText = context === 'image' ? overviewNorm
-    .replace(/(لا|لن|لم|ليس|ليست|غير|دون|بدون)\s+(تثبت|يثبت|تؤكد|يؤكد|تعتبر|تعد|تشكل|تستخدم|يوجد|توجد|يكون|دليل|اثبات|درجه|حكم|مؤشر|برهان|كافي|كافيه)[^.,؛]{0,30}?(تلاعب|تزوير|تزييف|مزيف|مزور|معدله|معدلا|تعديل|تعديلا|اصاله|توليد|فوتوشوب)/g, ' ')
+  const guardText = (context === 'image' || context === 'video') ? overviewNorm
+    // Negation must start at a word boundary: without it «التغير» false-matches «غير» and the
+    // strip would delete a REAL verdict (observed in the video route test 2026-10-31). The
+    // conjunctions و/ف attach directly to the negation («ولا تثبت») and count as boundaries.
+    .replace(/(^|\s|[وف])(لا|لن|لم|ليس|ليست|غير|دون|بدون)\s+(تثبت|يثبت|تؤكد|يؤكد|تعتبر|تعد|تشكل|تستخدم|يوجد|توجد|يكون|دليل|اثبات|درجه|حكم|مؤشر|برهان|كافي|كافيه)[^.,؛]{0,30}?(تلاعب|تزوير|تزييف|مزيف|مزور|معدله|معدلا|تعديل|تعديلا|تركيب|اصاله|توليد|فوتوشوب)/g, '$1')
     : overviewNorm;
-  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(guardText)) || (context === 'image' && IMAGE_LINKED.test(guardText))) {
+  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(guardText)) || ((context === 'image' || context === 'video') && IMAGE_LINKED.test(guardText))) {
     // server-side diagnosis only: which check fired and the normalized text it saw
     console.log('summarize_filtered', JSON.stringify({ context, why: !overview ? 'empty' : bad.test(overview) ? 'url' : unsupported.test(overviewNorm) ? 'unsupported' : 'guard', text: guardText.slice(0, 500) }));
     return { error: 'filtered' };

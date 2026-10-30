@@ -271,3 +271,21 @@ test('route: image context blocks authenticity/manipulation verdicts, allows mea
   assert.equal(listed.provider, 'gemini', JSON.stringify(listed));
   assert.equal(listed.summary.key_quotes.length, 1);
 });
+
+test('route: video context blocks authenticity/editing verdicts, allows extraction description', async () => {
+  const results = 'اسم الملف: clip.mp4 الحجم: 480000 بايت SHA-256: ab12... لقطات مستخرجة: 6. لقطة عند 0.0ث · لقطة البداية المرجعية. لقطة عند 2.4ث · تغيّر مرصود · درجة 12.3. الدلالة والحدود: درجات التغيّر مؤشرات مراجعة لا حكم أصالة.';
+  for (const overview of [
+    'الفيديو معدل عند اللقطة 2.4ث.',
+    'درجات التغيّر تثبت تركيب الفيديو.',
+    'الفيديو أصلي ولم يُعدّل.',
+  ]) {
+    mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview, key_quotes: [] }) }));
+    const r = await (await post({ mode: 'summarize_text', text: results, context: 'video' })).json();
+    assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
+  }
+  // Negated limits wording is allowed; executed results described with their numbers.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'استُخرجت 6 لقطات من الملف مع بصمته، وسُجّل تغيّر مرصود بدرجة 12.3 عند 2.4ث وهو مؤشر مراجعة لا يثبت تعديلًا.', key_quotes: ['لقطات مستخرجة: 6'] }) }));
+  const ok = await (await post({ mode: 'summarize_text', text: results, context: 'video' })).json();
+  assert.equal(ok.provider, 'gemini', JSON.stringify(ok));
+  assert.equal(ok.summary.key_quotes.length, 1);
+});
