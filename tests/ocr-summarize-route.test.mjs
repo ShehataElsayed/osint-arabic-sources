@@ -161,3 +161,37 @@ test('route: OCR overview asserting OCR errors or a corruption cause fails close
     assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
   }
 });
+
+test('route: new tool contexts pass with grounded description and provider label', async () => {
+  // archive / domain / diff contexts: describe only what the result shows.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تظهر النتيجة 12 لقطة أرشيفية بين 2020 و2026 مع نقطتي تغير بصمة.', key_quotes: ['أقدم لقطة مجلوبة 2020-03-01'] }) }));
+  const arc = await (await post({ mode: 'summarize_text', text: 'نتيجة أرشيف: لقطات مجلوبة 12. أقدم لقطة مجلوبة 2020-03-01. أحدث لقطة مجلوبة 2026-01-15. نقطة تغير محتوى بين المجلوبة 2.', context: 'archive' })).json();
+  assert.equal(arc.provider, 'gemini');
+  assert.equal(arc.summary.key_quotes.length, 1);
+});
+
+test('route: domain guard blocks trust/reputation judgments', async () => {
+  const rec = 'سجل DNS من Google Public DNS\nالحالة: NOERROR\nexample.com A 93.184.216.34 (TTL 3600)\nبيانات التسجيل RDAP\nالمسجل: Example Registrar\nتاريخ التسجيل: 1995-08-14';
+  for (const overview of ['النطاق موثوق وقديم التسجيل.', 'السجلات تشير إلى موقع مشبوه.', 'يبدو النطاق آمنًا لكن تحقق بنفسك: النطاق موثوق.']) {
+    mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview, key_quotes: [] }) }));
+    const r = await (await post({ mode: 'summarize_text', text: rec, context: 'domain' })).json();
+    assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
+  }
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تشمل السجلات سجل A بعنوان 93.184.216.34 وتاريخ تسجيل يعود إلى 1995-08-14 عبر مسجل معلن.', key_quotes: ['تاريخ التسجيل: 1995-08-14'] }) }));
+  const ok = await (await post({ mode: 'summarize_text', text: rec, context: 'domain' })).json();
+  assert.equal(ok.provider, 'gemini');
+  assert.equal(ok.summary.key_quotes.length, 1);
+});
+
+test('route: archive guard blocks hacking speculation; diff guard blocks intent claims', async () => {
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'ربما تعرض الموقع لاختراق أدى لتغير البصمة.', key_quotes: [] }) }));
+  const arc = await (await post({ mode: 'summarize_text', text: 'نتيجة أرشيف: لقطات مجلوبة 12. أقدم لقطة مجلوبة 2020-03-01. أحدث لقطة 2026-01-15. نقاط تغير 2.', context: 'archive' })).json();
+  assert.deepEqual(arc, { summary: null, reason: 'filtered', retry_after: null });
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'يبدو أن التغيير تلاعب متعمد بالأرقام.', key_quotes: [] }) }));
+  const dif = await (await post({ mode: 'summarize_text', text: 'مقارنة نسختين: تغيرت 3 أسطر. السطر الأول: الموعد نهار الثلاثاء. السطر الثاني: الموعد نهار الأربعاء.', context: 'diff' })).json();
+  assert.deepEqual(dif, { summary: null, reason: 'filtered', retry_after: null });
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تغيرت 3 أسطر بين النسختين أبرزها تغيير يوم الموعد من الثلاثاء إلى الأربعاء.', key_quotes: ['الموعد نهار الثلاثاء'] }) }));
+  const okd = await (await post({ mode: 'summarize_text', text: 'مقارنة نسختين: تغيرت 3 أسطر. السطر الأول: الموعد نهار الثلاثاء. السطر الثاني: الموعد نهار الأربعاء.', context: 'diff' })).json();
+  assert.equal(okd.provider, 'gemini');
+  assert.equal(okd.summary.key_quotes.length, 1);
+});

@@ -1,3 +1,4 @@
+import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import{validateCase}from'../journalist-core.js';
 import{archiveCase}from'./archive-case-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
@@ -70,7 +71,7 @@ $('search').onclick=async()=>{
   rawCaps=captures;
   result={format:'archive-lookup-v1',queriedUrl:u,source:'arquivo.pt versionHistory API',limits:'Coverage differs across archives; digest change is a content-change lead, not its magnitude. Up to '+MAXC+' captures listed. No page content fetched.',
    rawResponses:responses,estimatedTotal:estimated,captures:captures.map(x=>({timestamp:x.tstamp,mime:x.mimeType,length:x.contentLength,digest:x.digest,view:x.linkToArchive}))};
-  $('result').hidden=false;render();
+  $('result').hidden=false;render();document.getElementById('ai-box')&&(document.getElementById('ai-box').hidden=false);
   $('export').disabled=false;$('wb').disabled=false;$('case-export').disabled=false;
   say(captures.length?'جُلبت '+captures.length+' لقطة (تقدير الإجمالي '+estimated+').':'لا لقطات لهذا الرابط في arquivo.pt. جرّب أقرب لقطة في archive.org.')}
  catch(e){if(gen!==generation)return;say('تعذر جلب الأرشيف: '+e.message+' — يمكنك المحاولة لاحقًا أو فتح arquivo.pt مباشرة.')}
@@ -93,3 +94,33 @@ $('export').onclick=()=>{if(!result)return;
 $('case-file').onchange=async()=>{const gen=++caseGeneration;caseBase=null;caseState='pending';$('case-status').textContent='تُقرأ القضية…';try{const f=$('case-file').files[0];if(!f){caseState='empty';$('case-status').textContent='ستنشأ نسخة قضية جديدة.';return}if(f.size>5*1024*1024)throw Error('أكبر من 5 MB');const text=await f.text();if(gen!==caseGeneration)return;caseBase=validateCase(JSON.parse(text));caseState='valid';$('case-status').textContent='قضية مفتوحة: '+caseBase.title}catch(e){if(gen!==caseGeneration)return;caseState='invalid';$('case-status').textContent='قضية غير صالحة: '+e.message}};
 $('case-clear').onclick=()=>{caseGeneration++;caseBase=null;caseState='empty';$('case-file').value='';$('case-status').textContent='ستنشأ نسخة قضية جديدة.'};
 $('case-export').onclick=()=>{if(!result)return;try{if(['pending','invalid'].includes(caseState))throw Error('انتظر قراءة القضية أو أزل الملف غير الصالح');const out=archiveCase(result,$('human-review').value,$('review-note').value,caseBase||undefined),u=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download='archive-case.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);$('case-status').textContent='نُزّلت نسخة جديدة؛ احتفظ بملفك السابق.'}catch(e){$('case-status').textContent='لم تصدّر القضية: '+e.message+'؛ التصدير الأصلي الكامل ما زال متاحًا.'}};
+
+// AI summary of the visible result (2026-10-30 all-tools AI expansion, user «تمام ضيفه ف كل
+// الأدوات»): the tool's processing stays fully local; this optional section sends ONLY the visible
+// result text to the guide worker (summarize_text route, context 'archive'). تغيّر البصمة قرينة تغيّر لا دليل عبث، والملخص لا يفترض سببًا.
+(function aiSummary(){
+  const box=document.getElementById('ai-box'), btn=document.getElementById('ai-summarize'),
+        st=document.getElementById('ai-status'), res=document.getElementById('ai-result'),
+        prov=document.getElementById('ai-provider'), ov=document.getElementById('ai-overview'),
+        qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes');
+  if(!box||!btn)return;
+  const show=()=>{box.hidden=false};
+  new MutationObserver(()=>{if(document.getElementById('result').hidden){box.hidden=true;res.hidden=true;st.textContent=''}}).observe(document.getElementById('result'),{attributes:true,attributeFilter:['hidden']});
+  btn.onclick=async()=>{
+    const text=(document.getElementById('result').innerText).slice(0,11000);
+    if(text.trim().length<40){st.textContent='المحتوى أقصر من أن يلخّص.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ التلخيص بالذكاء الاصطناعي…';
+    try{
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text,context:'archive'})});
+      const j=r.ok?await r.json():null;
+      const sm=j&&j.summary;
+      if(!sm){st.textContent='التلخيص بالذكاء الاصطناعي غير متاح الآن؛ نتيجتك الكاملة ظاهرة أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;
+      ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل التلخيص بالذكاء الاصطناعي؛ الملخص بصياغة النموذج - راجعه أمام النتيجة قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتيجتك الكاملة ظاهرة أعلاه.'}
+    finally{btn.disabled=false}};
+})();

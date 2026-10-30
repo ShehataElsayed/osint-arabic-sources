@@ -290,6 +290,9 @@ ${src}`;
 const SUMMARIZE_CONTEXTS = {
   ocr: 'أنت مساعد تنظيم نصوص داخل أداة OCR عربية. النص التالي استُخرج من صورة وقد يحتوي أخطاء تعرف ضوئي. لم ترَ الصورة الأصلية إطلاقًا: ممنوع منعًا باتًا أن تشير إلى الصورة الأصلية أو جودتها أو تلفها أو وضوحها، أو أن تنسب أي غموض في النص إلى الصورة أو إلى عملية الاستخراج أو التعرف الضوئي، أو أن تحكم على جودة الاستخراج أو خلو النص من الأخطاء. إن بدا مقطع غير مفهوم لغويًا فاذكره كغموض في النص فقط دون أي تفسير لمصدره.',
   data: 'أنت محلل بيانات داخل مختبر بيانات عربي. النص التالي نتيجة استعلام SQL بصيغة TSV من ملف بيانات المستخدم - ركّز في الملخص على ما تظهره النتيجة فعليًا (أعداد، أعمدة، أطراف القيم، أنماط) ولا تستنتج شيئًا خارجها.',
+  archive: 'أنت مساعد تنظيم نتائج داخل أداة أرشيف ويب عربية. النص التالي نتيجة استعلام عن لقطات أرشيفية لعنوان ويب (أعداد وتواريخ ونقاط تغير بصمة). صف ما تظهره النتيجة فقط من أعداد وتواريخ؛ تغيّر البصمة قرينة تغيّر محتوى وليس دليل اختراق أو عبث، فلا تفترض سببًا أبدًا.',
+  domain: 'أنت مساعد تنظيم سجلات داخل أداة ملف نطاق عربية. النص التالي سجلات تقنية لنطاق (DNS وRDAP وتواريخ تسجيل). صف السجلات كما وردت فقط؛ لا تحكم أبدًا على موثوقية النطاق أو أمانه أو نية مشغّله، فهذا خارج ما تظهره السجلات، وتذكّر أن إخفاء البيانات للخصوصية ليس مؤشرًا بذاته.',
+  diff: 'أنت مساعد تنظيم مقارنات داخل أداة مقارنة نسخ عربية. النص التالي نتيجة مقارنة نسختين نصيتين (أسطر وإحصاءات تغيّر). صف ما تغيّر فقط كما يظهر؛ لا تفترض نية التغيير أو هدفه ولا تحكم على أي من النسختين.',
   generic: 'أنت مساعد تنظيم نصوص داخل أداة مراجعة عربية.',
 };
 export async function summarizeText(text, env, f = fetch, context = 'generic') {
@@ -313,8 +316,17 @@ ${src}`;
   // its quality/damage/clarity, or any attribution of garbling to the image or the OCR process is
   // unsupported by definition - fail closed rather than show it.
   const ocrUnsupported = /(الصوره|النسخه|الملف)\s+الاصليه?|جوده\s+(ال)?(صوره|مسح|استخراج|تعرف)|دقه\s+(ال)?(استخراج|تعرف)|وضوح\s+(ال)?صوره|تلف\s+في\s+(ال)?صوره|(ال)?صوره\s+[^.,؛]{0,30}تلف|تعرف\s+(ال)?ضوئي|(ال)?مسح\s+(ال)?ضوئي|اداة\s+ocr|اخطاء\s+(ال)?(تعرف|استخراج|مسح)|(بسبب|نتيجه|يعود\s+الي|يرجع\s+الي|ادى\s+الي|مما\s+ادى|مما)[^.,؛]{0,60}(صوره|استخراج|تعرف|مسح|تلف)/;
+  // Per-context fail-closed guards: each blocks judgments the model cannot support from the
+  // text it saw in that tool (finite known-bad phrasings, not a promise no claim ever slips).
+  const CONTEXT_GUARDS = {
+    ocr: ocrUnsupported,
+    archive: /اختراق|اخترق|قرصن|عبث\s+بالموقع|هجوم\s+(علي|الكتروني)/,
+    domain: /مشبوه|احتيال|نصب|خبيث|تصيد|موثوق|جدير\s+بالثقه|خطر\s+علي/,
+    diff: /تلاعب|تزوير|تضليل|تحريف\s+متعمد|نية\s+(التضليل|الخداع)/,
+  };
+  const contextGuard = CONTEXT_GUARDS[context];
   const overviewNorm = normAr(overview);
-  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (context === 'ocr' && ocrUnsupported.test(overviewNorm))) return { error: 'filtered' };
+  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(overviewNorm))) return { error: 'filtered' };
   const srcNorm = normAr(src);
   const quotes = [...new Set((Array.isArray(j?.key_quotes) ? j.key_quotes : [])
     .map(q => String(q ?? '').replace(/\s+/g, ' ').trim())

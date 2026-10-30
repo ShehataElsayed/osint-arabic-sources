@@ -1,10 +1,11 @@
+import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import {importDomain} from './domain-case-core.js';
 import{parseDomain}from'../journalist-core.js';
 const $=id=>document.getElementById(id),say=t=>$('status').textContent=t;
 const L=v=>'\u2066'+v+'\u2069';
 const el=(tag,text,cls)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(cls)n.className=cls;return n};
 let info=null;let generation=0;const records=[];
-$('url').oninput=()=>{generation++;info=null;$('parse-out').hidden=true;$('dns').disabled=true;$('rdap').disabled=true;$('save').disabled=true;records.length=0;$('cards').replaceChildren();say('تغير العنوان. أُزيلت النتائج السابقة؛ فككه من جديد قبل الاستعلام.');};
+$('url').oninput=()=>{const ab=document.getElementById('ai-box');if(ab)ab.hidden=true;generation++;info=null;$('parse-out').hidden=true;$('dns').disabled=true;$('rdap').disabled=true;$('save').disabled=true;records.length=0;$('cards').replaceChildren();say('تغير العنوان. أُزيلت النتائج السابقة؛ فككه من جديد قبل الاستعلام.');};
 function addCard(title,lines,raw,source,accessed){
  const summary=lines.map(([k,v])=>k+' '+v).join('\n');
  records.push({title,summary,raw,source,accessed});
@@ -13,7 +14,7 @@ function addCard(title,lines,raw,source,accessed){
  const src=el('p',undefined,'src');
  src.append('المصدر: ',el('span',source,'dd-val'),document.createTextNode('\n'),'وقت الوصول (UTC): ',el('span',accessed,'dd-val'));
  card.append(el('h3',title),body,src);
- $('cards').append(card);$('save').disabled=false}
+ $('cards').append(card);$('save').disabled=false;document.getElementById('ai-box')&&(document.getElementById('ai-box').hidden=false)}
 $('parse').onclick=()=>{try{const parsed=parseDomain($('url').value);generation++;records.length=0;$('cards').replaceChildren();$('save').disabled=true;info=parsed;
  const out=$('parse-out');out.hidden=false;
  out.textContent=`النطاق الفعلي: ${L(info.hostname)}\nالأصل: ${L(info.origin)}\nالمسار: ${L(info.path)}\nالمنفذ: ${L(info.port)}\n${info.punycode?'يتضمن Punycode؛ راجع التشابه البصري بعناية.\n':''}${info.caution}`;
@@ -50,3 +51,33 @@ $('case-file').onchange=async()=>{const generation=++caseGeneration;try{caseInva
 $('case-export').onclick=async()=>{try{if(caseInvalid)throw Error('القضية المختارة غير صالحة أو لم يكتمل فتحها؛ اختر ملفًا صالحًا أو ألغ الاختيار');if(!info||!records.length)throw Error('اجمع سجل نطاق أولًا');const out=await importDomain(JSON.stringify(dossier(),null,2),baseCase);const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(out,null,2)],{type:'application/json'}));a.href=u;a.download='journalist-domain-case.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500);$('case-port-status').textContent='نُزلت نسخة جديدة بكل مصادرها. سجلات النطاق بلا مراجعة؛ القضية الأصلية لم تتغير.'}catch(e){$('case-port-status').textContent='لم تُصدر قضية: '+e.message+'؛ نزّل ملف النطاق الأصلي للاحتفاظ بالسجلات.'}};
 $('save').onclick=()=>{const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify({format:'domain-dossier-v1',input:$('url').value,hostname:info?.hostname,localParse:info,records,limitations:'DNS/RDAP records are point-in-time and can be privacy-masked; they do not prove operator identity or credibility.',reviewState:'manual-review-required'},null,2)],{type:'application/json'}));
  a.href=u;a.download='domain-dossier.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)};
+
+// AI summary of the visible result (2026-10-30 all-tools AI expansion, user «تمام ضيفه ف كل
+// الأدوات»): the tool's processing stays fully local; this optional section sends ONLY the visible
+// result text to the guide worker (summarize_text route, context 'domain'). الملخص وصف للسجلات فقط وليس حكمًا على النطاق.
+(function aiSummary(){
+  const box=document.getElementById('ai-box'), btn=document.getElementById('ai-summarize'),
+        st=document.getElementById('ai-status'), res=document.getElementById('ai-result'),
+        prov=document.getElementById('ai-provider'), ov=document.getElementById('ai-overview'),
+        qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes');
+  if(!box||!btn)return;
+  const show=()=>{box.hidden=false};
+  
+  btn.onclick=async()=>{
+    const text=(records.map(r=>r.title+'\n'+r.summary).join('\n\n')).slice(0,11000);
+    if(text.trim().length<40){st.textContent='المحتوى أقصر من أن يلخّص.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ التلخيص بالذكاء الاصطناعي…';
+    try{
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text,context:'domain'})});
+      const j=r.ok?await r.json():null;
+      const sm=j&&j.summary;
+      if(!sm){st.textContent='التلخيص بالذكاء الاصطناعي غير متاح الآن؛ نتيجتك الكاملة ظاهرة أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;
+      ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل التلخيص بالذكاء الاصطناعي؛ الملخص بصياغة النموذج - راجعه أمام النتيجة قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتيجتك الكاملة ظاهرة أعلاه.'}
+    finally{btn.disabled=false}};
+})();
