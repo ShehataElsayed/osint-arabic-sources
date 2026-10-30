@@ -326,7 +326,11 @@ ${src}`;
     diff: /تلاعب|تزوير|تضليل|تحريف\s+متعمد|نية\s+(التضليل|الخداع)/,
     // Image forensics: these metrics can never prove authenticity, editing, or generation -
     // block verdict-shaped claims, not mere description of the measurements.
-    image: /مزيف|مزور|تلاعب|فوتوشوب|مولد\s+بال|الصوره\s+(اصلي|حقيقي|معدله)|تثبت|يثبت|تؤكد|يؤكد|اثبات|إثبات|دليل\s+قاطع|بيقين/,
+    // Proof tokens only count as a verdict when NOT negated: «لا تثبت» / «ليست اثبات» is the
+    // page's own limits wording (metrics never prove authenticity), not a verdict. Authenticity
+    // words (مزيف/تلاعب/أصلية...) stay blocked even negated - «ليست مزيفة» is still an
+    // authenticity claim the metrics cannot support. Finite negation list, not a promise.
+    image: /مزيف|مزور|تلاعب|فوتوشوب|مولد\s+بال|الصوره\s+(اصلي|حقيقي|معدله)|(?<!(?:لا|لن|لم|ليس|ليست|غير|دون|بدون)\s)(?:تثبت|يثبت|تؤكد|يؤكد|اثبات|إثبات|بيقين)|دليل\s+قاطع/,
   };
   const contextGuard = CONTEXT_GUARDS[context];
   const overviewNorm = normAr(overview);

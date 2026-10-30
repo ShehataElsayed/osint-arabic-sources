@@ -226,4 +226,14 @@ test('route: image context blocks authenticity/manipulation verdicts, allows mea
   const ok = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
   assert.equal(ok.provider, 'gemini');
   assert.equal(ok.summary.key_quotes.length, 1);
+  // Negated limits wording (observed live 2026-10-31, reason 'filtered' on image-difference):
+  // «لا تثبت» / «ليست اثبات» mirrors the page's own disclaimer and must NOT be blocked.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'هذه القياسات وصفية لفرق إعادة الضغط ولا تثبت تعديلًا وليست اثبات على الأصالة.', key_quotes: ['أكبر فرق: 87 من 255'] }) }));
+  const neg = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.equal(neg.provider, 'gemini');
+  assert.equal(neg.summary.key_quotes.length, 1);
+  // Negated authenticity words stay blocked: «ليست مزيفة» is still an authenticity verdict.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'الصورة ليست مزيفة حسب هذه القياسات.', key_quotes: [] }) }));
+  const negAuth = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.deepEqual(negAuth, { summary: null, reason: 'filtered', retry_after: null });
 });
