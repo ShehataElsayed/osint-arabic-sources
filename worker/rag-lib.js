@@ -266,10 +266,16 @@ ${src}`;
 // is model-generated prose (the page labels it as such, never as corroboration); every key quote
 // is validated verbatim against the source after Arabic normalization, so no quote can be
 // invented. No fact verification, no corroboration - OCR stays a transcription aid.
-export async function summarizeText(text, env, f = fetch) {
+const SUMMARIZE_CONTEXTS = {
+  ocr: 'أنت مساعد تنظيم نصوص داخل أداة OCR عربية. النص التالي استُخرج من صورة وقد يحتوي أخطاء تعرف ضوئي. لم ترَ الصورة الأصلية: لا تحكم أبدًا على جودة الاستخراج أو خلو النص من الأخطاء، وإن بدا مقطع غير مفهوم لغويًا فاذكره كغموض في النص فقط.',
+  data: 'أنت محلل بيانات داخل مختبر بيانات عربي. النص التالي نتيجة استعلام SQL بصيغة TSV من ملف بيانات المستخدم - ركّز في الملخص على ما تظهره النتيجة فعليًا (أعداد، أعمدة، أطراف القيم، أنماط) ولا تستنتج شيئًا خارجها.',
+  generic: 'أنت مساعد تنظيم نصوص داخل أداة مراجعة عربية.',
+};
+export async function summarizeText(text, env, f = fetch, context = 'generic') {
   const src = String(text || '').trim().slice(0, 12000);
   if (src.length < 40) return { error: 'empty' };
-  const prompt = `أنت مساعد تنظيم نصوص داخل أداة OCR عربية. النص التالي استُخرج من صورة وقد يحتوي أخطاء تعرف ضوئي. المطلوب: 1) overview ملخص من جملتين أو ثلاث بصياغتك يصف موضوع النص وأبرز ما ورد فيه، مع الإشارة لأي غموض ظاهر بسبب أخطاء الاستخراج. 2) key_quotes قائمة حتى 5 اقتباسات من أهم الجمل، منسوخة حرفيًا من النص دون أي تغيير أو تصحيح. قواعد صارمة: لا تضف معلومات غير موجودة في النص، ولا تحقق من صحة شيء، ولا تضف روابط أو مصادر خارجية، والاقتباسات حرفية تمامًا كما وردت. أعد JSON فقط بالشكل {"overview":"...","key_quotes":["..."]}.
+  const preamble = SUMMARIZE_CONTEXTS[context] || SUMMARIZE_CONTEXTS.generic;
+  const prompt = `${preamble} المطلوب: 1) overview ملخص من جملتين أو ثلاث بصياغتك يصف موضوع النص وأبرز ما ورد فيه فقط. 2) key_quotes قائمة حتى 5 اقتباسات من أهم الجمل، منسوخة حرفيًا من النص دون أي تغيير أو تصحيح. قواعد صارمة: لا تضف معلومات غير موجودة في النص، ولا تحقق من صحة شيء، ولا تضف روابط أو مصادر خارجية، والاقتباسات حرفية تمامًا كما وردت. أعد JSON فقط بالشكل {"overview":"...","key_quotes":["..."]}.
 النص المستخرج:
 ${src}`;
   const g = await aiExtractRaw(prompt, env, f);
@@ -278,7 +284,10 @@ ${src}`;
   let j; try { j = JSON.parse(String(raw).replace(/^\s*```(?:json)?|```\s*$/g, '').trim()); } catch { return { error: 'parse' }; }
   const bad = /https?:|www\./i;
   const overview = String(j?.overview ?? '').replace(/\s+/g, ' ').trim().slice(0, 600);
-  if (!overview || bad.test(overview)) return { error: 'filtered' };
+  // The model only saw text, never the source image/data: any claim about extraction quality,
+  // accuracy, or error-freeness is unsupported - fail closed rather than show it.
+  const unsupported = /خال[يا]*\s*من\s+(اي\s+)?(اخطاء|خطا)|لا\s+(يحتوي|تتضمن|يوجد|توجد)[^.,؛]*خط|بدون اخطاء|دون اخطاء|بلا اخطاء|خلوه من|جوده الاستخراج|دقه الاستخراج|سليم تماما|صحيح تماما/; // matched AFTER Arabic normalization (normAr)
+  if (!overview || bad.test(overview) || unsupported.test(normAr(overview))) return { error: 'filtered' };
   const srcNorm = normAr(src);
   const quotes = [...new Set((Array.isArray(j?.key_quotes) ? j.key_quotes : [])
     .map(q => String(q ?? '').replace(/\s+/g, ' ').trim())
@@ -1795,7 +1804,7 @@ export default {
     }
     if (b?.mode === 'extract_claims') { try { const ec = await extractClaims(b.text ?? b.question, env); return json(ec.error ? { claims: null, reason: ec.error, retry_after: ec.retry_after ?? null } : { claims: ec.claims, provider: ec.provider }, 200, o); } catch { return json({ claims: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'extract_events') { try { const ev = await extractEvents(b.text ?? b.question, env); return json(ev.error ? { events: null, reason: ev.error, retry_after: ev.retry_after ?? null } : { events: ev.events, provider: ev.provider }, 200, o); } catch { return json({ events: null, reason: 'err' }, 200, o); } }
-    if (b?.mode === 'summarize_text') { try { const st = await summarizeText(b.text ?? b.question, env); return json(st.error ? { summary: null, reason: st.error, retry_after: st.retry_after ?? null } : { summary: { overview: st.overview, key_quotes: st.key_quotes }, provider: st.provider }, 200, o); } catch { return json({ summary: null, reason: 'err' }, 200, o); } }
+    if (b?.mode === 'summarize_text') { try { const st = await summarizeText(b.text ?? b.question, env, fetch, typeof b.context === 'string' ? b.context : 'generic'); return json(st.error ? { summary: null, reason: st.error, retry_after: st.retry_after ?? null } : { summary: { overview: st.overview, key_quotes: st.key_quotes }, provider: st.provider }, 200, o); } catch { return json({ summary: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'extract_entities') { try { const ee = await extractEntities(b.text ?? b.question, env); return json(ee.error ? { entities: null, reason: ee.error, retry_after: ee.retry_after ?? null } : { entities: { persons: ee.persons, organizations: ee.organizations, places: ee.places }, provider: ee.provider }, 200, o); } catch { return json({ entities: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'research_plan') { try { const rp = await researchPlan(b.question, b.candidates, env); return json(rp.error ? { plan: null, reason: rp.error } : { plan: rp }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }
     if (b?.mode === 'plan') { try { const pl = await plan(String(b.text || ''), env); return json(pl.error ? { plan: null, reason: pl.error } : { plan: pl }, 200, o); } catch { return json({ plan: null, reason: 'err' }, 200, o); } }

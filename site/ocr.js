@@ -125,7 +125,7 @@ import{BACKEND_URL,aiProviderName}from'./rag-config.js';
     if(text.length<40){st.textContent='النص قصير جدًا للتلخيص.';return}
     btn.disabled=true;res.hidden=true;st.textContent='جارٍ التلخيص بالذكاء الاصطناعي…';
     try{
-      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text})});
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text,context:'ocr'})});
       const j=r.ok?await r.json():null;
       const sm=j&&j.summary;
       if(!sm){st.textContent='التلخيص بالذكاء الاصطناعي غير متاح الآن؛ النص المستخرج محليًا كامل أعلاه.';return}
