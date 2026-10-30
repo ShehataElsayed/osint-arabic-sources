@@ -707,9 +707,22 @@ export const looksLikeCode = s => {
   const markers = (t.match(/\bfunction\b|=>|throw new\b|\bnew Error\b|\b(?:var|let|const) \w|\breturn\b|[{}]|\)\s*[;{]/g) || []).length;
   return markers >= 2;
 };
+// Reject page boilerplate as claim evidence (reviewer finding, 2026-10-30 live UI): relative
+// timestamps ("Published قبل 2 ساعة"), preference prompts ("to register the site as a preferred
+// source"), subscribe/share chrome. Verbatim from the page, but not claim-bearing: showing them
+// as a supporting quote implies support the source never stated. Bounded to short chrome strings
+// so a real sentence that happens to mention a relative time stays eligible.
+export const looksLikeBoilerplate = s => {
+  const t = String(s || '').trim();
+  if (!t) return false;
+  if (t.length < 60 && /(منذ|قبل)\s*\d+\s*(ساع|دقيق|يوم|أيام|أسبوع|شهر)/.test(t)) return true;
+  if (t.length < 80 && /^(published|updated)\b/i.test(t)) return true;
+  if (t.length < 160 && /preferred source|register the site|newsletter|اشترك|سجّل|تابعنا/i.test(t)) return true;
+  return false;
+};
 export function supportOf(claimText, sents, nums) {
   const scored = sents.map((x, i) => ({ x, i, s: cos(claimText, x) })).sort((a, b) => b.s - a.s);
-  const usable = scored.filter(c => !looksLikeCode(c.x));
+  const usable = scored.filter(c => !looksLikeCode(c.x) && !looksLikeBoilerplate(c.x));
   const best = usable[0], similarity = best ? Math.round(best.s * 100) / 100 : 0;
   const want = (nums || []).map(digits).filter(Boolean);
   const win = best ? digits([sents[best.i - 1], sents[best.i], sents[best.i + 1]].filter(Boolean).join(' ')) : '';
