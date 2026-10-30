@@ -141,7 +141,7 @@ function render(conf, question) {
       if (srcGroups.filter(g => g[1].length).length > 1) { const gh = el('h4', null, label); gh.style.cssText = 'margin:14px 0 4px;font-size:15px'; srcCard.append(gh); }
       list.forEach(([s, n]) => {
         const item = el('div', 'srcitem'); item.id = 'asksrc' + n;
-        item.style.cssText = 'border-inline-start:4px solid ' + TEAL + ';padding:12px 14px;background:#f7faf9;border-radius:10px;margin:10px 0';
+        item.style.cssText = 'border:1px solid #3c4a2d;border-inline-start:4px solid ' + TEAL + ';padding:12px 14px;background:#131a0d;border-radius:10px;margin:10px 0';
         const a = document.createElement('a'); a.href = s.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = `[${n}] ${decodeEntities(s.title || s.name || '') || s.url}`;
         const rel = REL[s.rel] || REL.unknown;
         const pill = el('span', 'tier-pill ' + rel[1], rel[0]);
@@ -151,7 +151,7 @@ function render(conf, question) {
         const meta = el('small', 'srcmeta', (s.name && s.name !== s.title ? decodeEntities(s.name) + ' · ' : '') + provenance(s) + (s.published_at ? ' · نُشر: ' + s.published_at : ''));
         item.append(meta);
         if (SERVER && s.exists && s.identity_status === 'skipped_budget' && s.host) lazyIds.push({ s, meta, pill });
-        if (cleanQuote(s.quote)) { const q = el('blockquote', null, cleanQuote(s.quote)); q.style.cssText = 'margin:8px 0 0;color:#274a52;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px'; item.append(q); }
+        if (cleanQuote(s.quote)) { const q = el('blockquote', null, cleanQuote(s.quote)); q.style.cssText = 'margin:8px 0 0;color:#c3dc9f;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px'; item.append(q); }
         srcCard.append(item);
       });
     });
