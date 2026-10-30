@@ -339,7 +339,11 @@ ${src}`;
     .replace(/(لا|لن|لم|ليس|ليست|غير|دون|بدون)\s+(تثبت|يثبت|تؤكد|يؤكد|دليل|اثبات|درجه|حكم|مؤشر|برهان|كافي|كافيه)[^.,؛]{0,30}?(تلاعب|تزوير|تزييف|مزيف|مزور|تعديل|تعديلا|اصاله|توليد|فوتوشوب)/g, ' ')
     .replace(/(لا|لن|لم)\s+(تثبت|يثبت|تؤكد|يؤكد)/g, ' ')
     : overviewNorm;
-  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(guardText))) return { error: 'filtered' };
+  if (!overview || bad.test(overview) || unsupported.test(overviewNorm) || (contextGuard && contextGuard.test(guardText))) {
+    // server-side diagnosis only: which check fired and the normalized text it saw
+    console.log('summarize_filtered', JSON.stringify({ context, why: !overview ? 'empty' : bad.test(overview) ? 'url' : unsupported.test(overviewNorm) ? 'unsupported' : 'guard', text: guardText.slice(0, 500) }));
+    return { error: 'filtered' };
+  }
   const srcNorm = normAr(src);
   const quotes = [...new Set((Array.isArray(j?.key_quotes) ? j.key_quotes : [])
     .map(q => String(q ?? '').replace(/\s+/g, ' ').trim())
