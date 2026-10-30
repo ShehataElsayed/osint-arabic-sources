@@ -146,3 +146,18 @@ test('route: data context mentioning damage in the CONTENT is not blocked by the
   assert.equal(r.provider, 'gemini');
   assert.equal(r.summary.overview, 'تظهر النتيجة 6 منتجات، نصفها تالف والنصف سليم.');
 });
+
+test('route: OCR overview asserting OCR errors or a corruption cause fails closed (live phrasing 2026-10-30)', async () => {
+  // Second live phrasing: "مُستخرج عبر أداة OCR ويتضمن أخطاء تعرف ضوئي، مما أدى إلى تلفه" -
+  // an extraction-quality judgment plus a causal claim; both unsupported from text alone.
+  for (const overview of [
+    'النص هو نص عربي مُستخرج عبر أداة OCR ويتضمن أخطاء تعرف ضوئي، مما أدى إلى تلفه وصعوبة فهمه.',
+    'النص يحتوي أخطاء استخراج واضحة.',
+    'أدى التعرف الضوئي إلى تلف بعض الكلمات.',
+    'دقة التعرف منخفضة في هذا النص.',
+  ]) {
+    mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview, key_quotes: [] }) }));
+    const r = await (await post({ mode: 'summarize_text', text: SRC, context: 'ocr' })).json();
+    assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
+  }
+});
