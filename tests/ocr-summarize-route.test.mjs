@@ -312,3 +312,21 @@ test('route: case context blocks credibility/truth verdicts, allows case descrip
   assert.equal(ok.provider, 'gemini', JSON.stringify(ok));
   assert.equal(ok.summary.key_quotes.length, 1);
 });
+
+test('route: plan context blocks executed-plan claims, allows step description', async () => {
+  const planText = '1. البحث العكسي عن الصورة. مواد: صورة منشورة. إشارات من وصفك: صورة. 2. مطابقة تفاصيل الموقع. إشارات من وصفك: موقع. 3. توثيق النتائج في قضية منظمة.';
+  for (const overview of [
+    'تم تنفيذ المسار بالكامل واكتمل التحقق.',
+    'نفذ المسار كل الخطوات بنجاح.',
+    'هذا المسار كافٍ للتحقق من الادعاء.',
+    'تحققت من صحة الادعاء عبر هذه الخطوات.',
+  ]) {
+    mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview, key_quotes: [] }) }));
+    const r = await (await post({ mode: 'summarize_text', text: planText, context: 'plan' })).json();
+    assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
+  }
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'يقترح المسار ثلاث خطوات: البحث العكسي عن الصورة ثم مطابقة تفاصيل الموقع ثم توثيق النتائج، وهو اقتراح مطابقة قواعد لم يُنفَّذ.', key_quotes: ['البحث العكسي عن الصورة'] }) }));
+  const ok = await (await post({ mode: 'summarize_text', text: planText, context: 'plan' })).json();
+  assert.equal(ok.provider, 'gemini', JSON.stringify(ok));
+  assert.equal(ok.summary.key_quotes.length, 1);
+});

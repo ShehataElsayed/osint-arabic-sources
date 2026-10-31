@@ -40,8 +40,13 @@ assert.equal(await p.locator('#frames figure').count(),4,'four temporal frames')
  assert.ok((await p.evaluate(()=>document.getElementById('ai-result').hidden)),'no stale result after filtered');
  await p.unroute('https://osint-rag.egkrkr.workers.dev/**');
  for(let i=external.length-1;i>=0;i--)if(external[i].includes('osint-rag'))external.splice(i,1)}
-const classes=await p.evaluate(()=>[...document.querySelectorAll('#frames figure img')].map(img=>{const c=document.createElement('canvas');c.width=10;c.height=10;const x=c.getContext('2d');x.drawImage(img,0,0);const d=x.getImageData(5,5,1,1).data;return d[0]>200?'red':d[2]>200?'blue':'other'}));
-assert.deepEqual(classes,['red','red','blue','blue'],'real canvas frames from the actual video scenes');
+// Seek timing is not frame-exact: a cut frame can land mid-fade, so a single pixel is
+// unreliable (CI 2026-10-31: frame 3 sampled red on one run, blue on the next, same code).
+// Average the whole downscaled frame and require a clear dominant channel; the sequence must
+// still run red-scene -> blue-scene, proving the frames are real canvas captures of the
+// fixture's two scenes, not placeholders.
+const classes=await p.evaluate(()=>[...document.querySelectorAll('#frames figure img')].map(img=>{const c=document.createElement('canvas');c.width=10;c.height=10;const x=c.getContext('2d');x.drawImage(img,0,0);const d=x.getImageData(0,0,10,10).data;let r=0,b=0;for(let i=0;i<d.length;i+=4){r+=d[i];b+=d[i+2]}r/=100;b/=100;return r>150&&r-b>40?'red':b>150&&b-r>40?'blue':'other'}));
+assert.ok(classes[0]==='red'&&classes[classes.length-1]==='blue'&&classes.every(c=>c!=='other')&&classes.indexOf('blue')>classes.lastIndexOf('red'),'real canvas frames from the actual video scenes: '+classes.join(','));
 assert.deepEqual(external,[],'frame capture is fully local: '+external.join(','));
 for(const sel of ['#meta','#frames figcaption'])assert.equal(await p.evaluate(s=>getComputedStyle(document.querySelector(s)).direction,sel),'ltr','technical values isolated LTR: '+sel);
 // frame text index (B2): local OCR per frame, review caveat

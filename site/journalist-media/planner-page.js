@@ -1,4 +1,5 @@
 import {validateCase} from '../journalist-core.js';
+import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import {plannerCase} from './planner-case-core.js';
 import{MATERIALS,buildPlan,planText}from'./planner-core.js';
 import{CATALOG}from'./planner-catalog.js';
@@ -52,3 +53,34 @@ $('export').onclick=()=>{if(!lastPlan||lastPlan.empty)return;
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='verification-path.txt';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),4000)};
 $('copy').onclick=async()=>{if(!lastPlan||lastPlan.empty)return;
  try{await navigator.clipboard.writeText(planText(lastPlan,lastDesc));say('نُسخ المسار إلى الحافظة.')}catch(e){say('تعذر النسخ: '+e.message)}};
+
+// AI explanation of the built plan (2026-10-31 all-tools AI expansion, user «تمام ضيفه ف كل
+// الأدوات»): the plan stays a local rule match; this optional section sends ONLY the visible plan
+// text to the guide worker (summarize_text route, context 'plan'). The worker guard blocks any
+// claim that the plan was executed or verified anything; description of the proposal only.
+(function aiSummary(){
+  const res0=document.getElementById('result');
+  new MutationObserver(()=>{const b=document.getElementById('ai-box'); if(b) b.hidden=res0.hidden; if(res0.hidden){const r=document.getElementById('ai-result'); if(r)r.hidden=true; const s=document.getElementById('ai-status'); if(s)s.textContent='';}}).observe(res0,{attributes:true,attributeFilter:['hidden']});
+  const box=document.getElementById('ai-box'), btn=document.getElementById('ai-summarize'),
+        st=document.getElementById('ai-status'), res=document.getElementById('ai-result'),
+        prov=document.getElementById('ai-provider'), ov=document.getElementById('ai-overview'),
+        qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes');
+  if(!box||!btn)return;
+  btn.onclick=async()=>{
+    const text=(document.getElementById('result').innerText).slice(0,11000);
+    if(text.trim().length<40){st.textContent='المسار أقصر من أن يُشرح.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ الشرح بالذكاء الاصطناعي…';
+    try{
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text,context:'plan'})});
+      const j=r.ok?await r.json():null;
+      const sm=j&&j.summary;
+      if(!sm){st.textContent='الشرح بالذكاء الاصطناعي غير متاح الآن؛ مسارك الكامل ظاهر أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;
+      ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل الشرح بالذكاء الاصطناعي؛ الملخص بصياغة النموذج وصفٌ لمسار مقترح لم يُنفَّذ - راجعه أمام المسار قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ مسارك الكامل ظاهر أعلاه.'}
+    finally{btn.disabled=false}};
+})();
