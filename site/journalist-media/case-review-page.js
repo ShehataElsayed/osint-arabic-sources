@@ -15,9 +15,24 @@ $('export').onclick=()=>{try{if(!current)return;const checked=validateCase(curre
 $('report').onclick=()=>{if(current)download('journalist-case-report.txt',textReport(validateCase(current)),'text/plain;charset=utf-8')};
 
 // AI summary of the open case (2026-10-31 all-tools AI expansion, user «تمام ضيفه ف كل
-// الأدوات»): review stays fully local; this optional section sends ONLY the visible case text to
-// the guide worker (summarize_text route, context 'case'). The worker guard blocks credibility /
-// truth verdicts; the summary describes the case, and review states stay the reviewer's own marks.
+// الأدوات»): review stays fully local; this optional section sends ONLY the open case's content
+// (title, sources, records with their quotes, review states and notes) to the guide worker
+// (summarize_text route, context 'case'). The text is built from the validated case data, NOT
+// scraped from the page, so no UI chrome (buttons, filter labels, the record-count status line)
+// can leak into the summary or be picked as a "verbatim quote" (observed live 2026-10-31: the
+// status line «يُعرض 2 من 2 سجلًا...» was returned as a key quote). The worker guard blocks
+// credibility / truth verdicts; the summary describes the case, and review states stay the
+// reviewer's own marks.
+const REVIEW_STATE_NAMES={unreviewed:'لم يُراجع',accepted:'قُبل',rejected:'رُفض'};
+function caseTextForAI(c){
+  const lines=['عنوان القضية: '+c.title,document.getElementById('summary').textContent];
+  for(const s of c.sources){lines.push('مصدر: '+s.title+(s.url?' ('+s.url+')':''));lines.push(s.text)}
+  for(const r of c.records){lines.push('سجل: '+r.title+' ('+(TOOL_NAMES[r.tool]||r.tool)+')');
+    for(const a of r.anchors){const s=c.sources.find(x=>x.id===a.sourceId);lines.push('اقتباس حرفي من «'+(s?s.title:'مصدر')+'»: '+a.quote)}
+    if(r.note)lines.push('ملاحظة المراجع: '+r.note);
+    lines.push('حالة مراجعة السجل: '+(REVIEW_STATE_NAMES[r.review]||r.review))}
+  return lines.join('\n');
+}
 (function aiSummary(){
   const ws=document.getElementById('workspace');
   new MutationObserver(()=>{const b=document.getElementById('ai-box'); if(b) b.hidden=ws.hidden; if(ws.hidden){const r=document.getElementById('ai-result'); if(r)r.hidden=true; const s=document.getElementById('ai-status'); if(s)s.textContent='';}}).observe(ws,{attributes:true,attributeFilter:['hidden']});
@@ -27,7 +42,8 @@ $('report').onclick=()=>{if(current)download('journalist-case-report.txt',textRe
         qh=document.getElementById('ai-quotes-h'), ql=document.getElementById('ai-quotes');
   if(!box||!btn)return;
   btn.onclick=async()=>{
-    const text=(document.getElementById('summary').textContent+'\n'+document.getElementById('workspace').innerText).slice(0,11000);
+    if(!current){st.textContent='افتح قضية أولًا.';return}
+    const text=caseTextForAI(current).slice(0,11000);
     if(text.trim().length<40){st.textContent='محتوى القضية أقصر من أن يُلخَّص.';return}
     btn.disabled=true;res.hidden=true;st.textContent='جارٍ التلخيص بالذكاء الاصطناعي…';
     try{
