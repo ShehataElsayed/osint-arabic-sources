@@ -30,3 +30,37 @@ $('exportJson').onclick=()=>{download('نسخة-حالات-التحقق.json','a
 $('exportText').onclick=()=>{const c=current(),lines=['تقرير تحقق صحفي',`العنوان: ${c.title||'غير محدد'}`,`نوع المادة: ${LABEL[c.kind]}`,`الادعاء: ${c.claim||'غير محدد'}`,`تاريخ التصدير: ${new Date().toLocaleString('ar-EG')}`,'','خطوات المسار:',...paths[c.kind].steps.map(([title],i)=>`${i+1}. ${c.checked[i]?'رُوجعت':'لم تُراجع'}: ${title}\n   ملاحظة: ${c.stepNotes[i]||'لا توجد'}`),'','سجل الأدلة:',...c.evidence.map((e,i)=>`${i+1}. ${e.name} | ${TYPES[e.type]} | ${DIR[e.direction]}\n   الرابط: ${e.url||'غير مسجل'}\n   تاريخ الوصول: ${e.access||'غير مسجل'}\n   الملاحظة: ${e.note}`),'',`التقدير التحريري: ${VERDICTS[c.verdict]}`,`الثقة: ${CONF[c.confidence]}`,`التفسير والحدود: ${c.rationale||'غير مسجل'}`,`الخطوة التالية: ${c.nextStep||'غير مسجلة'}`,`ملاحظات التشريح: ${c.forensics||'غير مسجلة'}`,'','هذا سجل بشري، وليس حكمًا آليًا أو ضمانًا للدقة.'];download('تقرير-التحقق.txt','text/plain;charset=utf-8',lines.join('\n'));$('ioStatus').textContent='نُزل التقرير النصي للحالة الحالية.'};
 $('importJson').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{if(f.size>3_000_000)throw Error('الملف أكبر من الحد المسموح (3 ميغابايت)');const raw=JSON.parse(await f.text());if(raw.format!==PREFIX)throw Error('هذا الملف ليس نسخة بيانات معتمدة من المنصة');const incoming=normalize(raw);if(!incoming.length)throw Error('الملف لا يحتوي حالات');if(!confirm(`استبدال ${cases.length} حالة محفوظة بـ ${incoming.length} حالة من الملف؟ نزّل نسخة أولًا إن لزم.`))return;cases=incoming;active=cases.some(c=>c.id===raw.active)?raw.active:cases[0].id;persist();render();$('ioStatus').textContent='استُعيدت الحالات من الملف.'}catch(err){$('ioStatus').textContent='تعذر الاستيراد: '+err.message}finally{e.target.value=''}};
 render();
+
+// AI organization of the active verification case (2026-10-31 all-tools AI expansion, user
+// «تمام ضيفه ف كل الأدوات»): the case stays fully local; this optional section sends ONLY the
+// active case's content (claim, reviewed steps with the journalist's notes, the evidence list,
+// and the journalist's own editorial assessment) to the guide worker (summarize_text route,
+// context 'verify'). The text is built from the case data, NOT scraped from the page, so no UI
+// chrome can leak into the summary (lesson from case-review 2026-10-31). The worker guard fails
+// closed on any verdict about the claim; verdict/confidence/rationale stay the journalist's.
+(function aiSummary(){
+  const box=$('ai-box');if(!box)return;
+  const btn=$('ai-summarize'),st=$('ai-status'),res=$('ai-result'),prov=$('ai-provider'),ov=$('ai-overview'),qh=$('ai-quotes-h'),ql=$('ai-quotes');
+  function caseText(c){const lines=['عنوان الحالة: '+(c.title||'بلا عنوان'),'نوع المادة: '+LABEL[c.kind],'الادعاء المحدد: '+(c.claim||'غير محدد')];
+    paths[c.kind].steps.forEach(([title],i)=>{lines.push('خطوة: '+title+' - '+(c.checked[i]?'راجعها الصحفي':'لم يراجعها الصحفي')+(c.stepNotes[i]?' | ملاحظة الصحفي: '+c.stepNotes[i]:''))});
+    if(!c.evidence.length)lines.push('لم تُضف أدلة بعد.');
+    c.evidence.forEach((e,i)=>{lines.push('دليل '+(i+1)+': '+(e.name||'بلا اسم')+' | '+TYPES[e.type]+' | '+DIR[e.direction]+' | الوصول: '+(e.access||'غير مسجل')+' | ملاحظة الصحفي: '+e.note)});
+    lines.push('التقدير التحريري للصحفي نفسه: '+VERDICTS[c.verdict]+' | الثقة: '+CONF[c.confidence]+' | تفسير الصحفي وحدوده: '+(c.rationale||'غير مسجل')+' | الخطوة التالية: '+(c.nextStep||'غير مسجلة'));
+    return lines.join('\n')}
+  btn.onclick=async()=>{const c=current();if(!c){st.textContent='أنشئ حالة أولًا.';return}
+    const text=caseText(c).slice(0,11000);
+    if(text.trim().length<40){st.textContent='محتوى الحالة أقصر من أن يُلخَّص.';return}
+    btn.disabled=true;res.hidden=true;st.textContent='جارٍ التلخيص بالذكاء الاصطناعي…';
+    try{
+      const {BACKEND_URL,aiProviderName}=await import('./rag-config.js');
+      const r=await fetch(BACKEND_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({mode:'summarize_text',text,context:'verify'})});
+      const j=r.ok?await r.json():null;const sm=j&&j.summary;
+      if(!sm){st.textContent='الملخص بالذكاء الاصطناعي غير متاح الآن؛ حالتك الكاملة ظاهرة أعلاه.';return}
+      prov.textContent=aiProviderName(j&&j.provider);
+      ov.textContent=sm.overview;ql.replaceChildren();
+      if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
+      res.hidden=false;
+      st.textContent='اكتمل التلخيص بالذكاء الاصطناعي؛ الملخص بصياغة النموذج وصفٌ للحالة لا حكم على الادعاء ولا مصادقة على تقديرك - راجعه أمام الحالة قبل الاعتماد عليه.'}
+    catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ حالتك الكاملة ظاهرة أعلاه.'}
+    finally{btn.disabled=false}};
+})();

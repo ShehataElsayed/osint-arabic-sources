@@ -330,3 +330,49 @@ test('route: plan context blocks executed-plan claims, allows step description',
   assert.equal(ok.provider, 'gemini', JSON.stringify(ok));
   assert.equal(ok.summary.key_quotes.length, 1);
 });
+// Verification workbench context 'verify' + fail-closed unknown contexts (2026-10-31).
+const VERIFY_SRC = 'عنوان الحالة: حملة تطعيم\nالادعاء المحدد: أعلنت الوزارة تطعيم مليوني مواطن خلال ثلاثة أشهر.\nخطوة: الأصل والسياق - راجعها الصحفي | ملاحظة الصحفي: وُجد البيان الأصلي مساء الثلاثاء.\nدليل 1: بيان الوزارة | أولي | يدعم | الوصول: 2026-10-30 | ملاحظة الصحفي: يذكر الرقم صراحة.\nدليل 2: تغطية مستقلة | مستقل | سياق فقط | الوصول: 2026-10-30 | ملاحظة الصحفي: تكرر الرقم دون تفاصيل تنفيذ.\nالتقدير التحريري للصحفي نفسه: تدعمه الأدلة | الثقة: متوسط | تفسير الصحفي وحدوده: مصدران متطابقان في الرقم دون تفاصيل التنفيذ.';
+
+test('route: unknown summarize context fails closed BEFORE any model call (no unguarded generic fallback)', async () => {
+  calls = [];
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'ملخص تجريبي للنص المدخل فقط دون حكم.', key_quotes: [] }) }));
+  const r = await (await post({ mode: 'summarize_text', text: SRC, context: 'context-that-does-not-exist' })).json();
+  assert.deepEqual(r, { summary: null, reason: 'unsupported_context', retry_after: null });
+  assert.equal(calls.length, 0, 'no provider call for an unknown context');
+});
+
+test('route: every documented context still resolves (supported contexts preserved)', async () => {
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'ملخص تجريبي للنص المدخل فقط دون أي حكم.', key_quotes: [] }) }));
+  for (const ctx of ['generic', 'ocr', 'data', 'archive', 'domain', 'diff', 'image', 'video', 'case', 'plan', 'verify']) {
+    const r = await (await post({ mode: 'summarize_text', text: SRC, context: ctx })).json();
+    assert.ok(r.summary, ctx + ' should still summarize');
+  }
+});
+
+test('route: verify context - a verdict on the claim fails closed', async () => {
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تنظم الحالة ادعاء ودليلين، والادعاء صحيح بناءً عليهما.', key_quotes: [] }) }));
+  const r = await (await post({ mode: 'summarize_text', text: VERIFY_SRC, context: 'verify' })).json();
+  assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, 'machine verdict on the claim must fail closed');
+});
+
+test('route: verify context - endorsing the evidence as proof of the claim fails closed', async () => {
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'الأدلة المسجلة تثبت صحة الادعاء بشكل واضح.', key_quotes: [] }) }));
+  const r = await (await post({ mode: 'summarize_text', text: VERIFY_SRC, context: 'verify' })).json();
+  assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null });
+});
+
+test('route: verify context - describing the case and attributing the verdict to the journalist passes', async () => {
+  const ov = 'الحالة تختبر ادعاء عن تطعيم مليوني مواطن وتشمل دليلين أحدهما أولي يدعم والآخر مستقل للسياق. سجّل الصحفي تقديره التحريري: تدعمه الأدلة بثقة متوسطة، مع تفسير أن المصدرين متطابقان في الرقم دون تفاصيل التنفيذ.';
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: ov, key_quotes: ['أعلنت الوزارة تطعيم مليوني مواطن خلال ثلاثة أشهر.', 'سجل غير موجود في النص'] }) }));
+  const r = await (await post({ mode: 'summarize_text', text: VERIFY_SRC, context: 'verify' })).json();
+  assert.equal(r.summary.overview, ov);
+  assert.deepEqual(r.summary.key_quotes, ['أعلنت الوزارة تطعيم مليوني مواطن خلال ثلاثة أشهر.'], 'invented quote dropped');
+});
+
+test('route: verify context prompt frames verdict ownership and bans machine verdicts', async () => {
+  let bodySeen = '';
+  mockGemini(async (url, init) => { bodySeen = String(init && init.body || ''); return { ok: true, json: async () => geminiBody({ overview: 'وصف تنظيمي للحالة فقط.', key_quotes: [] }) }; });
+  await post({ mode: 'summarize_text', text: VERIFY_SRC, context: 'verify' });
+  assert.match(bodySeen, /تقدير الصحفي نفسه/, 'prompt assigns the verdict to the journalist');
+  assert.match(bodySeen, /ممنوع منعًا باتًا أن تصدر حكمًا/, 'prompt bans a machine verdict');
+});
