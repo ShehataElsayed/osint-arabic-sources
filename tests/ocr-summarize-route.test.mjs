@@ -294,3 +294,21 @@ test('route: video context blocks authenticity/editing verdicts, allows extracti
   assert.equal(ok.provider, 'gemini', JSON.stringify(ok));
   assert.equal(ok.summary.key_quotes.length, 1);
 });
+
+test('route: case context blocks credibility/truth verdicts, allows case description', async () => {
+  const caseText = '3 مصدرًا و5 سجلًا؛ 2 غير مراجع. مصدر: تقرير الأمم المتحدة 2026 (4200 حرفًا). سجل: ادعاء حول أرقام اللقاحات | اقتباس حرفي مربوط. حالة مراجعة السجل: قبلت السجل. ملاحظات السجل: راجعت الأصل أمام النسخة.';
+  for (const overview of [
+    'المصدر الأول موثوق ويمكن الاعتماد عليه.',
+    'الادعاء الوارد في السجل كاذب.',
+    'تحققت القضية من صحة الأرقام المذكورة.',
+    'المصدر صادق فيما نقله.',
+  ]) {
+    mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview, key_quotes: [] }) }));
+    const r = await (await post({ mode: 'summarize_text', text: caseText, context: 'case' })).json();
+    assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
+  }
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تضم القضية 3 مصادر و5 سجلات، اثنان منها بلا مراجعة بعد، ويعتمد سجل على اقتباس حرفي مربوط بمصدر. حالات المراجعة الواردة علامات الصحفي نفسه.', key_quotes: ['3 مصدرًا و5 سجلًا؛ 2 غير مراجع'] }) }));
+  const ok = await (await post({ mode: 'summarize_text', text: caseText, context: 'case' })).json();
+  assert.equal(ok.provider, 'gemini', JSON.stringify(ok));
+  assert.equal(ok.summary.key_quotes.length, 1);
+});
