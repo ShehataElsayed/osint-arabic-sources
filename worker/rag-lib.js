@@ -297,12 +297,22 @@ const SUMMARIZE_CONTEXTS = {
   video: 'أنت مساعد تنظيم نتائج داخل أداة لقطات فيديو عربية. النص التالي نتائج استخراج لقطات محلي من فيديو (بيانات ملف وبصمة ومواضع لقطات ودرجات تغيّر مرصودة ونص مستخرج إن وُجد). صف النتائج كما وردت فقط؛ ممنوع منعًا باتًا أي حكم على أصالة الفيديو أو تعديله أو تركيبه أو توليده - درجات التغيّر مؤشرات مراجعة لا تثبت شيئًا من ذلك، وقد تنتج عن حركة طبيعية أو ضغط أو انتقالات مشهد. ميّز بين النتائج المنفذة فعلًا الظاهرة بأرقامها وبين أسماء خيارات أو أدوات متاحة لم تُنفَّذ.',
   plan: 'أنت مساعد تنظيم خطط داخل أداة تصميم مسار تحقق عربية. النص التالي مسار تحقق مقترح ولّدته الأداة بمطابقة قواعد موثقة على وصف الصحفي ومواده المعلنة: خطوات مرقمة بأسماء أدوات وأدلتها (مواد وإشارات من الوصف). صف خطوات المسار كما وردت فقط؛ ممنوع منعًا باتًا أن تدّعي أن المسار نُفِّذ أو اكتمل أو أن أي خطوة تحققت من شيء أو أنتجت نتيجة - المسار اقتراح مطابقة قواعد لم يُنفَّذ ولا يتحقق من أي شيء، وممنوع الحكم على جدوى المسار أو كفايته أو أنه الطريقة الصحيحة. ميّز بين الخطوات المقترحة الموجودة فعلًا وبين أي تفسير لملاءمتها لا تضفه.',
   case: 'أنت مساعد تنظيم قضايا داخل أداة مراجعة قضايا صحفية عربية. النص التالي محتوى قضية جمعها صحفي (مصادر واقتباسات حرفية وسجلات مراجعة بملاحظاته وحالات مراجعته). صف محتوى القضية كما ورد فقط؛ ممنوع منعًا باتًا أي تقييم لصحة المصادر أو مصداقيتها أو تحقق من الادعاءات - تلخيصك تنظيم للمراجعة البشرية لا بديل عنها. حالات المراجعة الواردة (قُبلت/رُفضت/لم تُراجع) علامات الصحفي نفسه؛ انسبها إليه ولا تقدّمها كنتيجة للأداة. ميّز بين ما ورد فعلًا في القضية وبين ما لم يرد.',
+  // Verification workbench (2026-10-31): the summary organizes a verification case the
+  // journalist is building. The verdict/confidence/rationale in the text are the JOURNALIST'S
+  // OWN editorial assessment, explicitly labeled as such; the summary must attribute them and
+  // never issue, endorse, or reject a verdict on the claim itself.
+  verify: 'أنت مساعد تنظيم حالات تحقق داخل منصة تحقق صحفي عربية. النص التالي حالة تحقق يبنيها صحفي: ادعاء يختبره، خطوات مسار راجعها مع ملاحظاته، وسجل أدلة جمعها (أسماء وأنواع ومواقف من الادعاء وملاحظات)، ثم تقديره التحريري هو (الحكم والثقة والتفسير والخطوة التالية). صف محتوى الحالة وتنظيمها كما ورد فقط؛ ممنوع منعًا باتًا أن تصدر حكمًا على الادعاء أو أن تصادق على تقدير الصحفي أو ترفضه أو تقيّم كفاية أدلته - الحكم والثقة والتفسير تقدير الصحفي نفسه، فانسبها إليه صراحة (مثل «سجّل الصحفي تقديره») ولا تقدّمها كنتيجة للأداة ولا تبنِ عليها استنتاجًا. تلخيصك تنظيم للمراجعة البشرية لا بديل عنها.',
   generic: 'أنت مساعد تنظيم نصوص داخل أداة مراجعة عربية.',
 };
 export async function summarizeText(text, env, f = fetch, context = 'generic') {
   const src = String(text || '').trim().slice(0, 12000);
   if (src.length < 40) return { error: 'empty' };
-  const preamble = SUMMARIZE_CONTEXTS[context] || SUMMARIZE_CONTEXTS.generic;
+  // Deployment safety (2026-10-31, reviewer directive): a page calling a context the deployed
+  // worker does not know must NOT fall back to the unguarded generic preamble - that would run
+  // without the context's guard. Fail closed BEFORE any model call; 'generic' itself stays a
+  // valid context, and every previously supported context behaves exactly as before.
+  const preamble = SUMMARIZE_CONTEXTS[context];
+  if (!preamble) { console.log('summarize_unknown_context', JSON.stringify({ context: String(context).slice(0, 80) })); return { error: 'unsupported_context' }; }
   const prompt = `${preamble} المطلوب: 1) overview ملخص من جملتين أو ثلاث بصياغتك يصف موضوع النص وأبرز ما ورد فيه فقط. 2) key_quotes قائمة حتى 5 اقتباسات من أهم الجمل، منسوخة حرفيًا من النص دون أي تغيير أو تصحيح. قواعد صارمة: لا تضف معلومات غير موجودة في النص، ولا تحقق من صحة شيء، ولا تضف روابط أو مصادر خارجية، والاقتباسات حرفية تمامًا كما وردت. أعد JSON فقط بالشكل {"overview":"...","key_quotes":["..."]}.
 النص المستخرج:
 ${src}`;
@@ -341,6 +351,11 @@ ${src}`;
     // Case review: the summary organizes a journalist's case; it can never judge source
     // credibility or claim truth/verification. Finite known-bad phrasings, not a promise.
     case: /كاذب|صادق|مزيف|موثوق|مضلل|احتيال|نصب|مثبت|مؤكد\s+(تماما|بشكل\s+قاطع)|صحيح\s+تماما|حقيقي\s+تماما|جدير\s+بالثقه|تحققت|تم\s+(التحقق|التأكد|التأكد)|تأكدت\s+من\s+صحه/,
+    // Verification workbench: verdict predicates about the claim itself fail closed. Absolute
+    // tokens follow the case family; the claim-predicate form blocks «الادعاء صحيح/كاذب...»
+    // while letting attribution («سجّل الصحفي تقديره: تدعمه الأدلة») through. Finite known-bad
+    // phrasings, not a promise no verdict ever slips.
+    verify: /كاذب|صادق|مزيف|مزور|مضلل|احتيال|نصب|جدير\s+بالثقه|صحيح\s+تماما|حقيقي\s+تماما|مؤكد\s+(تماما|بشكل\s+قاطع)|مثبت\s+(تماما|بشكل\s+قاطع)|تحققت\s+من\s+صحه|تم\s+(التحقق|التأكد)\s+من\s+صحه|الادعاء\s+(صحيح|كاذب|مضلل|مزيف|حقيقي|سليم|ثابت)|(تثبت|يثبت|تؤكد|يؤكد)[^.,؛]{0,30}(صحه|زيف)\s+الادعاء/,
     // Plan designer (2026-10-31): the plan is a rule match never executed; the summary must not
     // claim steps ran, completed, or verified anything. Finite known-bad phrasings, not a promise.
     plan: /نُفذ|نفذت|تم\s+(تنفيذ|اجراء|إجراء)|اكتمل\s+(التنفيذ|المسار|التحقق)|أثبتت|اثبتت|نفذ\s+المسار|تحققت\s+من\s+(صحه|الادعاء)|طريقه\s+صحيحه|المسار\s+(كاف|الصحيح|المناسب)/,
