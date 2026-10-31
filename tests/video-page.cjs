@@ -22,6 +22,24 @@ assert.equal(await p.locator('#frames figure').count(),4,'four temporal frames')
  await p.unroute('https://reverse-search-proxy.egkrkr.workers.dev/**');
  for(let i=external.length-1;i>=0;i--)if(external[i].includes('workers.dev'))external.splice(i,1)}
 
+// AI explain section (2026-10-31): unhidden with results, route-mocked worker, provider label,
+// verbatim quotes; a filtered worker response shows the honest fallback and keeps results intact.
+{assert.ok(!(await p.evaluate(()=>document.getElementById('ai-box').hidden)),'ai-box unhidden with results');
+ await p.route('https://osint-rag.egkrkr.workers.dev/**',async r=>{await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({summary:{overview:'وصف اختباري للنتائج فقط لا حكم فيه على الفيديو.',key_quotes:['لقطة البداية المرجعية']},provider:'workers-ai'})})});
+ await p.click('#ai-summarize');
+ await p.waitForFunction(()=>!document.getElementById('ai-result').hidden);
+ assert.ok((await p.locator('#ai-provider').innerText()).includes('Workers AI'),'provider label shown');
+ assert.ok((await p.locator('#ai-overview').innerText()).includes('وصف اختباري'),'overview rendered');
+ assert.equal(await p.locator('#ai-quotes li').count(),1,'verbatim quote rendered');
+ await p.unroute('https://osint-rag.egkrkr.workers.dev/**');
+ for(let i=external.length-1;i>=0;i--)if(external[i].includes('osint-rag'))external.splice(i,1);
+ await p.route('https://osint-rag.egkrkr.workers.dev/**',async r=>{await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({summary:null,reason:'filtered',retry_after:null})})});
+ await p.click('#ai-summarize');
+ await p.waitForFunction(()=>document.getElementById('ai-status').textContent.includes('غير متاح'));
+ assert.ok((await p.locator('#ai-status').innerText()).includes('نتائجك الكاملة ظاهرة'),'honest fallback names visible results');
+ assert.ok((await p.evaluate(()=>!document.getElementById('vf-result').hidden)),'results intact after filtered');
+ assert.ok((await p.evaluate(()=>document.getElementById('ai-result').hidden)),'no stale result after filtered');
+ await p.unroute('https://osint-rag.egkrkr.workers.dev/**')}
 const classes=await p.evaluate(()=>[...document.querySelectorAll('#frames figure img')].map(img=>{const c=document.createElement('canvas');c.width=10;c.height=10;const x=c.getContext('2d');x.drawImage(img,0,0);const d=x.getImageData(5,5,1,1).data;return d[0]>200?'red':d[2]>200?'blue':'other'}));
 assert.deepEqual(classes,['red','red','blue','blue'],'real canvas frames from the actual video scenes');
 assert.deepEqual(external,[],'frame capture is fully local: '+external.join(','));
