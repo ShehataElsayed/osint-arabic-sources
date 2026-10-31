@@ -257,7 +257,12 @@ test('route: image context blocks authenticity/manipulation verdicts, allows mea
   // Proof verb tied to a verdict word still fails closed.
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'القياسات تثبت التعديل بوضوح في هذه الصورة.', key_quotes: [] }) }));
   const linked = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
-  assert.deepEqual(linked, { summary: null, reason: 'filtered', retry_after: null });
+  assert.deepEqual(linked, { summary: null, reason: 'filtered', retry_after: null });  // Boundary regression (caught by the video route test 2026-10-31): without a word boundary
+  // before the negation, «التغيّر» false-matches «غير» and the strip would DELETE this real
+  // verdict before the guard sees it. Finite regression coverage, not a safety guarantee.
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'درجات التغيّر تثبت التعديل في هذه الصورة.', key_quotes: [] }) }));
+  const boundary = await (await post({ mode: 'summarize_text', text: metrics, context: 'image' })).json();
+  assert.deepEqual(boundary, { summary: null, reason: 'filtered', retry_after: null });
   // Live phrasing 2026-10-31 on image-analysis (parent review): the source only LISTS display
   // layer names (الطبقات البصرية العميقة as available views), yet the overview implied a deep
   // layer analysis («إشارة إلى تحليل طبقات بصرية عميقة»). Executed-analysis claims about
@@ -286,6 +291,24 @@ test('route: video context blocks authenticity/editing verdicts, allows extracti
   // Negated limits wording is allowed; executed results described with their numbers.
   mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'استُخرجت 6 لقطات من الملف مع بصمته، وسُجّل تغيّر مرصود بدرجة 12.3 عند 2.4ث وهو مؤشر مراجعة لا يثبت تعديلًا.', key_quotes: ['لقطات مستخرجة: 6'] }) }));
   const ok = await (await post({ mode: 'summarize_text', text: results, context: 'video' })).json();
+  assert.equal(ok.provider, 'gemini', JSON.stringify(ok));
+  assert.equal(ok.summary.key_quotes.length, 1);
+});
+
+test('route: case context blocks credibility/truth verdicts, allows case description', async () => {
+  const caseText = '3 مصدرًا و5 سجلًا؛ 2 غير مراجع. مصدر: تقرير الأمم المتحدة 2026 (4200 حرفًا). سجل: ادعاء حول أرقام اللقاحات | اقتباس حرفي مربوط. حالة مراجعة السجل: قبلت السجل. ملاحظات السجل: راجعت الأصل أمام النسخة.';
+  for (const overview of [
+    'المصدر الأول موثوق ويمكن الاعتماد عليه.',
+    'الادعاء الوارد في السجل كاذب.',
+    'تحققت القضية من صحة الأرقام المذكورة.',
+    'المصدر صادق فيما نقله.',
+  ]) {
+    mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview, key_quotes: [] }) }));
+    const r = await (await post({ mode: 'summarize_text', text: caseText, context: 'case' })).json();
+    assert.deepEqual(r, { summary: null, reason: 'filtered', retry_after: null }, overview);
+  }
+  mockGemini(async () => ({ ok: true, json: async () => geminiBody({ overview: 'تضم القضية 3 مصادر و5 سجلات، اثنان منها بلا مراجعة بعد، ويعتمد سجل على اقتباس حرفي مربوط بمصدر. حالات المراجعة الواردة علامات الصحفي نفسه.', key_quotes: ['3 مصدرًا و5 سجلًا؛ 2 غير مراجع'] }) }));
+  const ok = await (await post({ mode: 'summarize_text', text: caseText, context: 'case' })).json();
   assert.equal(ok.provider, 'gemini', JSON.stringify(ok));
   assert.equal(ok.summary.key_quotes.length, 1);
 });
