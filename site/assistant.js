@@ -89,17 +89,17 @@ function render(conf, question) {
     const leads = (conf.leads || []).filter(l => l && l.claim);
     if (leads.length) {
       const lh = el('h3', null, 'أقرب ما وُجد لادعاءات المسودة — خيوط غير موثقة'); lh.style.marginTop = '14px'; answerCard.append(lh);
-      answerCard.append(el('p', 'note', 'تشابه آلي بين كل ادعاء ومقاطع المصادر المفتوحة لم يجتز فحوص الأرقام والنفي والكيانات؛ ليس سندًا ولا إجابة، وقد لا يمت للادعاء بصلة فعلية — راجع المصدر بنفسك.'));
+      const lnote = el('p', 'note', 'تشابه آلي لم يجتز فحوص التوثيق؛ ليس سندًا ولا إجابة — راجع المصدر بنفسك.'); lnote.style.color = '#d9e2ce'; answerCard.append(lnote);
       leads.forEach(l => {
         const row = el('div', 'claim');
-        row.append(el('span', 'st st-no', `ادعاء من المسودة لم يجد سندًا — تشابه آلي ${Math.round((l.similarity || 0) * 100)}% فقط`));
+        row.append(el('span', 'st st-no', `ادعاء غير موثق — تشابه آلي ${Math.round((l.similarity || 0) * 100)}%`));
         const body = el('div');
         body.append(el('span', null, l.claim));
         if (cleanQuote(l.sentence)) {
-          const ev = el('blockquote', null, cleanQuote(l.sentence)); ev.style.cssText = 'margin:4px 0 0;color:#cfdbe2;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px;font-size:14px';
+          const ev = el('blockquote', null, cleanQuote(l.sentence)); ev.style.cssText = 'margin:4px 0 0;color:#eef3f5;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px;font-size:14px';
           body.append(ev);
           if (l.source_ref >= 1 && allSrcs[l.source_ref - 1] && allSrcs[l.source_ref - 1].exists) { const chip = el('a', 'cite-chip', `[${l.source_ref}]`); chip.href = '#asksrc' + l.source_ref; body.append(chip); }
-        } else body.append(el('p', 'note', 'لم يُعثر على مقطع قريب في المصادر المفتوحة التي فُحصت.'));
+        } else { const nolead = el('p', 'note', 'لم يُعثر على مقطع قريب في المصادر المفتوحة التي فُحصت.'); nolead.style.color = '#d9e2ce'; body.append(nolead); }
         row.append(body);
         answerCard.append(row);
       });
