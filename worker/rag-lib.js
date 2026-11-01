@@ -1291,7 +1291,13 @@ export async function askAssistant(question, candidates, env, f = fetch) {
       if (b2 && (!best || b2.s > best.s)) { best = b2; winText = claimsEn[ci]; xl = true; }
     }
     const supported = Boolean(best && groundedOk(winText, best.x.text, best.s, semantic, xl));
-    return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0, evidence: supported ? cleanText(best.x.text, 300) : '', source_ref: supported ? best.x.ref : 0, cross_lang: supported && xl };
+    // Closest-passage lead for an unsupported claim: shown ONLY when the decision is insufficient, explicitly
+    // labeled as an unverified retrieval hint (lexical/semantic similarity that FAILED the grounding guards —
+    // never support). Display floor sits far below the support floors (0.78 semantic / 0.4 lexical) so a near-miss
+    // passage surfaces as a lead while noise does not; below the floor no passage is named at all.
+    const LEAD_FLOOR = semantic ? 0.5 : 0.3;
+    const lead = (!supported && best && best.s >= LEAD_FLOOR) ? { sentence: cleanText(best.x.text, 300), source_ref: best.x.ref } : { sentence: '', source_ref: 0 };
+    return { text: c, supported, similarity: best ? Math.round(best.s * 100) / 100 : 0, evidence: supported ? cleanText(best.x.text, 300) : '', source_ref: supported ? best.x.ref : 0, cross_lang: supported && xl, lead_sentence: lead.sentence, lead_source_ref: lead.source_ref };
   });
   // Citation reconciliation: every marker in the shown answer is RE-DERIVED from the fetched passages.
   // A sentence earns [S#] only when an opened source holds a passage that lexically supports it
@@ -1402,8 +1408,13 @@ export async function askAssistant(question, candidates, env, f = fetch) {
   warnings.push('مؤشر تغطية الفحوص checklist آلي: يقيس نسبة معايير الفحص المستوفاة، لا احتمال صحة الإجابة ولا موثوقيتها');
   warnings.push('تصنيف الجهات مبني على النطاق وبيانات التسجيل فقط، والتطابق النصي لا يعني إثبات الاستدلال');
   if (semantic) warnings.push('المطابقة الدلالية إشارة استرجاع آلية: قد لا تكشف استبدال الكيانات أو تناقضًا دقيقًا رغم فحوص الأرقام والنفي — راجع نص المصدر الأصلي');
+  // Labeled unverified leads: only when the answer was withheld (insufficient) and only for unsupported claims.
+  // Each lead's sentence is a verbatim passage substring (same cleaning as evidence) and its source_ref indexes the
+  // same opened-sources list as supported evidence; an empty sentence means no passage cleared the display floor.
+  const leads = decision === 'insufficient' ? claimRows.filter(r => !r.supported).map(r => ({ claim: r.text, similarity: r.similarity, sentence: r.lead_sentence || '', source_ref: r.lead_sentence ? (r.lead_source_ref || 0) : 0 })) : [];
+  if (leads.length) warnings.push('المعروض أدناه خيوط قريبة من ادعاءات المسودة بتشابه آلي فقط (لم تجتز فحوص الأرقام والنفي والكيانات): ليست سندًا ولا إجابة');
   return {
-    decision, ...(insufReason ? { insufficient_reason: insufReason } : {}), answer: finalAnswer, answer_qualified: qualified, claims: claimRows, completeness, confidence: { score, band, criteria: crit },
+    decision, ...(insufReason ? { insufficient_reason: insufReason } : {}), answer: finalAnswer, answer_qualified: qualified, claims: claimRows, leads, completeness, confidence: { score, band, criteria: crit },
     sources: checked.map(x => ({ name: x.name, url: x.exists ? x.url : '', claimed: x.exists ? '' : x.claimed, host: x.host, exists: x.exists, title: x.title, quote: x.exists ? x.quote : '', picked: Boolean(x.exists && x.picked), repaired: Boolean(x.repaired), by_search: Boolean(x.by_search), discovered: Boolean(x.discovered), escalated: Boolean(x.escalated), via: x.exists ? (x.via || '') : '', original: (x.repaired || x.escalated) ? x.original : '', published_at: x.exists ? (x.published_at || '') : '', rel: x.exists ? x.rel : 'unknown', tier: x.tier, similarity: x.similarity, verified: x.verified, numbers_ok: x.exists ? x.numbers_ok : null, negation_conflict: Boolean(x.exists && x.negation_conflict), identity: x.exists ? x.identity : null, identity_status: x.exists ? (x.identity_status || '') : '', page: x.exists ? x.page : null })),
     issues, angles, tools: Array.isArray(tools) ? tools : [], factcheck: fcHits, time_sensitive: d.json.time_sensitive === true, warnings, generated: true
   };

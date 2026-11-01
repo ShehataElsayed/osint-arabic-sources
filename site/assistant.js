@@ -84,6 +84,26 @@ function render(conf, question) {
     answerCard.append(el('span', 'badge mislead', badge));
     const head = el('h3', null, question); head.style.margin = '12px 0 8px'; answerCard.append(head);
     answerCard.append(el('p', null, text));
+    // Labeled unverified leads: closest passages to the withheld draft's claims. Retrieval similarity only —
+    // these FAILED the grounding guards; they are starting points for manual search, never evidence.
+    const leads = (conf.leads || []).filter(l => l && l.claim);
+    if (leads.length) {
+      const lh = el('h3', null, 'أقرب ما وُجد لادعاءات المسودة — خيوط غير موثقة'); lh.style.marginTop = '14px'; answerCard.append(lh);
+      answerCard.append(el('p', 'note', 'تشابه آلي بين كل ادعاء ومقاطع المصادر المفتوحة لم يجتز فحوص الأرقام والنفي والكيانات؛ ليس سندًا ولا إجابة، وقد لا يمت للادعاء بصلة فعلية — راجع المصدر بنفسك.'));
+      leads.forEach(l => {
+        const row = el('div', 'claim');
+        row.append(el('span', 'st st-no', `تشابه آلي ${Math.round((l.similarity || 0) * 100)}% — غير موثق`));
+        const body = el('div');
+        body.append(el('span', null, l.claim));
+        if (cleanQuote(l.sentence)) {
+          const ev = el('blockquote', null, cleanQuote(l.sentence)); ev.style.cssText = 'margin:4px 0 0;color:#cfdbe2;border-inline-start:3px solid ' + AMBER + ';padding-inline-start:10px;font-size:14px';
+          body.append(ev);
+          if (l.source_ref >= 1 && allSrcs[l.source_ref - 1] && allSrcs[l.source_ref - 1].exists) { const chip = el('a', 'cite-chip', `[${l.source_ref}]`); chip.href = '#asksrc' + l.source_ref; body.append(chip); }
+        } else body.append(el('p', 'note', 'لم يُعثر على مقطع قريب في المصادر المفتوحة التي فُحصت.'));
+        row.append(body);
+        answerCard.append(row);
+      });
+    }
   } else {
     answerCard.append(el('span', 'badge true', decision === 'extractive' ? 'مقتطفات موثقة من المصادر المفتوحة' : conf.answer_qualified ? 'الإجابة بعد الفحص والتنقية' : 'الإجابة بعد الفحص'));
     if (decision === 'extractive') answerCard.append(el('p', 'note', 'تعذرت صياغة إجابة موثقة كاملة؛ المعروض فقط ما تدعمه النصوص المفتوحة، باقتباساتها الحرفية.'));
