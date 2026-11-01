@@ -89,7 +89,7 @@ export function buildAskReport({ question, result, catalog, when }) {
   if (r.decision === 'insufficient' && (r.leads || []).length) {
     out.push('', '## خيوط غير موثقة (تشابه آلي فقط — لم تجتز فحوص التوثيق؛ ليست سندًا ولا إجابة)');
     r.leads.forEach(l => {
-      out.push(`- ${line(l.claim)} (تشابه آلي ${Math.round((l.similarity || 0) * 100)}%)`);
+      out.push(`- ادعاء من المسودة لم يجد سندًا: ${line(l.claim)} (تشابه آلي ${Math.round((l.similarity || 0) * 100)}% فقط)`);
       if (l.sentence) out.push(`  أقرب مقطع: "${line(cleanQuote(l.sentence))}" (المصدر [${l.source_ref}])`);
       else out.push('  لم يُعثر على مقطع قريب في المصادر المفتوحة التي فُحصت');
     });

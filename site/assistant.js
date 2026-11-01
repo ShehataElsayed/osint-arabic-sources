@@ -92,7 +92,7 @@ function render(conf, question) {
       answerCard.append(el('p', 'note', 'تشابه آلي بين كل ادعاء ومقاطع المصادر المفتوحة لم يجتز فحوص الأرقام والنفي والكيانات؛ ليس سندًا ولا إجابة، وقد لا يمت للادعاء بصلة فعلية — راجع المصدر بنفسك.'));
       leads.forEach(l => {
         const row = el('div', 'claim');
-        row.append(el('span', 'st st-no', `تشابه آلي ${Math.round((l.similarity || 0) * 100)}% — غير موثق`));
+        row.append(el('span', 'st st-no', `ادعاء من المسودة لم يجد سندًا — تشابه آلي ${Math.round((l.similarity || 0) * 100)}% فقط`));
         const body = el('div');
         body.append(el('span', null, l.claim));
         if (cleanQuote(l.sentence)) {
