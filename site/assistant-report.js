@@ -86,6 +86,14 @@ export function buildAskReport({ question, result, catalog, when }) {
       if (c.supported && cleanQuote(c.evidence)) out.push(`  السند: "${line(cleanQuote(c.evidence))}" (المصدر [${c.source_ref}])`);
     });
   }
+  if (r.decision === 'insufficient' && (r.leads || []).length) {
+    out.push('', '## خيوط غير موثقة (تشابه آلي فقط — لم تجتز فحوص التوثيق؛ ليست سندًا ولا إجابة)');
+    r.leads.forEach(l => {
+      out.push(`- ادعاء من المسودة لم يجد سندًا: ${line(l.claim)} (تشابه آلي ${Math.round((l.similarity || 0) * 100)}% فقط)`);
+      if (l.sentence) out.push(`  أقرب مقطع: "${line(cleanQuote(l.sentence))}" (المصدر [${l.source_ref}])`);
+      else out.push('  لم يُعثر على مقطع قريب في المصادر المفتوحة التي فُحصت');
+    });
+  }
   if ((conf.criteria || []).length) {
     out.push('', '## معايير الفحص الآلي المعلنة');
     conf.criteria.forEach(c => out.push(`- (${c.score}/1) ${c.label}: ${line(c.detail)}`));

@@ -101,6 +101,29 @@ test('ask: full pipeline qualifies unsupported claims, strips dead citation mark
   assert.deepEqual(r.issues, ['فجوة في البيانات الإقليمية المحدثة']);
   assert.equal(r.tools.length, 1);
   assert.ok(r.warnings.some(w => w.includes('لا احتمال صحة')) && r.warnings.some(w => w.includes('لا يعني إثبات الاستدلال')));
+  assert.deepEqual(r.leads, [], 'no unverified leads when the decision is not insufficient');
+});
+
+test('ask: unsupported near-miss claim surfaces a verbatim labeled lead on insufficient', async () => {
+  // Claim shares most content tokens with a real passage but invents a number (30 درجة) absent from the
+  // passage → numbers guard rejects support, yet the passage is a genuine near-miss worth showing as a lead.
+  const draft = JSON.stringify({
+    answer: 'إجابة مفصلة عن حرارة البحر [S1].', claims: ['ارتفعت درجات حرارة البحر بنسبة 30 درجة خلال العقد الأخير'], numbers: ['30'], time_sensitive: false,
+    sources: [{ name: 'تقرير المنظمة العالمية للأرصاد', url: OK_URL }],
+  });
+  const BODY = '<p>ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير بشكل قياسي حسب التقرير السنوي للمنظمة</p><p>تؤثر موجات الحر البحرية على الثروة السمكية والنظم البيئية البحرية في العالم</p>';
+  const f = scripted({ [OK_URL]: page(BODY, 'تقرير المنظمة') }, { draft });
+  const r = await askAssistant('ما أثر موجات الحر البحرية؟', CANDS, ENV, f);
+  assert.equal(r.decision, 'insufficient');
+  assert.equal(r.insufficient_reason, 'unsupported_claims');
+  assert.equal(r.answer, '', 'model text still withheld: leads never substitute for a verified answer');
+  assert.equal(r.claims[0].supported, false, 'invented number fails the numbers guard');
+  assert.ok(Array.isArray(r.leads) && r.leads.length === 1, 'one lead for the unsupported claim');
+  const lead = r.leads[0];
+  assert.equal(lead.claim, 'ارتفعت درجات حرارة البحر بنسبة 30 درجة خلال العقد الأخير');
+  assert.ok(lead.sentence.length > 0, 'near-miss passage clears the display floor');
+  assert.ok(BODY.includes(lead.sentence), 'lead sentence is a verbatim substring of the opened page');
+  assert.ok(lead.source_ref >= 1 && r.sources[lead.source_ref - 1] && r.sources[lead.source_ref - 1].exists, 'lead source_ref points at an opened source');
 });
 
 test('ask: credible but irrelevant page yields no support and low confidence', async () => {
@@ -122,6 +145,14 @@ test('ask: credible but irrelevant page yields no support and low confidence', a
   assert.equal(r.insufficient_reason, 'unsupported_claims');
   assert.ok(r.warnings.some(w => w.includes('غير كافية')));
   assert.ok(r.warnings.some(w => w.includes('الامتناع عن الإجابة لا يعني غياب المعلومة')), 'anti-absence warning');
+  // Labeled leads: one per unsupported claim, never a supported claim; a shown sentence must be a verbatim
+  // substring of an opened page and its source_ref must point at an opened source. Below the display floor
+  // the sentence stays empty rather than dressing noise up as a lead.
+  assert.ok(Array.isArray(r.leads) && r.leads.length === 1, 'one lead for the single unsupported claim');
+  assert.equal(r.leads[0].claim, 'ارتفعت درجات حرارة البحر في المنطقة خلال العقد الأخير');
+  assert.equal(r.leads[0].sentence, '', 'irrelevant page is below the display floor: no passage named');
+  assert.equal(r.leads[0].source_ref, 0);
+  assert.ok(r.warnings.some(w => w.includes('خيوط قريبة') && w.includes('ليست سندًا')), 'lead disclaimer warning');
 });
 
 test('ask: no checkable claims is a processing limitation, never an evidence gap', async () => {

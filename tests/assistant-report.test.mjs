@@ -30,6 +30,19 @@ test('verify report lists criteria, sources and keeps model answer flagged', () 
   assert.ok(md.includes('اجتاز الفحص')); assert.ok(md.includes('درجة الثقة الإرشادية: عالية'));
 });
 
+test('ask report lists labeled unverified leads only on insufficient decisions', () => {
+  const base = { decision: 'insufficient', insufficient_reason: 'unsupported_claims', completeness: 'لم تُقدَّم إجابة', answer: '',
+    claims: [{ text: 'ادعاء بلا سند', supported: false, similarity: 0.55 }],
+    leads: [{ claim: 'ادعاء بلا سند', similarity: 0.55, sentence: 'مقطع حقيقي من نص المصدر المفتوح', source_ref: 1 }],
+    sources: [{ name: 'مصدر', url: 'https://a.example/x', exists: true, title: 'مصدر', quote: '', rel: 'unknown', tier: 'unknown' }] };
+  const md = buildAskReport({ question: 'سؤال', result: base, catalog: [], when: '2026-11-02' });
+  assert.ok(md.includes('خيوط غير موثقة'), 'leads section header present');
+  assert.ok(md.includes('لم تجتز فحوص التوثيق'), 'lead disclaimer present');
+  assert.ok(md.includes('"مقطع حقيقي من نص المصدر المفتوح"'), 'verbatim lead passage shown');
+  const answered = buildAskReport({ question: 'سؤال', result: { ...base, decision: 'answer', leads: [] }, catalog: [], when: '2026-11-02' });
+  assert.ok(!answered.includes('خيوط غير موثقة'), 'no leads section on an answered report');
+});
+
 test('cleanQuote drops code-like fragments, keeps real prose quotes', () => {
   assert.equal(cleanQuote('length)throw new Error("Field name must be in the format'), '');
   assert.equal(cleanQuote('window.querySelectorAll("a").length)'), '');
