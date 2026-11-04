@@ -70,3 +70,23 @@ class TenantStoreTests(unittest.TestCase):
         self.store.db.commit()
         with self.assertRaises(Denied):
             self.store.read('editor', self.a, self.f)
+
+    def test_editorial_review_is_separate_and_version_bound(self):
+        self.store.member('alice', self.a, 'reviewer', 'reviewer')
+        self.store.transition('alice', self.a, self.f, 1, 'submit')
+        with self.assertRaises(Denied):
+            self.store.transition('alice', self.a, self.f, 1, 'approve')
+        self.assertEqual(self.store.transition('reviewer', self.a, self.f, 1, 'approve'), 'approved')
+        self.store.save('alice', self.a, self.f, 1, {'text': 'جديد'})
+        self.assertEqual(self.store.editorial_state('reviewer', self.a, self.f)['state'], 'draft')
+        with self.assertRaises(Conflict):
+            self.store.transition('reviewer', self.a, self.f, 1, 'approve')
+
+    def test_editorial_cross_tenant_and_role_denied(self):
+        with self.assertRaises(Denied):
+            self.store.transition('bob', self.b, self.f, 1, 'submit')
+        self.store.member('alice', self.a, 'viewer', 'viewer')
+        with self.assertRaises(Denied):
+            self.store.transition('viewer', self.a, self.f, 1, 'submit')
+        with self.assertRaises(Conflict):
+            self.store.transition('alice', self.a, self.f, 1, 'request_changes')

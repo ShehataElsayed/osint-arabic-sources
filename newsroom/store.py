@@ -26,6 +26,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS members(tenant TEXT REFERENCES institutions(id), user TEXT, role TEXT CHECK(role IN ('owner','editor','reviewer','viewer')), PRIMARY KEY(tenant,user));
         CREATE TABLE IF NOT EXISTS files(id TEXT PRIMARY KEY, tenant TEXT REFERENCES institutions(id), name TEXT NOT NULL, version INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS versions(file TEXT REFERENCES files(id), version INTEGER, content TEXT NOT NULL, author TEXT NOT NULL, PRIMARY KEY(file,version));
+        CREATE TABLE IF NOT EXISTS workflow(file TEXT PRIMARY KEY REFERENCES files(id), version INTEGER NOT NULL, state TEXT CHECK(state IN ('draft','in_review','approved','changes_requested')), reviewer TEXT);
         CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, tenant TEXT, actor TEXT, action TEXT, file TEXT, version INTEGER, created_at TEXT DEFAULT CURRENT_TIMESTAMP);
         ''')
 
@@ -60,6 +61,7 @@ class Store:
         with self.db:
             self._role(principal, tenant, ('owner', 'editor'))
             self.db.execute('INSERT INTO files VALUES (?,?,?,1)', (fid, tenant, name))
+            self.db.execute("INSERT INTO workflow VALUES (?,1,'draft',NULL)", (fid,))
             self.db.execute('INSERT INTO versions VALUES (?,1,?,?)', (fid, encoded, principal))
             self.db.execute('INSERT INTO audit(tenant,actor,action,file,version) VALUES (?,?,?,?,1)', (tenant, principal, 'create', fid))
         return fid
@@ -89,5 +91,43 @@ class Store:
             if changed != 1:
                 raise Conflict('concurrent save')
             self.db.execute('INSERT INTO versions VALUES (?,?,?,?)', (fid, new, encoded, principal))
+            self.db.execute("UPDATE workflow SET version=?,state='draft',reviewer=NULL WHERE file=?", (new, fid))
             self.db.execute('INSERT INTO audit(tenant,actor,action,file,version) VALUES (?,?,?,?,?)', (tenant, principal, 'save', fid, new))
         return new
+
+    def editorial_state(self, principal, tenant, fid):
+        self.read(principal, tenant, fid)
+        row = self.db.execute('SELECT version,state,reviewer FROM workflow WHERE file=?', (fid,)).fetchone()
+        if not row:
+            raise ValueError('workflow unavailable for legacy file')
+        return dict(zip(('version', 'state', 'reviewer'), row))
+
+    def transition(self, principal, tenant, fid, expected_version, action):
+        # Approval is a version-bound internal decision, never external publication.
+        roles = {'submit': ('owner', 'editor'), 'approve': ('reviewer', 'owner'),
+                 'request_changes': ('reviewer', 'owner')}
+        if action not in roles:
+            raise ValueError('unknown editorial action')
+        with self.db:
+            self._role(principal, tenant, roles[action])
+            content = self.read(principal, tenant, fid)
+            if content['version'] != expected_version:
+                raise Conflict('editorial decision requires current version')
+            state = self.editorial_state(principal, tenant, fid)['state']
+            if action == 'submit':
+                if state not in ('draft', 'changes_requested'):
+                    raise Conflict('file is not ready for submission')
+                target, reviewer = 'in_review', None
+            else:
+                if state != 'in_review':
+                    raise Conflict('file is not awaiting review')
+                author = self.db.execute('SELECT author FROM versions WHERE file=? AND version=?', (fid, expected_version)).fetchone()[0]
+                if author == principal:
+                    raise Denied('a different person must review this version')
+                target = 'approved' if action == 'approve' else 'changes_requested'
+                reviewer = principal
+            changed = self.db.execute('UPDATE workflow SET state=?,reviewer=? WHERE file=? AND version=? AND state=?', (target, reviewer, fid, expected_version, state)).rowcount
+            if changed != 1:
+                raise Conflict('editorial state changed; reload')
+            self.db.execute('INSERT INTO audit(tenant,actor,action,file,version) VALUES (?,?,?,?,?)', (tenant, principal, action, fid, expected_version))
+        return target
