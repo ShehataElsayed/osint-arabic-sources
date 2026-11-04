@@ -9,3 +9,6 @@ CREATE INDEX IF NOT EXISTS audit_tenant_time ON audit_events(tenant,created_at);
 
 CREATE TABLE IF NOT EXISTS editorial_state(file_id TEXT PRIMARY KEY REFERENCES office_files(id),version INTEGER NOT NULL,state TEXT NOT NULL CHECK(state IN ('draft','in_review','approved','changes_requested','rejected')),reviewer TEXT,transition_id TEXT NOT NULL,updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS workflow_runs(id TEXT PRIMARY KEY,tenant TEXT NOT NULL REFERENCES institutions(id),revision INTEGER NOT NULL,content TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS crm_records(id TEXT PRIMARY KEY,tenant TEXT NOT NULL REFERENCES institutions(id),kind TEXT NOT NULL CHECK(kind IN ('actor','opportunity','activity','contract','ledger')),revision INTEGER NOT NULL CHECK(revision>=1),content TEXT NOT NULL,updated_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS crm_tenant_kind ON crm_records(tenant,kind,updated_at);
+CREATE TABLE IF NOT EXISTS crm_work_links(tenant TEXT NOT NULL REFERENCES institutions(id),record_id TEXT NOT NULL REFERENCES crm_records(id),workflow_id TEXT NOT NULL REFERENCES workflow_runs(id),created_at INTEGER NOT NULL,PRIMARY KEY(tenant,record_id,workflow_id));
