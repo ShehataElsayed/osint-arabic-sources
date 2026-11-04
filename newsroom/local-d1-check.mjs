@@ -1,0 +1,5 @@
+import {getPlatformProxy} from './node_modules/wrangler/wrangler-dist/cli.js';
+import {readFileSync} from 'node:fs';import assert from 'node:assert/strict';
+import {OfficeService,Conflict,Denied} from './d1-service.mjs';
+const proxy=await getPlatformProxy({configPath:new URL('./wrangler.toml',import.meta.url).pathname,persist:false});
+try{const db=proxy.env.DB;await db.exec(readFileSync(new URL('./schema.sql',import.meta.url),'utf8').replace(/\n/g,' '));await db.exec("INSERT INTO institutions VALUES ('a','Alpha'),('b','Beta'); INSERT INTO members VALUES ('a','alice','owner'),('a','viewer','viewer'),('b','bob','owner');");const s=new OfficeService(db),f=await s.create('alice','a',{kind:'doc',name:'تحقيق',data:{html:'مصدر'}});assert.equal((await s.read('alice','a',f.id)).data.html,'مصدر');await assert.rejects(s.read('bob','b',f.id),Denied);await s.save('alice','a',f.id,1,{kind:'doc',name:'تحقيق',data:{html:'تعديل'}});await assert.rejects(s.save('alice','a',f.id,1,{kind:'doc',name:'تحقيق',data:{html:'قديم'}}),Conflict);console.log('PASS actual local Wrangler D1 binding create/read/save/stale/isolation');}finally{await proxy.dispose()}

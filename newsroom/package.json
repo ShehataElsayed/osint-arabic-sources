@@ -1,0 +1,1 @@
+{"name":"osh-newsroom-prototype","private":true,"type":"module","dependencies":{"jose":"6.2.15"},"devDependencies":{"wrangler":"4.157.0"},"scripts":{"test":"node --test ../tests/newsroom-*.test.mjs"}}
