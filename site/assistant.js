@@ -217,7 +217,7 @@ function newsPanel(q) {
   return post({ mode: 'news_rss', q }).then(r => r&&Array.isArray(r.items)?{...r,error:r.feeds_ok===0?'feeds_unavailable':null,items:filterRss(q,r.items),lexical_filter:true}: {error:r?.error||'unexpected',items:[]}).catch(() => ({error:'neterr',items:[]}));
 }
 function renderNews(r, box) {
-  const card = el('div', 'src-card fade');
+  const card = el('div', 'src-card');
   card.append(el('span', 'badge', 'موجز RSS'));
   card.append(el('h3', null, 'عناوين RSS اجتازت مطابقة كلمات محدودة'));
   if(r.error)card.append(el('p',null,'تعذر جلب موجزات RSS الآن. لا توجد نتيجة يمكن الاعتماد عليها.'));
@@ -245,7 +245,7 @@ function factPanel(q) {
     .catch(() => ({ error: 'neterr' }));
 }
 function renderFacts(r, box) {
-  const card = el('div', 'src-card fade');
+  const card = el('div', 'src-card');
   card.append(el('span', 'badge', 'تحقق سريع'));
   card.append(el('h3', null, 'مراجعات تحقق مطابقة (Google Fact Check)'));
   if (r.error) {
