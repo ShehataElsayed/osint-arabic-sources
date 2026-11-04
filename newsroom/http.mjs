@@ -1,3 +1,4 @@
+import{GoalAgent,workersAIDecider}from'./goal-agent.mjs';
 import{institutionOverview}from'./institution-overview.mjs';
 import{produceReport}from'./produce-report.mjs';
 import{runPublicDemonstration}from'./public-demonstration.mjs';
@@ -13,7 +14,7 @@ import {WorkflowRunner,WorkflowConflict,WorkflowBlocked} from './workflow-runner
 import {suppliedSourceAdapters,normalizeSources} from './source-adapters.mjs';
 import {D1WorkflowStore} from './workflow-store.mjs';
 const reply=(status,body,origin)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff',...(origin?{'access-control-allow-origin':origin,'vary':'Origin'}:{})}});
-export function createHandler({authenticate=authenticateAccess,service=db=>new OfficeService(db),workflow=db=>new WorkflowRunner({store:new D1WorkflowStore(db),office:service(db),adapters:id=>id==='local-source-extract-v1'?suppliedSourceAdapters():id==='local-csv-statistics-v1'?tableAdapters():null})}={}){
+export function createHandler({goalDecider=workersAIDecider,authenticate=authenticateAccess,service=db=>new OfficeService(db),workflow=db=>new WorkflowRunner({store:new D1WorkflowStore(db),office:service(db),adapters:id=>id==='local-source-extract-v1'?suppliedSourceAdapters():id==='local-csv-statistics-v1'?tableAdapters():null})}={}){
  return async(request,env)=>{
   const origin=request.headers.get('origin');
   // Server-managed exact origin, never reflected without equality. No cookie-auth CORS.
@@ -26,11 +27,11 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    const session=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/session$/);if(session){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,{tenant:session[1],role:await service(env.DB).role(identity.principal,session[1])},cors)}
    const overviewPath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/overview$/);if(overviewPath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await institutionOverview({principal:identity.principal,tenant:overviewPath[1],office:service(env.DB),store:new D1WorkflowStore(env.DB),db:env.DB,env}),cors)}
    const capabilityPath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/capabilities(?:\/([a-zA-Z0-9-]{1,80}))?$/);if(capabilityPath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(identity.principal,capabilityPath[1]);return reply(200,capabilityPath[2]?capabilityContract(capabilityPath[2]):searchCapabilities(new URL(request.url).searchParams.get('q')||''),cors)}
-   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows|plans|public-demo|produce-report)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile|pause|resume|branch|replan))?$/);
+   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows|plans|public-demo|produce-report|goal-agents)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile|pause|resume|branch|replan|tick))?$/);
    if(!path)return reply(404,{error:'not_found'},cors);
    const [,tenant,resource,id,tail]=path,principal=identity.principal;
    if(resource==='plans'||resource==='public-demo'||resource==='produce-report'){if(request.method!=='POST'||id||tail)return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(principal,tenant,['owner','editor'])}
-   const isWorkflow=resource==='workflows',review=tail==='/review',store=isWorkflow?workflow(env.DB):service(env.DB);
+   const isWorkflow=resource==='workflows'||resource==='goal-agents',review=tail==='/review',store=isWorkflow?workflow(env.DB):service(env.DB);
    if(isWorkflow&&request.method==='GET')return reply(200,id?await store.read(principal,tenant,id):{runs:await store.list(principal,tenant)},cors);
    if(!isWorkflow&&tail&&!review)return reply(404,{error:'not_found'},cors);
    if(review&&!id)return reply(404,{error:'not_found'},cors);
@@ -46,6 +47,7 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length}
    let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{return reply(400,{error:'invalid_json'},cors)}
    if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
+   if(resource==='goal-agents'){if(env.GOAL_AGENT_ENABLED!=='true')return reply(503,{error:'goal_agent_not_enabled'},cors);const agent=new GoalAgent({store:new D1WorkflowStore(env.DB),office:service(env.DB),decide:goalDecider(env)});if(!id&&!tail)return reply(201,await agent.create({principal,tenant,brief:body.brief,sourceInputs:body.sourceInputs,maxTurns:body.maxTurns,providerDataGrant:body.providerDataGrant}),cors);if(id&&['/tick','/pause','/resume','/materialize'].includes(tail))return reply(200,await agent[tail.slice(1)](principal,tenant,id),cors);return reply(404,{error:'not_found'},cors)}
    if(resource==='produce-report')return reply(201,await produceReport({principal,tenant,brief:body.brief,sourceInputs:body.sourceInputs,office:service(env.DB),store:new D1WorkflowStore(env.DB)}),cors);
    if(resource==='public-demo')return reply(201,await runPublicDemonstration({principal,tenant,office:service(env.DB),store:new D1WorkflowStore(env.DB),env}),cors);
    if(resource==='plans')return reply(200,await proposePlan({question:body.question,capabilityIds:body.capabilityIds},{...env,PLANNER:env.PLANNER||(env.INSTITUTION_PLANNER_ENABLED==='true'?existingWorkerPlanner(env):undefined)}),cors);
