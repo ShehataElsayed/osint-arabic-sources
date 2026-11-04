@@ -26,11 +26,11 @@ export class OfficeService {
  const after=await this.read(principal,tenant,id);if(after.version!==next)throw new Conflict('save was not applied');return{id,version:next}}
  async reviewState(principal,tenant,id){const f=await this.read(principal,tenant,id);const r=await this.db.prepare('SELECT version,state,reviewer FROM editorial_state WHERE file_id=? AND version=?').bind(id,f.version).first();return r||{version:f.version,state:'draft',reviewer:null}}
  async transition(principal,tenant,id,expectedVersion,action){
- const policy={submit:['owner','editor'],approve:['owner','reviewer'],request_changes:['owner','reviewer']};if(!policy[action])throw new Invalid('unknown review action');await this.role(principal,tenant,policy[action]);
+ const policy={submit:['owner','editor'],approve:['owner','reviewer'],request_changes:['owner','reviewer'],reject:['owner','reviewer']};if(!policy[action])throw new Invalid('unknown review action');await this.role(principal,tenant,policy[action]);
  const current=await this.read(principal,tenant,id);if(current.version!==expectedVersion)throw new Conflict('review requires current version');
  const before=await this.reviewState(principal,tenant,id);if(action==='submit'?!['draft','changes_requested'].includes(before.state):before.state!=='in_review')throw new Conflict('review state changed');
  const author=await this.db.prepare('SELECT author FROM file_versions WHERE file_id=? AND version=?').bind(id,expectedVersion).first();if(action!=='submit'&&author?.author===principal)throw new Denied('a different person must review');
- const target=action==='submit'?'in_review':action==='approve'?'approved':'changes_requested',reviewer=action==='submit'?null:principal,now=Date.now(),op=crypto.randomUUID();
+ const target=action==='submit'?'in_review':action==='approve'?'approved':action==='reject'?'rejected':'changes_requested',reviewer=action==='submit'?null:principal,now=Date.now(),op=crypto.randomUUID();
  // One conditional write owns the transition. Role, author, version and state are rechecked in SQL.
  const allowed=policy[action].map(()=>'?').join(','),states=action==='submit'?"('draft','changes_requested')":"('in_review')";
  const results=await this.db.batch([

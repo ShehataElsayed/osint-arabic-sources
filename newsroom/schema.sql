@@ -7,4 +7,5 @@ CREATE TABLE IF NOT EXISTS file_versions(file_id TEXT NOT NULL REFERENCES office
 CREATE TABLE IF NOT EXISTS audit_events(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,file_id TEXT,version INTEGER,created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS audit_tenant_time ON audit_events(tenant,created_at);
 
-CREATE TABLE IF NOT EXISTS editorial_state(file_id TEXT PRIMARY KEY REFERENCES office_files(id),version INTEGER NOT NULL,state TEXT NOT NULL CHECK(state IN ('draft','in_review','approved','changes_requested')),reviewer TEXT,transition_id TEXT NOT NULL,updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS editorial_state(file_id TEXT PRIMARY KEY REFERENCES office_files(id),version INTEGER NOT NULL,state TEXT NOT NULL CHECK(state IN ('draft','in_review','approved','changes_requested','rejected')),reviewer TEXT,transition_id TEXT NOT NULL,updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS workflow_runs(id TEXT PRIMARY KEY,tenant TEXT NOT NULL REFERENCES institutions(id),revision INTEGER NOT NULL,content TEXT NOT NULL);
