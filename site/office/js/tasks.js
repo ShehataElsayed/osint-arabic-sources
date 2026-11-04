@@ -1,3 +1,4 @@
+import {showAIStatus} from './ai.js';
 /* مهام أوش: لوحات كانبان محلية بقوائم وبطاقات وسحب وإفلات. */
 import { getFile, putFile, newFile, esc, download, toast, debounce, fileParam, uid } from './kernel.js';
 
@@ -111,7 +112,7 @@ async function load() {
   const id = fileParam();
   if (id) file = await getFile(id);
   if (!file) { file = newFile('board'); await putFile(file); history.replaceState(null, '', './tasks.html?f=' + file.id); }
-  $('#doc-name').value = file.name;
+  $('#doc-name').value = file.name;showAIStatus(file);
   const params = new URLSearchParams(location.search);
   if (params.get('import') === '1') {
     const dataUrl = sessionStorage.getItem('osh-import-' + file.id);

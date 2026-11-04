@@ -1,6 +1,6 @@
 /* Osh Office hub: مدير الملفات + الأمر الذكي الذي يحوّل الطلب إلى التطبيق المناسب. */
 import { listFiles, putFile, deleteFile, getFile, newFile, openFile, KINDS, esc, fmtDate, download, toast, peekHandoff, takeHandoff, uid } from './kernel.js';
-import { summarize, extractEntities, extractEvents, extractClaims, researchPlan, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
+import { summarize, extractEntities, extractEvents, extractClaims, researchPlan,latestAI,attachAI,draftNotice, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
 
 const $ = s => document.querySelector(s);
 const ICONS = {
@@ -77,7 +77,7 @@ function renderHandoff() {
     if (p.kind === 'doc' || !p.kind) f.data.html = p.docHtml || '';
     if (p.kind === 'sheet' && Array.isArray(p.rows)) { const cells = {}; p.rows.forEach((row, r) => row.forEach((v, c) => { if (v !== '' && v != null) cells[(r + 1) + ',' + (c + 1)] = { v: String(v) }; })); f.data.sheets[0].cells = cells; }
     if (p.kind === 'deck' && Array.isArray(p.slides)) f.data.slides = p.slides;
-    await putFile(f); openFile(f);
+    if(p.aiProvenance)attachAI(f,p.aiProvenance);await putFile(f); openFile(f);
   });
 }
 
@@ -150,8 +150,8 @@ $('#ai-run').addEventListener('click', async () => {
   $('#ai-run').disabled = true;
   try {
     const p = await buildDocFromAI(text, target);
-    const f = newFile(p.kind, p.name);
-    if (p.kind === 'doc') f.data.html = p.html;
+    const f = newFile(p.kind, p.name);attachAI(f,latestAI());
+    if (p.kind === 'doc') f.data.html = '<p>'+esc(draftNotice)+'</p>'+p.html;
     if (p.kind === 'sheet') { const cells = {}; (p.rows || []).forEach((row, r) => row.forEach((v, c) => { if (v !== '' && v != null) cells[(r + 1) + ',' + (c + 1)] = { v: String(v) }; })); f.data.sheets[0].cells = cells; }
     if (p.kind === 'deck' && p.plan) {
       const plan = p.plan; const T = f.data.theme;
@@ -170,7 +170,7 @@ $('#ai-run').addEventListener('click', async () => {
       if (p.plan.intro) f.data.lists[0].title = 'خطة: ' + p.name.replace(/^مهام: /, '').slice(0, 30);
     }
     await putFile(f);
-    out.innerHTML = `<span class="en-provider">${esc(p.provider ? aiProviderName(p.provider) : '')}</span>تم إنشاء «${esc(f.name)}» (${KINDS[f.kind]}). ${p.note ? esc(p.note) : ''}`;
+    out.innerHTML = `<span class="en-provider">${esc(p.provider ? aiProviderName(p.provider) : aiProviderName(null))}</span>${esc(draftNotice)} تم إنشاء «${esc(f.name)}» (${KINDS[f.kind]}). ${p.note ? esc(p.note) : ''}`;
     setTimeout(() => openFile(f), 900);
   } catch (e) {
     out.textContent = reasonText(e && e.reason, e && e.retryAfter);
