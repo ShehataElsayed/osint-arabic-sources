@@ -15,6 +15,7 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors?{'access-control-allow-origin':cors,'access-control-allow-methods':'GET,POST,PUT,OPTIONS','access-control-allow-headers':'Content-Type,Cf-Access-Jwt-Assertion','access-control-max-age':'600','vary':'Origin'}:{}});
   try{
    const identity=await authenticate(request,{issuer:env.ACCESS_ISSUER,audience:env.ACCESS_AUDIENCE});
+   const session=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/session$/);if(session){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,{tenant:session[1],role:await service(env.DB).role(identity.principal,session[1])},cors)}
    const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile))?$/);
    if(!path)return reply(404,{error:'not_found'},cors);
    const [,tenant,resource,id,tail]=path,principal=identity.principal;
