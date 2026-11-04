@@ -170,3 +170,14 @@ The bundle under site/tools vendors Pyodide (MPL-2.0), CPython (PSF), NumPy, Pil
 - Tesseract.js 5.1.1 worker, Apache-2.0, https://github.com/naptha/tesseract.js (license in site/journalist-media/ocr/LICENSE.md).
 - Tesseract.js-core 5.1.1 embedded LSTM and SIMD-LSTM WebAssembly loaders, Apache-2.0, https://github.com/naptha/tesseract.js-core (CORE-LICENSE alongside assets).
 - These are self-hosted, pinned OCR dependencies, not a language model. OCR may misread names, negation and numbers. Browser extraction must be reviewed against the image.
+
+## Osh Office vendored components (site/office/)
+
+- SheetJS `xlsx` 0.20.3 — Apache License 2.0 (vendor/licenses/xlsx-Apache.txt)
+- `docx` 9.15.2 — MIT (vendor/licenses/docx-MIT.txt)
+- PptxGenJS 4.0.1 — MIT (vendor/licenses/pptxgenjs-MIT.txt)
+- JSZip 3.10.2 — dual-licensed MIT or GPLv3; used here under MIT (vendor/licenses/jszip-MIT.txt)
+- Mammoth 1.13.0 — BSD-2-Clause (vendor/licenses/mammoth-BSD.txt)
+- Formula.js (@formulajs/formulajs) 4.6.1 — MIT (vendor/licenses/formulajs-MIT.txt)
+
+The bundled fonts in site/office/fonts/ (Amiri, Aref Ruqaa, Almarai, Cairo, Changa, El Messiri, Harmattan, Lateef, Mada, Markazi Text, Noto Kufi Arabic, Noto Naskh Arabic, Noto Sans Arabic, Reem Kufi, Scheherazade New, Tajawal, Vazirmatn, Readex Pro, Rubik, Alexandria, IBM Plex Sans Arabic, Marhey, Rakkas, Lemonada, Inter, Noto Sans, Noto Serif, Noto Sans Mono, Roboto, Open Sans, Montserrat, Merriweather, Playfair Display, Source Code Pro) are each licensed under the SIL Open Font License 1.1 (fonts/OFL.txt), except Roboto which is Apache License 2.0. Copyright belongs to their respective authors as listed on fonts.google.com.

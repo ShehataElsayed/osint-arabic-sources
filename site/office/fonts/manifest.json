@@ -1,0 +1,237 @@
+{
+ "Amiri": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "amiri"
+ },
+ "Aref Ruqaa": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "aref-ruqaa"
+ },
+ "Almarai": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "almarai"
+ },
+ "Cairo": {
+  "weights": [
+   "400",
+   "600",
+   "700"
+  ],
+  "slug": "cairo"
+ },
+ "Changa": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "changa"
+ },
+ "El Messiri": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "el-messiri"
+ },
+ "Harmattan": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "harmattan"
+ },
+ "Lateef": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "lateef"
+ },
+ "Mada": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "mada"
+ },
+ "Markazi Text": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "markazi-text"
+ },
+ "Noto Kufi Arabic": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "noto-kufi-arabic"
+ },
+ "Noto Naskh Arabic": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "noto-naskh-arabic"
+ },
+ "Noto Sans Arabic": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "noto-sans-arabic"
+ },
+ "Reem Kufi": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "reem-kufi"
+ },
+ "Scheherazade New": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "scheherazade-new"
+ },
+ "Tajawal": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "tajawal"
+ },
+ "Vazirmatn": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "vazirmatn"
+ },
+ "Readex Pro": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "readex-pro"
+ },
+ "Rubik": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "rubik"
+ },
+ "Alexandria": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "alexandria"
+ },
+ "IBM Plex Sans Arabic": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "ibm-plex-sans-arabic"
+ },
+ "Marhey": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "marhey"
+ },
+ "Rakkas": {
+  "weights": [
+   "400"
+  ],
+  "slug": "rakkas"
+ },
+ "Lemonada": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "lemonada"
+ },
+ "Inter": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "inter"
+ },
+ "Noto Sans": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "noto-sans"
+ },
+ "Noto Serif": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "noto-serif"
+ },
+ "Noto Sans Mono": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "noto-sans-mono"
+ },
+ "Roboto": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "roboto"
+ },
+ "Open Sans": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "open-sans"
+ },
+ "Montserrat": {
+  "weights": [],
+  "slug": "montserrat"
+ },
+ "Merriweather": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "merriweather"
+ },
+ "Playfair Display": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "playfair-display"
+ },
+ "Source Code Pro": {
+  "weights": [
+   "400",
+   "700"
+  ],
+  "slug": "source-code-pro"
+ }
+}

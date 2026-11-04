@@ -74,5 +74,9 @@ jobs:
       - name: Image observation case portability
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/image-case-portability.cjs
 
+
+      - name: Osh Office suite contract
+        run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:office
+
       - name: All shared-case adapters preserve earlier evidence
         run: TEST_SITE=_site CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") node tests/case-workflow-all-adapters.cjs
