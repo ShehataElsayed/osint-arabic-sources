@@ -202,3 +202,5 @@ body.ai-open main{min-width:0}
  .osh-stage-wrap{overflow:hidden}
 }
 @media(max-width:999px){.osh-deck-grid{grid-template-columns:minmax(0,1fr)}.osh-deck-grid>div{min-width:0}}
+
+.osh-backup-actions{display:flex;flex-wrap:wrap;gap:12px}.osh-backup-actions .osh-btn{min-height:44px;cursor:pointer}#backup-status{overflow-wrap:anywhere;color:#e8eddf;line-height:1.9}

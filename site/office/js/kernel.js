@@ -24,6 +24,7 @@ function tx(mode, fn) {
 export function listFiles() { return openDB().then(d => new Promise((res, rej) => { const rq = d.transaction('files').objectStore('files').getAll(); rq.onsuccess = () => res(rq.result || []); rq.onerror = () => rej(rq.error); })); }
 export function getFile(id) { return openDB().then(d => new Promise((res, rej) => { const rq = d.transaction('files').objectStore('files').get(id); rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error); })); }
 export function putFile(f) { f.updated = Date.now(); return tx('readwrite', s => s.put(f)).then(() => f); }
+export function putFilesAtomic(files){return openDB().then(d=>new Promise((resolve,reject)=>{const t=d.transaction('files','readwrite'),s=t.objectStore('files');for(const f of files)s.add(f);t.oncomplete=()=>resolve();t.onerror=t.onabort=()=>reject(t.error||new Error('تعذر حفظ النسخة، لم تتغير الملفات.'))}))}
 export function deleteFile(id) { return tx('readwrite', s => s.delete(id)); }
 
 export const uid = () => 'f' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);

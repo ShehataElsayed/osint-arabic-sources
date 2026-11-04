@@ -1,3 +1,5 @@
+import{parseBackup,workspaceBackup,validateFile}from'./backup.js';
+import{putFilesAtomic}from'./kernel.js';
 /* Osh Office hub: مدير الملفات + الأمر الذكي الذي يحوّل الطلب إلى التطبيق المناسب. */
 import { listFiles, putFile, deleteFile, getFile, newFile, openFile, KINDS, esc, fmtDate, download, toast, peekHandoff, takeHandoff, uid } from './kernel.js';
 import { summarize, extractEntities, extractEvents, extractClaims, researchPlan,latestAI,attachAI,draftNotice, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
@@ -53,7 +55,7 @@ $('#import-file').addEventListener('change', async e => {
   let kind = IMPORT_KIND[ext];
   if (ext === 'json') { try { const j = JSON.parse(await file.text()); if (j.kind && KINDS[j.kind]) kind = j.kind; } catch { kind = 'board'; } }
   if (!kind) return toast('صيغة غير مدعومة للاستيراد: ' + ext);
-  if (ext === 'json') { try { const j = JSON.parse(await file.text()); if (j.kind && j.data) { const f = { ...j, id: uid(), updated: Date.now() }; await putFile(f); return openFile(f); } } catch {} }
+  if (ext === 'json') { try { const j=JSON.parse(await file.text());const f={...validateFile(j),id:uid(),updated:Date.now()};await putFile(f);return openFile(f) } catch {return toast('ملف JSON غير صالح. استخدم استعادة نسخة كاملة لنسخ مساحة العمل.')} }
   const f = newFile(kind, file.name.replace(/\.[^.]+$/, ''));
   await putFile(f);
   const dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file); });
@@ -177,4 +179,6 @@ $('#ai-run').addEventListener('click', async () => {
   } finally { $('#ai-run').disabled = false; }
 });
 
+$('#workspace-backup').addEventListener('click',async()=>{const all=await listFiles();download('osh-office-workspace-'+new Date().toISOString().slice(0,10)+'.json',new Blob([JSON.stringify(workspaceBackup(all))],{type:'application/json'}));$('#backup-status').textContent='نُزّلت نسخة محلية من '+all.length+' ملف. احفظها في مكان آمن؛ قد تحتوي على نصوص ومصادر حساسة.'});
+$('#workspace-restore').addEventListener('change',async e=>{const selected=e.target.files[0];e.target.value='';if(!selected)return;const status=$('#backup-status');try{if(selected.size>50*1024*1024)throw Error('حجم النسخة أكبر من 50 ميجابايت.');const incoming=parseBackup(await selected.text());if(!confirm('استعادة '+incoming.length+' ملف كنسخ جديدة؟ لن تُحذف أو تُستبدل الملفات الحالية.')){status.textContent='أُلغيت الاستعادة دون تغيير.';return}await putFilesAtomic(incoming);await refresh();status.textContent='استُعيد '+incoming.length+' ملف كنسخ جديدة؛ ملفاتك الأصلية لم تتغير.'}catch(error){status.textContent='لم تُستعد النسخة: '+error.message}});
 refresh(); renderHandoff();
