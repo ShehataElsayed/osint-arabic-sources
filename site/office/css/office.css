@@ -189,3 +189,8 @@ body.ai-open main{min-width:0}
 .osh-cell-detail{border:1px solid var(--line);padding:9px 13px;margin:8px 0;color:var(--ink);font-size:12px}
 .osh-cell-detail summary{cursor:pointer;color:var(--accent)}
 .osh-cell-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;padding:12px;background:#0a0d08;font:inherit;user-select:text}
+
+/* Nested brand copy must shrink and wrap independently of its logo on narrow RTL views. */
+.osh-app-shell .top .brand > div { min-width:0; flex:1 1 auto; }
+.osh-app-shell .top .brand small { display:block; white-space:normal; overflow-wrap:anywhere; max-width:100%; }
+@media(max-width:760px){.osh-app-shell .top .brand small{font-size:10px!important;line-height:1.8;}.osh-app-shell .top .brand img{flex-shrink:0;}}
