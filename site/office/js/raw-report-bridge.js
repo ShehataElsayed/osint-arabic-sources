@@ -1,0 +1,4 @@
+/* Human records and measurements, never model verdicts. */
+import {newFile,putFile,esc} from './kernel.js';
+export async function captureRawReport({name,raw,text,sourceUrl=location.href}){const f=newFile('doc',name);f.rawReport={version:1,raw:structuredClone(raw),sourceUrl,capturedAt:new Date().toISOString(),origin:'local-tool-record',review:'not-certified'};f.data.html='<h1>'+esc(name)+'</h1><p>نسخة سجل محلي، ليست مصادقة أو موافقة نشر. التقدير البشري والقياسات لا تتحول إلى حكم آلي.</p>'+String(text).split('\n').map(line=>'<p>'+esc(line||' ')+'</p>').join('');await putFile(f);return f}
+export function reportLink(source,f){let a=document.getElementById('raw-report-office');if(!a){a=document.createElement('a');a.id='raw-report-office';a.className='btn';source.after(a)}a.textContent='حُفظ سجل كامل في مكتب أوش - افتح للمراجعة';a.href=new URL('writer.html?f='+encodeURIComponent(f.id),import.meta.url.replace('/js/raw-report-bridge.js','/')).href}
