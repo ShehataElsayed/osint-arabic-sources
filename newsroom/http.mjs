@@ -1,3 +1,5 @@
+import{existingWorkerPlanner}from'./existing-worker-planner.mjs';
+import{tableAdapters}from'./table-analysis.mjs';
 import{proposePlan,PlanningUnavailable}from'./planning-bridge.mjs';
 import{searchCapabilities,capabilityContract}from'./capability-registry.mjs';
 /* Staged API only. Not included in existing AI Worker or deployed automatically. */
@@ -7,7 +9,7 @@ import {WorkflowRunner,WorkflowConflict,WorkflowBlocked} from './workflow-runner
 import {suppliedSourceAdapters,normalizeSources} from './source-adapters.mjs';
 import {D1WorkflowStore} from './workflow-store.mjs';
 const reply=(status,body,origin)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff',...(origin?{'access-control-allow-origin':origin,'vary':'Origin'}:{})}});
-export function createHandler({authenticate=authenticateAccess,service=db=>new OfficeService(db),workflow=db=>new WorkflowRunner({store:new D1WorkflowStore(db),office:service(db),adapters:suppliedSourceAdapters()})}={}){
+export function createHandler({authenticate=authenticateAccess,service=db=>new OfficeService(db),workflow=db=>new WorkflowRunner({store:new D1WorkflowStore(db),office:service(db),adapters:id=>id==='local-source-extract-v1'?suppliedSourceAdapters():id==='local-csv-statistics-v1'?tableAdapters():null})}={}){
  return async(request,env)=>{
   const origin=request.headers.get('origin');
   // Server-managed exact origin, never reflected without equality. No cookie-auth CORS.
@@ -39,7 +41,7 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length}
    let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{return reply(400,{error:'invalid_json'},cors)}
    if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
-   if(resource==='plans')return reply(200,await proposePlan({question:body.question,capabilityIds:body.capabilityIds},env),cors);
+   if(resource==='plans')return reply(200,await proposePlan({question:body.question,capabilityIds:body.capabilityIds},{...env,PLANNER:env.PLANNER||(env.INSTITUTION_PLANNER_ENABLED==='true'?existingWorkerPlanner(env):undefined)}),cors);
    // Body principal/tenant claims are not consulted.
    if(isWorkflow){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);if(!id&&!tail)return reply(201,await store.create({principal,tenant,brief:body.brief,sourceInputs:normalizeSources(body.sourceInputs),...(body.capabilityId?{capabilityId:body.capabilityId}:{})}),cors);const action=tail?.slice(1);if(!id||!['advance','materialize','submit','reconcile','pause','resume','branch'].includes(action))return reply(404,{error:'not_found'},cors);return reply(200,await store[action](principal,tenant,id),cors)}
    if(review){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await store.transition(principal,tenant,id,body.expectedVersion,body.action),cors)}
