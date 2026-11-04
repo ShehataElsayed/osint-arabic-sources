@@ -1,3 +1,4 @@
+import {captureAIResult} from './office/js/tool-bridge.js';
 // مختبر بيانات محلي: SQL كامل على ملفات CSV/TSV/JSON داخل المتصفح عبر DuckDB-WASM — لا يُرفع أي ملف.
 import { BACKEND_URL, aiProviderName } from './rag-config.js';
 import * as duckdb from './duckdb/duckdb-browser.mjs';
@@ -141,6 +142,7 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
       ql.replaceChildren();
       if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
       res.hidden=false;
+      captureAIResult({overview:sm.overview,quotes:sm.key_quotes||[],provider:j.provider},{name:document.title+' - ملخص آلي',sourceText:typeof text==='string'?text:(typeof tsv==='string'?tsv:'')}).catch(()=>{st.textContent+=' لم تُحفظ نسخة مكتب أوش؛ النتيجة ظاهرة هنا.'});
       st.textContent='اكتمل الشرح بالذكاء الاصطناعي؛ الملخص بصياغة النموذج - راجعه أمام النتيجة قبل الاعتماد عليه.'}
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتيجتك الكاملة ظاهرة أعلاه.'}
     finally{btn.disabled=false}};

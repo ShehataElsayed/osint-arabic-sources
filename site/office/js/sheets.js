@@ -264,7 +264,21 @@ $('#formula-input').addEventListener('keydown', e => {
     else setCell(sel.r1, sel.c1, { v: v, f: null });
     recalc(); markDirty(); render(); moveSel(1, 0); e.preventDefault(); }
 });
-function syncFormulaBar() { const cell = getCell(sel.r1, sel.c1); $('#formula-input').value = cell ? (cell.f ? '=' + cell.f : (cell.v ?? '')) : ''; }
+function syncFormulaBar() {
+ const cell = getCell(sel.r1, sel.c1); const raw=cell ? (cell.f ? '=' + cell.f : (cell.v ?? '')) : '';
+ $('#formula-input').value=raw;
+ const label=$('#cell-detail-label'),value=$('#cell-detail-value');
+ if(label)label.textContent=numToCol(sel.c1)+sel.r1+' - القيمة الكاملة';
+ if(value)value.textContent=String(displayValue(sel.r1,sel.c1)??'');
+}
+// A text view makes canvas cells inspectable and keyboard/mobile accessible without truncation.
+const detail=document.createElement('details');detail.className='osh-cell-detail';
+const label=document.createElement('summary');label.id='cell-detail-label';label.textContent='القيمة الكاملة للخلية المحددة';
+const value=document.createElement('pre');value.id='cell-detail-value';value.tabIndex=0;
+const fit=document.createElement('button');fit.type='button';fit.className='osh-btn';fit.id='cell-autofit';fit.textContent='وسّع العمود حسب المحتوى';
+detail.append(label,value,fit);host.before(detail);
+fit.onclick=()=>{pushUndo();const sh=sheet();let w=100;ctx.save();ctx.font='13px Cairo,sans-serif';for(const key of Object.keys(sh.cells)){const[r,c]=key.split(',').map(Number);if(c===sel.c1)w=Math.max(w,ctx.measureText(String(displayValue(r,c,sh)??'')).width+24)}ctx.restore();sh.colW[sel.c1]=Math.min(600,w);syncSpacer();render();markDirty()};
+
 function moveSel(dr, dc) {
   const g = gridGeom();
   sel.r1 = sel.r2 = Math.min(Math.max(1, sel.r1 + dr), g.rows);

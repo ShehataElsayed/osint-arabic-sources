@@ -1,3 +1,5 @@
+import {attachOfficeAction} from './office/js/tool-bridge.js';
+import {captureAIResult} from './office/js/tool-bridge.js';
 import {validateCase} from './journalist-core.js';
 import {ocrCase} from './journalist-media/ocr-case-core.js';
 import{flagSuspectTokens}from'./journalist-media/ocr-review-core.js';
@@ -39,6 +41,7 @@ import{BACKEND_URL,aiProviderName}from'./rag-config.js';
   function download(name,data){const a=document.createElement('a'),u=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1500)}
   $('#raw-export').onclick=()=>{if(rawText)download('ocr-review.json',snapshot())};
   $('#case-export').onclick=()=>{try{if(caseInvalid)throw Error('القضية غير صالحة أو لم يكتمل فتحها');if(busy)throw Error('انتظر الاستخراج');download('journalist-ocr-case.json',ocrCase(snapshot(),baseCase));$('#case-status').textContent='نُزلت نسخة جديدة مع الأصل وتعديلاتك منفصلة، دون تغيير القضية السابقة.'}catch(e){$('#case-status').textContent='لم تُصدر القضية: '+e.message+'؛ تصدير مراجعة OCR الأصلي ما زال متاحًا.'}};
+  attachOfficeAction($('#case-export'),async()=>{if(caseInvalid||busy)throw Error('النتيجة غير جاهزة');return ocrCase(snapshot(),baseCase)},{kind:'doc',name:'نص OCR ومراجعته'});
   out.addEventListener('input',()=>{$('#human-review').value='unreviewed';});
   function clearResult() { $('#raw-disclosure').hidden=true;$('#raw-text').textContent='';rawText='';imageInfo=null;$('#raw-export').disabled=true;$('#case-export').disabled=true;$('#human-review').value='unreviewed';$('#review-note').value='';out.value = ''; out.hidden = true; copy.hidden = true; review.hidden = true; reviewList.replaceChildren(); layoutSideBySide(false); }
   function layoutSideBySide(on) {
@@ -134,6 +137,7 @@ import{BACKEND_URL,aiProviderName}from'./rag-config.js';
       ql.replaceChildren();
       if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
       res.hidden=false;
+      captureAIResult({overview:sm.overview,quotes:sm.key_quotes||[],provider:j.provider},{name:document.title+' - ملخص آلي',sourceText:typeof text==='string'?text:(typeof tsv==='string'?tsv:'')}).catch(()=>{st.textContent+=' لم تُحفظ نسخة مكتب أوش؛ النتيجة ظاهرة هنا.'});
       st.textContent='اكتمل التلخيص بالذكاء الاصطناعي؛ الملخص بصياغة النموذج - راجعه أمام النص والصورة قبل الاعتماد عليه.'}
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ النص المستخرج محليًا كامل أعلاه.'}
     finally{btn.disabled=false}};

@@ -1,3 +1,4 @@
+import {captureAIResult} from '../office/js/tool-bridge.js';
 import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import {sentences,validateCase} from '../journalist-core.js';
 import {BACKEND_URL, AI_NOTICE, aiProviderName} from '../rag-config.js';
@@ -174,6 +175,7 @@ async function aiExtract(){
   if(!any){box.append(el('p','لم يجد النموذج كيانات مؤكدة في النص.'))}
   $('ai-notice').textContent=AI_NOTICE;
   $('ai-result').hidden=false;
+  captureAIResult({rows:[['الكيان','النوع'],...(e.persons||[]).map(x=>[x,'شخص']),...(e.organizations||[]).map(x=>[x,'جهة']),...(e.places||[]).map(x=>[x,'مكان'])],provider:j.provider,raw:j},{kind:'sheet',name:document.title+' - استخراج آلي',sourceText:text}).catch(()=>say('النتيجة ظاهرة؛ تعذر حفظ نسخة مكتب أوش.'));
   say('اكتمل الاستخراج بالذكاء الاصطناعي؛ راجع الأسماء قبل اعتمادها.')}
  catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الاستخراج المحلي ما زال متاحًا.')}
  finally{btn.disabled=false}}
