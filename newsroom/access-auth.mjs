@@ -1,7 +1,9 @@
 /* Staged adapter. Deployment pins issuer/audience; membership checks follow auth. */
 import {jwtVerify,importJWK} from 'jose';
+import {createKeyFetcher} from './key-cache.mjs';
+const cachedKeys=createKeyFetcher();
 export class Unauthenticated extends Error {}
-export async function authenticateAccess(request,{issuer,audience,fetchKeys=fetch,now=()=>Date.now()/1000}={}) {
+export async function authenticateAccess(request,{issuer,audience,fetchKeys=cachedKeys,now=()=>Date.now()/1000}={}) {
  let url;try{url=new URL(issuer)}catch{throw new Unauthenticated('authentication not configured')}
  if(url.protocol!=='https:'||!url.hostname.endsWith('.cloudflareaccess.com')||url.pathname!=='/'||url.search||url.hash||url.username||url.password||!audience)throw new Unauthenticated('authentication not configured');
  const token=request.headers.get('cf-access-jwt-assertion');if(!token||token.length>16384)throw new Unauthenticated('authentication required');
