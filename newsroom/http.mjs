@@ -1,3 +1,4 @@
+import{TaskExecutor}from'./task-executor.mjs';
 import{existingWorkerPlanner}from'./existing-worker-planner.mjs';
 import{tableAdapters}from'./table-analysis.mjs';
 import{proposePlan,PlanningUnavailable}from'./planning-bridge.mjs';
@@ -43,6 +44,8 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
    if(resource==='plans')return reply(200,await proposePlan({question:body.question,capabilityIds:body.capabilityIds},{...env,PLANNER:env.PLANNER||(env.INSTITUTION_PLANNER_ENABLED==='true'?existingWorkerPlanner(env):undefined)}),cors);
    // Body principal/tenant claims are not consulted.
+   if(isWorkflow&&request.method==='POST'&&!id&&!tail&&body.executionPlan)return reply(201,await new TaskExecutor({store:new D1WorkflowStore(env.DB),office:service(env.DB)}).create({principal,tenant,brief:body.brief,sourceInputs:body.sourceInputs,plan:body.executionPlan}),cors);
+   if(isWorkflow&&request.method==='POST'&&['/advance','/materialize'].includes(tail)){const run=await store.read(principal,tenant,id);if(run.kind==='bounded-task')return reply(200,await new TaskExecutor({store:new D1WorkflowStore(env.DB),office:service(env.DB)})[tail.slice(1)](principal,tenant,id),cors)}
    if(isWorkflow){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);if(!id&&!tail)return reply(201,await store.create({principal,tenant,brief:body.brief,sourceInputs:normalizeSources(body.sourceInputs),...(body.capabilityId?{capabilityId:body.capabilityId}:{})}),cors);const action=tail?.slice(1);if(!id||!['advance','materialize','submit','reconcile','pause','resume','branch'].includes(action))return reply(404,{error:'not_found'},cors);return reply(200,await store[action](principal,tenant,id),cors)}
    if(review){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await store.transition(principal,tenant,id,body.expectedVersion,body.action),cors)}
    if(request.method==='POST'&&!id)return reply(201,await store.create(principal,tenant,body.file),cors);
