@@ -16,5 +16,6 @@ export async function captureSQLResult({columns,rows,query,fileName,types=[]}){
  columns.forEach((v,c)=>{cells[`1,${c+1}`]={v:String(v),sqlType:'column'}});
  rows.forEach((row,r)=>row.forEach((v,c)=>{cells[`${r+2},${c+1}`]=sqlCell(v,types[c]||{})}));
  f.sqlProvenance={version:1,query,fileName,columns:columns.map((name,i)=>({name,type:types[i]?.name||'unknown'})),rowCount:rows.length,sourceUrl:location.href,createdAt:new Date().toISOString(),review:'unreviewed',limits:'Local query output, not source verification. SQL null is an empty cell with sqlType=null; bigint is exact text. Original input file is not embedded.'};
+ const meta=newFile('sheet').data.sheets[0];meta.name='سياق الاستعلام';const details=[['الحقل','القيمة'],['الملف المحلي',fileName],['الاستعلام',query],['عدد الصفوف',rows.length],['حالة المراجعة','لم تُراجع؛ ليست تحققًا من المصدر'],['الأصل','الملف الأصلي غير مضمن في هذه النسخة'],['أنواع دقيقة','BIGINT وDECIMAL نص دقيق؛ NULL خلية فارغة مع sqlType=null'],...columns.map((n,i)=>['نوع '+n,types[i]?.name||'unknown'])];details.forEach((row,r)=>row.forEach((v,c)=>{meta.cells[`${r+1},${c+1}`]={v}}));f.data.sheets.push(meta);
  await putFile(f);return f;
 }
