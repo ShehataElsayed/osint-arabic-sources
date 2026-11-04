@@ -1,3 +1,4 @@
+import{proposePlan,PlanningUnavailable}from'./planning-bridge.mjs';
 import{searchCapabilities,capabilityContract}from'./capability-registry.mjs';
 /* Staged API only. Not included in existing AI Worker or deployed automatically. */
 import {authenticateAccess,Unauthenticated} from './access-auth.mjs';
@@ -18,9 +19,10 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    const identity=await authenticate(request,{issuer:env.ACCESS_ISSUER,audience:env.ACCESS_AUDIENCE});
    const session=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/session$/);if(session){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,{tenant:session[1],role:await service(env.DB).role(identity.principal,session[1])},cors)}
    const capabilityPath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/capabilities(?:\/([a-zA-Z0-9-]{1,80}))?$/);if(capabilityPath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(identity.principal,capabilityPath[1]);return reply(200,capabilityPath[2]?capabilityContract(capabilityPath[2]):searchCapabilities(new URL(request.url).searchParams.get('q')||''),cors)}
-   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile))?$/);
+   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows|plans)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile|pause|resume|branch))?$/);
    if(!path)return reply(404,{error:'not_found'},cors);
    const [,tenant,resource,id,tail]=path,principal=identity.principal;
+   if(resource==='plans'){if(request.method!=='POST'||id||tail)return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(principal,tenant,['owner','editor'])}
    const isWorkflow=resource==='workflows',review=tail==='/review',store=isWorkflow?workflow(env.DB):service(env.DB);
    if(isWorkflow&&request.method==='GET')return reply(200,id?await store.read(principal,tenant,id):{runs:await store.list(principal,tenant)},cors);
    if(!isWorkflow&&tail&&!review)return reply(404,{error:'not_found'},cors);
@@ -37,13 +39,14 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length}
    let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{return reply(400,{error:'invalid_json'},cors)}
    if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
+   if(resource==='plans')return reply(200,await proposePlan({question:body.question,capabilityIds:body.capabilityIds},env),cors);
    // Body principal/tenant claims are not consulted.
-   if(isWorkflow){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);if(!id&&!tail)return reply(201,await store.create({principal,tenant,brief:body.brief,sourceInputs:normalizeSources(body.sourceInputs),...(body.capabilityId?{capabilityId:body.capabilityId}:{})}),cors);const action=tail?.slice(1);if(!id||!['advance','materialize','submit','reconcile'].includes(action))return reply(404,{error:'not_found'},cors);return reply(200,await store[action](principal,tenant,id),cors)}
+   if(isWorkflow){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);if(!id&&!tail)return reply(201,await store.create({principal,tenant,brief:body.brief,sourceInputs:normalizeSources(body.sourceInputs),...(body.capabilityId?{capabilityId:body.capabilityId}:{})}),cors);const action=tail?.slice(1);if(!id||!['advance','materialize','submit','reconcile','pause','resume','branch'].includes(action))return reply(404,{error:'not_found'},cors);return reply(200,await store[action](principal,tenant,id),cors)}
    if(review){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await store.transition(principal,tenant,id,body.expectedVersion,body.action),cors)}
    if(request.method==='POST'&&!id)return reply(201,await store.create(principal,tenant,body.file),cors);
    if(request.method==='PUT'&&id)return reply(200,await store.save(principal,tenant,id,body.expectedVersion,body.file),cors);
    return reply(405,{error:'method_not_allowed'},cors);
-  }catch(e){if(e instanceof Unauthenticated)return reply(401,{error:'authentication_required'},cors);if(e instanceof Denied)return reply(403,{error:'not_permitted'},cors);if(e instanceof WorkflowBlocked)return reply(400,{error:'workflow_blocked'},cors);if(e instanceof WorkflowConflict)return reply(409,{error:'inspect_workflow_before_retry'},cors);if(e instanceof Conflict)return reply(409,{error:'reload_before_saving'},cors);if(e instanceof Invalid)return reply(400,{error:e.message},cors);return reply(503,{error:'temporarily_unavailable'},cors)}
+  }catch(e){if(e instanceof PlanningUnavailable)return reply(e.reason==='invalid_plan_request'?400:503,{error:e.reason},cors);if(e instanceof Unauthenticated)return reply(401,{error:'authentication_required'},cors);if(e instanceof Denied)return reply(403,{error:'not_permitted'},cors);if(e instanceof WorkflowBlocked)return reply(400,{error:'workflow_blocked'},cors);if(e instanceof WorkflowConflict)return reply(409,{error:'inspect_workflow_before_retry'},cors);if(e instanceof Conflict)return reply(409,{error:'reload_before_saving'},cors);if(e instanceof Invalid)return reply(400,{error:e.message},cors);return reply(503,{error:'temporarily_unavailable'},cors)}
  }
 }
 export default {fetch:createHandler()};
