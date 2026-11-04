@@ -125,6 +125,10 @@ async function ask(q) {
     await typeInto(title, 'خطة البحث المقترحة لسؤالك (الترشيح التفصيلي تعذّر الآن):');
     const p2 = el('p', 'تعذّر الترشيح التفصيلي للأدوات الآن؛ الخطة أعلاه مقترحة من أوصاف أدوات الدليل وتحتاج مراجعتك قبل الاعتماد عليها.', 'meta-line fade'); body.append(p2);
   }
+
+  const chosen=Array.isArray(picks)&&picks.length?picks.map(k=>({...all[k.id],why:k.why,how:k.how})).filter(t=>t.name):cands.slice(0,8).map(x=>x.t);
+  const note=plan||picks?.length?'خطة وترشيحات مقترحة، ليست بحثاً منفذاً أو تحققاً.':'مطابقة كلمات محلية، ليست ترشيح ذكاء اصطناعي أو تحققاً.';
+  import('./office/js/search-capture.js').then(({captureSearch})=>captureSearch({question:q,items:chosen,plan:plan?{...plan,steps:plan.steps.map(st=>({...st,tool:all[st.tool_id]}))}:null,note,provider:plan?.provider||'',target:body})).catch(()=>{body.append(el('p','لم تُحفظ نسخة مكتب أوش؛ النتائج متاحة هنا.','meta-line'))});
   addPlanner(body, q);
   const okWeb = web.filter(x => /^https:\/\//.test(x.url || '')).slice(0, 3);
   if (okWeb.length) {
@@ -140,6 +144,7 @@ function showRanking(r, title, note) {
   const seen = new Set(); const deduped = r.filter(x => x.t.url && !seen.has(x.t.url) && seen.add(x.t.url));
   const shown = deduped.slice(0, 6);
   shown.forEach((x, i) => body.append(card(x.t, i, x.scopeMismatch ? [['تنبيه نطاق:', 'أداة مقيدة بـ' + x.scopeMismatch + ' وسؤالك لا يذكر هذا النوع؛ رُتبت بعد الأدوات المطابقة لنوع مهمتك.']] : null)));
+  import('./office/js/search-capture.js').then(({captureSearch})=>captureSearch({question:last?.q||title,items:shown.map(x=>x.t),note,provider:title.includes('جهازي')?'local-transformers':'workers-ai',target:body})).catch(()=>{});
   if (shown.some(x => x.scopeMismatch)) body.append(el('p', 'التشابه الدلالي يقيس قرب الوصف لا نوع المهمة؛ الأدوات المقيدة بنطاق لا يذكره سؤالك موسومة ومؤخرة.', 'meta-line fade'));
 }
 const RANK_NOTE_CATALOG = 'نتائج الكلمات بترتيبها كما هي، مع إضافة أدوات اكتشفها التشابه الدلالي على كامل الدليل في نهاية القائمة (نموذج Workers AI على خادم الدليل؛ أُرسل سؤالك فقط). الإضافات الدلالية اقتراح تجريبي للمراجعة وليست إجابة موثقة.';

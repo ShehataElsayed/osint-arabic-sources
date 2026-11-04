@@ -293,6 +293,7 @@ async function run(q) {
     return;
   }
   render(conf, q);
+  import('./office/js/search-capture.js').then(({captureAsk})=>captureAsk({result:conf,question:q,report:buildAskReport({question:q,result:conf,catalog:tIndex?tIndex.items:[]}),target:box})).catch(()=>{box.append(el('p','note','لم تُحفظ نسخة مكتب أوش؛ النتيجة الأصلية متاحة هنا.'))});
   const fr = await facts; if (fr) renderFacts(fr, box);
   const nr = await news; if (nr) renderNews(nr, box);
 }
