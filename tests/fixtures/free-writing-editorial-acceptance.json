@@ -21,5 +21,11 @@
     "machineAcceptance": "passed",
     "editorialAcceptance": "rejected-limits-contamination",
     "finding": "Separating rules in the task improved body scope, but generated limits incorrectly blamed numeric placeholders for an unknown update date and added an unsupported interpretation of free allowance coverage. Full body+limits review remains required."
+  },
+  "bodyOnlyPipelineEvaluation": {
+    "machineAcceptance": "one real output passed, repeat rejected evidence ID cardinality",
+    "manualReview": "First body separates allowance/paid exception and preserves numbers; operational limits from pipeline, not model. Basic grammar still improvable. Not a broad quality benchmark.",
+    "persistedProof": "Existing accepted public output materialized in actual local D1 Office version1 awaiting human submission; not production or human approval",
+    "productionEnabled": false
   }
 }
