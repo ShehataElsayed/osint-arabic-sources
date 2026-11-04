@@ -21,6 +21,10 @@ assert(!aiBody.text.includes('إضافة الدليل'),'button chrome must not 
 assert(!aiBody.text.includes('تصدير ونسخ احتياطي'),'section chrome must not be sent');
 assert((await p.locator('#ai-provider').textContent()).includes('Workers AI'));
 assert((await p.locator('#ai-overview').textContent()).includes('وصف اختباري'));
+await p.locator('[data-office-result-link]').waitFor();
+const saved=await p.evaluate(async()=>{const k=await import('./office/js/kernel.js');return(await k.listFiles())[0]});
+assert.equal(saved.kind,'doc');assert.equal(saved.aiProvenance.provider,'workers-ai');assert.equal(saved.aiProvenance.review,'unreviewed');assert(saved.aiProvenance.sourceText.includes('بيان الوزارة'));
+
 await p.unroute('https://osint-rag.egkrkr.workers.dev/**');
 await p.route('https://osint-rag.egkrkr.workers.dev/**',async r=>{await r.fulfill({status:200,contentType:'application/json',body:JSON.stringify({summary:null,reason:'filtered',retry_after:null})})});
 await p.locator('#ai-summarize').click();
