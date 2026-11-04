@@ -1,3 +1,4 @@
+import{searchCapabilities,capabilityContract}from'./capability-registry.mjs';
 /* Staged API only. Not included in existing AI Worker or deployed automatically. */
 import {authenticateAccess,Unauthenticated} from './access-auth.mjs';
 import {OfficeService,Denied,Conflict,Invalid} from './d1-service.mjs';
@@ -16,6 +17,7 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
   try{
    const identity=await authenticate(request,{issuer:env.ACCESS_ISSUER,audience:env.ACCESS_AUDIENCE});
    const session=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/session$/);if(session){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,{tenant:session[1],role:await service(env.DB).role(identity.principal,session[1])},cors)}
+   const capabilityPath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/capabilities(?:\/([a-zA-Z0-9-]{1,80}))?$/);if(capabilityPath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(identity.principal,capabilityPath[1]);return reply(200,capabilityPath[2]?capabilityContract(capabilityPath[2]):searchCapabilities(new URL(request.url).searchParams.get('q')||''),cors)}
    const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile))?$/);
    if(!path)return reply(404,{error:'not_found'},cors);
    const [,tenant,resource,id,tail]=path,principal=identity.principal;
@@ -36,7 +38,7 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{return reply(400,{error:'invalid_json'},cors)}
    if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
    // Body principal/tenant claims are not consulted.
-   if(isWorkflow){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);if(!id&&!tail)return reply(201,await store.create({principal,tenant,brief:body.brief,sourceInputs:normalizeSources(body.sourceInputs)}),cors);const action=tail?.slice(1);if(!id||!['advance','materialize','submit','reconcile'].includes(action))return reply(404,{error:'not_found'},cors);return reply(200,await store[action](principal,tenant,id),cors)}
+   if(isWorkflow){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);if(!id&&!tail)return reply(201,await store.create({principal,tenant,brief:body.brief,sourceInputs:normalizeSources(body.sourceInputs),...(body.capabilityId?{capabilityId:body.capabilityId}:{})}),cors);const action=tail?.slice(1);if(!id||!['advance','materialize','submit','reconcile'].includes(action))return reply(404,{error:'not_found'},cors);return reply(200,await store[action](principal,tenant,id),cors)}
    if(review){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await store.transition(principal,tenant,id,body.expectedVersion,body.action),cors)}
    if(request.method==='POST'&&!id)return reply(201,await store.create(principal,tenant,body.file),cors);
    if(request.method==='PUT'&&id)return reply(200,await store.save(principal,tenant,id,body.expectedVersion,body.file),cors);
