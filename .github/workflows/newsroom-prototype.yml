@@ -1,0 +1,23 @@
+name: Validate isolated newsroom prototype
+on:
+  pull_request:
+    paths: ['newsroom/**', 'tests/newsroom-*.test.mjs', 'tests/test_newsroom_store.py', '.github/workflows/newsroom-prototype.yml']
+permissions:
+  contents: read
+jobs:
+  local-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: newsroom/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --prefix newsroom
+      - run: node --test tests/newsroom-*.test.mjs
+      - run: python3 -m unittest tests/test_newsroom_store.py -v
+      - run: node newsroom/local-d1-check.mjs

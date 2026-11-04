@@ -20,3 +20,5 @@ Editorial approval is an internal version-bound decision, not authorization or i
 
 
 Local runtime binding check: `cd newsroom && npm ci && node local-d1-check.mjs`. This now passes actual local Wrangler4.157.0 D1 binding create/read/save/stale-version/isolation checks, beyond the SQLite-shaped harness. It is not a remote cloud test. Config deliberately disables public/preview routes and has a zero placeholder DB ID; never deploy it unchanged. Dependencies are isolated and lockfile-pinned, license retained. No secrets or account IDs in config. `node --test ../tests/newsroom-*.test.mjs` runs the domain adapter tests after installing this package.
+
+The local Wrangler integration check also exercises a real locally signed RS256 JWT through the HTTP adapter into local D1, ignoring forged body identity, and denying missing auth/cross-tenant access. Its key endpoint is a synthetic local fixture, not Cloudflare Access. Remote enrollment, actual JWKS availability and policy routing are still unverified.
