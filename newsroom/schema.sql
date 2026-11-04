@@ -16,3 +16,5 @@ CREATE TABLE IF NOT EXISTS crm_imports(tenant TEXT NOT NULL,source_hash TEXT NOT
 CREATE TABLE IF NOT EXISTS crm_import_guards(id TEXT PRIMARY KEY,passed INTEGER NOT NULL CHECK(passed=1));
 CREATE TABLE IF NOT EXISTS work_orders(id TEXT PRIMARY KEY,tenant TEXT NOT NULL REFERENCES institutions(id),revision INTEGER NOT NULL,content TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS order_executions(tenant TEXT NOT NULL,order_id TEXT NOT NULL,revision INTEGER NOT NULL,content TEXT NOT NULL,PRIMARY KEY(tenant,order_id));
+CREATE TABLE IF NOT EXISTS work_order_acceptances(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,order_id TEXT NOT NULL,content TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS order_acceptances_tenant_order ON work_order_acceptances(tenant,order_id);
