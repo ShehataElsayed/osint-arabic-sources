@@ -204,3 +204,5 @@ body.ai-open main{min-width:0}
 @media(max-width:999px){.osh-deck-grid{grid-template-columns:minmax(0,1fr)}.osh-deck-grid>div{min-width:0}}
 
 .osh-backup-actions{display:flex;flex-wrap:wrap;gap:12px}.osh-backup-actions .osh-btn{min-height:44px;cursor:pointer}#backup-status{overflow-wrap:anywhere;color:#e8eddf;line-height:1.9}
+
+.osh-case-panel{margin-top:20px}.osh-case-panel textarea{width:100%;max-width:100%;min-height:70px;background:#090d07;color:#eef0e7;border:1px solid #607548;padding:12px;font:inherit}.osh-case-panel label{display:block;margin:10px 0}.osh-case-panel select,.osh-file-card select{max-width:100%;background:#141c0f;color:#eef0e7;padding:8px;border:1px solid #607548;border-radius:4px}.osh-case-panel a{overflow-wrap:anywhere}.osh-case-panel li{margin:10px 0}#case-status{line-height:1.9;color:#e8eddf}
