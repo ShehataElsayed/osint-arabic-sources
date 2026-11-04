@@ -1,3 +1,4 @@
+import {captureSQLResult} from './office/js/data-result-bridge.js';
 import {captureAIResult} from './office/js/tool-bridge.js';
 // مختبر بيانات محلي: SQL كامل على ملفات CSV/TSV/JSON داخل المتصفح عبر DuckDB-WASM — لا يُرفع أي ملف.
 import { BACKEND_URL, aiProviderName } from './rag-config.js';
@@ -8,7 +9,8 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
         previewwrap = $('#previewwrap'), sql = $('#sql'), run = $('#run'), copy = $('#copy'),
         status = $('#status'), result = $('#result'), resultwrap = $('#resultwrap'), resultmeta = $('#resultmeta');
   let db = null, conn = null, rawFile = null, lastTSV = '', busy = false, cleanup = Promise.resolve();
-  function clearResult() { resultwrap.hidden = true; result.innerHTML = ''; resultmeta.textContent = ''; copy.hidden = true; lastTSV = ''; }
+  let officeLink=null;
+  function clearResult() { if(officeLink){officeLink.remove();officeLink=null} resultwrap.hidden = true; result.innerHTML = ''; resultmeta.textContent = ''; copy.hidden = true; lastTSV = ''; }
   function releaseDB() {
     const oldConn = conn, oldDB = db; conn = null; db = null;
     cleanup = cleanup.then(async () => {
@@ -94,6 +96,7 @@ import * as duckdb from './duckdb/duckdb-browser.mjs';
       lastTSV = [cols.join('\t')].concat(rows.map(r => r.map(v => String(v == null ? '' : v).replace(/[\t\n]/g, ' ')).join('\t'))).join('\n');
       window.__dlLastTSV = lastTSV; // exposed for the AI-result section (closure-local state)
       copy.hidden = false; status.textContent = 'اكتمل الاستعلام محليًا على جهازك.';
+      try{const saved=await captureSQLResult({columns:cols,rows,query:sql.value,fileName:rawFile.name,types:res.schema.fields.map(f=>({name:String(f.type),scale:f.type.scale}))});officeLink=document.createElement('a');officeLink.id='sql-office';officeLink.className='btn';officeLink.textContent='حُفظت النتيجة الكاملة في مكتب أوش - افتح للمراجعة';officeLink.href='./office/sheets.html?f='+encodeURIComponent(saved.id);resultmeta.after(officeLink)}catch(e){status.textContent+=' لم تُحفظ نسخة مكتب أوش: '+e.message}
     } catch (e) {
       clearResult(); releaseDB(); previewwrap.hidden = true; // failed imports/queries never reuse incomplete state
       const q = sql.value;
