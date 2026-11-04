@@ -1,0 +1,36 @@
+/* Staged API only. Not included in existing AI Worker or deployed automatically. */
+import {authenticateAccess,Unauthenticated} from './access-auth.mjs';
+import {OfficeService,Denied,Conflict,Invalid} from './d1-service.mjs';
+const reply=(status,body,origin)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff',...(origin?{'access-control-allow-origin':origin,'vary':'Origin'}:{})}});
+export function createHandler({authenticate=authenticateAccess,service=db=>new OfficeService(db)}={}){
+ return async(request,env)=>{
+  const origin=request.headers.get('origin');
+  // Server-managed exact origin, never reflected without equality. No cookie-auth CORS.
+  if(!env.DB||!env.ACCESS_ISSUER||!env.ACCESS_AUDIENCE||!env.APP_ORIGIN)return reply(503,{error:'service_not_configured'});
+  if(origin&&origin!==env.APP_ORIGIN)return reply(403,{error:'origin_not_allowed'});
+  const cors=origin===env.APP_ORIGIN?origin:null;
+  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors?{'access-control-allow-origin':cors,'access-control-allow-methods':'GET,POST,PUT,OPTIONS','access-control-allow-headers':'Content-Type,Cf-Access-Jwt-Assertion','access-control-max-age':'600','vary':'Origin'}:{}});
+  try{
+   const identity=await authenticate(request,{issuer:env.ACCESS_ISSUER,audience:env.ACCESS_AUDIENCE});
+   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/files(?:\/([a-zA-Z0-9-]{1,64}))?$/);
+   if(!path)return reply(404,{error:'not_found'},cors);
+   const [,tenant,id]=path,store=service(env.DB),principal=identity.principal;
+   if(request.method==='GET')return reply(200,id?await store.read(principal,tenant,id):{files:await store.list(principal,tenant)},cors);
+   if(!['POST','PUT'].includes(request.method))return reply(405,{error:'method_not_allowed'},cors);
+   if(!cors)return reply(403,{error:'write_origin_required'});
+   if(!(request.headers.get('content-type')||'').startsWith('application/json'))return reply(415,{error:'json_required'},cors);
+   if(Number(request.headers.get('content-length'))>600000)return reply(413,{error:'file_too_large'},cors);
+   const reader=request.body?.getReader();if(!reader)return reply(400,{error:'body_required'},cors);
+   const chunks=[];let size=0;
+   while(true){const {value,done}=await reader.read();if(done)break;size+=value.byteLength;if(size>600000){await reader.cancel();return reply(413,{error:'file_too_large'},cors)}chunks.push(value)}
+   const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length}
+   let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{return reply(400,{error:'invalid_json'},cors)}
+   if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
+   // Body principal/tenant claims are not consulted.
+   if(request.method==='POST'&&!id)return reply(201,await store.create(principal,tenant,body.file),cors);
+   if(request.method==='PUT'&&id)return reply(200,await store.save(principal,tenant,id,body.expectedVersion,body.file),cors);
+   return reply(405,{error:'method_not_allowed'},cors);
+  }catch(e){if(e instanceof Unauthenticated)return reply(401,{error:'authentication_required'},cors);if(e instanceof Denied)return reply(403,{error:'not_permitted'},cors);if(e instanceof Conflict)return reply(409,{error:'reload_before_saving'},cors);if(e instanceof Invalid)return reply(400,{error:e.message},cors);return reply(503,{error:'temporarily_unavailable'},cors)}
+ }
+}
+export default {fetch:createHandler()};
