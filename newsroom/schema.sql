@@ -15,3 +15,4 @@ CREATE TABLE IF NOT EXISTS crm_work_links(tenant TEXT NOT NULL REFERENCES instit
 CREATE TABLE IF NOT EXISTS crm_imports(tenant TEXT NOT NULL,source_hash TEXT NOT NULL,id TEXT NOT NULL,content TEXT NOT NULL,PRIMARY KEY(tenant,source_hash));
 CREATE TABLE IF NOT EXISTS crm_import_guards(id TEXT PRIMARY KEY,passed INTEGER NOT NULL CHECK(passed=1));
 CREATE TABLE IF NOT EXISTS work_orders(id TEXT PRIMARY KEY,tenant TEXT NOT NULL REFERENCES institutions(id),revision INTEGER NOT NULL,content TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS order_executions(tenant TEXT NOT NULL,order_id TEXT NOT NULL,revision INTEGER NOT NULL,content TEXT NOT NULL,PRIMARY KEY(tenant,order_id));
