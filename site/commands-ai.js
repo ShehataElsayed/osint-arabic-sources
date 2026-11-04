@@ -25,8 +25,8 @@ async function ask(text) {
   let note = 'تعذّر فهم الطلب الآن. استخدم النموذج أدناه مباشرة.', ok = false;
   if (EXTERNAL_AI && BACKEND_URL) {
     const { s, map } = redact(text);
-    try { const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'plan', text: s }) }); const pl = r.ok ? (await r.json()).plan : null;
-      if (pl && fill(pl, map)) { ok = true; note = (pl.note ? restore(pl.note, map) + ' ' : '') + 'ملأتُ النموذج وولّدتُ الأوامر من قوالب الدليل الثابتة، وهي تظهر أدناه.'; $('build').click(); } } catch { /* manual form remains */ }
+    try { const r = await fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'plan', text: s }) }); const data=r.ok?await r.json():null,pl=data?.plan;
+      if (pl && fill(pl, map)) { ok = true; note = (data?.provider==='gemini'?'عبر Gemini من Google. ':data?.provider==='workers-ai'?'عبر Workers AI على Cloudflare. ':'موفر النموذج غير محدد. ') + (pl.note ? restore(pl.note, map) + ' ' : '') + 'ملأتُ النموذج وولّدتُ الأوامر من قوالب الدليل الثابتة، وهي تظهر أدناه.'; $('build').commandsAIContext={provider:data?.provider||'',sourceText:text,raw:structuredClone(data),review:'unreviewed'};try{$('build').click()}finally{delete $('build').commandsAIContext}; } } catch { /* manual form remains */ }
   }
   body.replaceChildren(); const t = el('h3', null, 'answer-title'); body.append(t); await typeInto(t, note);
   if (ok) { const a = el('a', 'انتقل إلى الخطة الاستقصائية ↓', 'jump fade'); a.href = '#outbox'; body.append(a); $('outbox').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
