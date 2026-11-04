@@ -1,3 +1,4 @@
+import{newCase,casesFrom,caseMembers,caseSources}from'./case-workspace.js';
 import{parseBackup,workspaceBackup,validateFile}from'./backup.js';
 import{putFilesAtomic}from'./kernel.js';
 /* Osh Office hub: مدير الملفات + الأمر الذكي الذي يحوّل الطلب إلى التطبيق المناسب. */
@@ -13,32 +14,44 @@ const ICONS = {
 };
 $('#ai-notice').textContent = AI_NOTICE;
 
-let files = [];
+let files = [],activeCase='';
 async function refresh() {
   files = (await listFiles()).sort((a, b) => b.updated - a.updated);
-  render();
+  renderCases();render();
 }
 function render(filter = '') {
   const host = $('#files'); const q = filter.trim();
-  const shown = q ? files.filter(f => f.name.includes(q)) : files;
+  const pool=activeCase?caseMembers(files,activeCase):files;const shown = q ? pool.filter(f => f.name.includes(q)) : pool;
   $('#files-empty').hidden = shown.length > 0;
   host.innerHTML = '';
   for (const f of shown) {
     const card = document.createElement('div'); card.className = 'osh-file-card';
     card.innerHTML = `<div class="fc-top"><span class="fc-ico">${ICONS[f.kind] || ''}</span><div style="min-width:0"><strong>${esc(f.name)}</strong><small>${KINDS[f.kind] || f.kind} · آخر تعديل ${fmtDate(f.updated)}</small></div></div>
     <div class="fc-acts"><button data-act="open">افتح</button><button data-act="rename">أعد التسمية</button><button data-act="dup">انسخ</button><button data-act="export">نزّل نسخة</button><button data-act="del" style="color:#f3aaa1">احذف</button></div>`;
+    if(!f.caseWorkspace){const label=document.createElement('label');label.textContent='القضية: ';const select=document.createElement('select');select.setAttribute('aria-label','قضية '+f.name);select.innerHTML='<option value="">بلا قضية</option>'+casesFrom(files).map(c=>'<option value="'+esc(c.id)+'">'+esc(c.name)+'</option>').join('');select.value=f.caseId||'';select.addEventListener('click',e=>e.stopPropagation());select.addEventListener('change',async e=>{e.stopPropagation();f.caseId=select.value||null;await putFile(f);refresh()});label.addEventListener('click',e=>e.stopPropagation());label.append(select);card.append(label)}
     card.addEventListener('click', async e => {
       const act = e.target.dataset && e.target.dataset.act;
       if (!act || act === 'open') return openFile(f);
       e.stopPropagation();
       if (act === 'rename') { const n = prompt('اسم الملف الجديد:', f.name); if (n && n.trim()) { f.name = n.trim(); await putFile(f); refresh(); } }
       if (act === 'dup') { const c = JSON.parse(JSON.stringify(f)); c.id = uid(); c.name = f.name + ' — نسخة'; await putFile(c); refresh(); }
-      if (act === 'del') { if (confirm(`احذف «${f.name}» نهائيًا من هذا الجهاز؟`)) { await deleteFile(f.id); refresh(); } }
+      if (act === 'del') { if (confirm(`احذف «${f.name}» نهائيًا من هذا الجهاز؟`)) { await deleteFile(f.id);if(activeCase===f.id)activeCase=''; refresh(); } }
       if (act === 'export') download(f.name + '.oshoffice.json', new Blob([JSON.stringify(f, null, 1)], { type: 'application/json' }));
     });
     host.appendChild(card);
   }
 }
+function renderCases(){
+ const select=$('#case-select');select.innerHTML='<option value="">كل الملفات</option>'+casesFrom(files).map(f=>'<option value="'+esc(f.id)+'">'+esc(f.name)+'</option>').join('');if(!files.some(f=>f.id===activeCase))activeCase='';select.value=activeCase;
+ const f=files.find(f=>f.id===activeCase);$('#case-detail').hidden=!f;$('#case-bundle').disabled=!f;if(!f)return;
+ $('#case-question').value=f.caseWorkspace.question;$('#case-notes').value=f.caseWorkspace.notes;
+ const list=$('#case-checklist');list.innerHTML='';f.caseWorkspace.checklist.forEach((x,i)=>{const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.checked=x.done;input.dataset.step=i;label.append(input,document.createTextNode(x.text));list.append(label)});
+ const sources=$('#case-sources');sources.innerHTML='';for(const s of caseSources(files,f.id)){const li=document.createElement('li');if(/^https?:\/\//i.test(s.url)){const a=document.createElement('a');a.href=s.url;a.target='_blank';a.rel='noopener noreferrer';a.textContent=s.title;li.append(a)}else li.textContent=s.title+' (رابط غير قابل للفتح)';li.append(document.createTextNode(' - '+s.fileName));sources.append(li)}if(!sources.children.length)sources.textContent='لا توجد روابط مصادر محفوظة مع الملفات المرتبطة بعد.';
+}
+$('#case-select').addEventListener('change',e=>{activeCase=e.target.value;renderCases();render()});
+$('#case-create').addEventListener('click',async()=>{const name=prompt('اسم القضية المحلية:');if(!name?.trim())return;const f=newCase(name.trim().slice(0,500));await putFile(f);activeCase=f.id;await refresh();$('#case-status').textContent='أُنشئت قضية شخصية محلية. اربط الملفات من قائمة القضية في بطاقة كل ملف.'});
+$('#case-save').addEventListener('click',async()=>{const f=files.find(f=>f.id===activeCase);if(!f)return;f.caseWorkspace.question=$('#case-question').value;f.caseWorkspace.notes=$('#case-notes').value;$('#case-checklist').querySelectorAll('input').forEach(e=>f.caseWorkspace.checklist[+e.dataset.step].done=e.checked);await putFile(f);$('#case-status').textContent='حُفظ التجهيز المحلي؛ هذا ليس اعتماداً تحريرياً أو نشراً.'});
+$('#case-bundle').addEventListener('click',()=>{const f=files.find(f=>f.id===activeCase);if(!f)return;download(f.name+'.oshcase.json',new Blob([JSON.stringify(workspaceBackup(caseMembers(files,f.id)))],{type:'application/json'}));$('#case-status').textContent='نُزّلت ملفات القضية ومصادرها. الاستعادة من زر النسخة الكاملة تضيف نسخاً جديدة؛ الحزمة قد تحتوي على مواد حساسة.'});
 $('#file-search').addEventListener('input', e => render(e.target.value));
 
 document.querySelectorAll('[data-new]').forEach(b => b.addEventListener('click', async () => {

@@ -7,6 +7,8 @@ const array=(x,max)=>{if(!Array.isArray(x)||x.length>max)fail();return x};
 export function validateFile(input){
  if(!object(input)||!Object.hasOwn(KINDS,input.kind)||typeof input.name!=='string'||!input.name.trim()||input.name.length>500||!object(input.data))fail();
  const f=structuredClone(input),d=f.data;
+ if(f.caseId!=null&&typeof f.caseId!=='string')fail();if(f.caseWorkspace){const c=f.caseWorkspace;if(f.kind!=='doc'||c.version!==1||typeof c.question!=='string'||typeof c.notes!=='string')fail();for(const x of array(c.checklist,100))if(!object(x)||typeof x.text!=='string'||typeof x.done!=='boolean')fail()}
+
  const scan=(v,depth=0)=>{if(depth>40)fail();if(v&&typeof v==='object')for(const[k,x]of Object.entries(v)){if(['__proto__','prototype','constructor'].includes(k))fail();scan(x,depth+1)}};scan(f);
  const safeStyle=o=>{if(!object(o))return;for(const v of Object.values(o))if(typeof v==='string'&&/url\s*\(|expression|[<>]/i.test(v))fail()};
  if(f.kind==='doc'){if(typeof d.html!=='string'||!object(d.settings))fail();d.html=safeDocumentHtml(d.html)}
@@ -15,5 +17,5 @@ export function validateFile(input){
  if(f.kind==='board'){for(const l of array(d.lists,1000)){if(!object(l)||typeof l.title!=='string'||typeof l.id!=='string')fail();for(const c of array(l.cards,10000)){if(!object(c)||typeof c.title!=='string'||typeof c.id!=='string')fail();for(const k of ['desc','due','pr'])if(c[k]!=null&&typeof c[k]!=='string')fail();for(const x of array(c.labels||[],1000))if(typeof x!=='string')fail();for(const x of array(c.check||[],1000))if(!object(x)||typeof x.text!=='string'||typeof x.done!=='boolean')fail()}}}
  return f;
 }
-export function parseBackup(text){if(typeof text!=='string'||text.length>50*1024*1024)fail();let v;try{v=JSON.parse(text)}catch{fail()}if(v.format!==BACKUP_FORMAT||v.version!==1)fail();const files=array(v.files,1000).map(validateFile);return files.map(f=>({...f,id:uid(),restoredAt:Date.now(),restoredFrom:f.id||null,updated:Date.now()}))}
+export function parseBackup(text){if(typeof text!=='string'||text.length>50*1024*1024)fail();let v;try{v=JSON.parse(text)}catch{fail()}if(v.format!==BACKUP_FORMAT||v.version!==1)fail();const files=array(v.files,1000).map(validateFile);if(files.some(f=>typeof f.id!=='string'||!f.id)||new Set(files.map(f=>f.id)).size!==files.length)fail();const ids=new Map(files.map(f=>[f.id,uid()]));return files.map(f=>({...f,id:ids.get(f.id),caseId:ids.get(f.caseId)||null,restoredAt:Date.now(),restoredFrom:f.id||null,updated:Date.now()}))}
 export function workspaceBackup(files){return {format:BACKUP_FORMAT,version:1,exportedAt:new Date().toISOString(),files}}
