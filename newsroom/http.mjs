@@ -12,9 +12,11 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors?{'access-control-allow-origin':cors,'access-control-allow-methods':'GET,POST,PUT,OPTIONS','access-control-allow-headers':'Content-Type,Cf-Access-Jwt-Assertion','access-control-max-age':'600','vary':'Origin'}:{}});
   try{
    const identity=await authenticate(request,{issuer:env.ACCESS_ISSUER,audience:env.ACCESS_AUDIENCE});
-   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/files(?:\/([a-zA-Z0-9-]{1,64}))?$/);
+   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/files(?:\/([a-zA-Z0-9-]{1,64}))?(\/review)?$/);
    if(!path)return reply(404,{error:'not_found'},cors);
-   const [,tenant,id]=path,store=service(env.DB),principal=identity.principal;
+   const [,tenant,id,review]=path,store=service(env.DB),principal=identity.principal;
+   if(review&&!id)return reply(404,{error:'not_found'},cors);
+   if(request.method==='GET'&&review)return reply(200,await store.reviewState(principal,tenant,id),cors);
    if(request.method==='GET')return reply(200,id?await store.read(principal,tenant,id):{files:await store.list(principal,tenant)},cors);
    if(!['POST','PUT'].includes(request.method))return reply(405,{error:'method_not_allowed'},cors);
    if(!cors)return reply(403,{error:'write_origin_required'});
@@ -27,6 +29,7 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{return reply(400,{error:'invalid_json'},cors)}
    if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
    // Body principal/tenant claims are not consulted.
+   if(review){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await store.transition(principal,tenant,id,body.expectedVersion,body.action),cors)}
    if(request.method==='POST'&&!id)return reply(201,await store.create(principal,tenant,body.file),cors);
    if(request.method==='PUT'&&id)return reply(200,await store.save(principal,tenant,id,body.expectedVersion,body.file),cors);
    return reply(405,{error:'method_not_allowed'},cors);

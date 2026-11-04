@@ -24,4 +24,19 @@ export class OfficeService {
  this.db.prepare("INSERT INTO audit_events SELECT ?,?,?,'save',?,?,? WHERE EXISTS(SELECT 1 FROM file_versions WHERE file_id=? AND version=? AND operation_id=?)").bind(crypto.randomUUID(),tenant,principal,id,next,now,id,next,operation)]);}catch(e){if(String(e).includes('UNIQUE'))throw new Conflict('concurrent save');throw e}
  if(results[0].meta.changes!==1)throw new Conflict('save was not applied');
  const after=await this.read(principal,tenant,id);if(after.version!==next)throw new Conflict('save was not applied');return{id,version:next}}
+ async reviewState(principal,tenant,id){const f=await this.read(principal,tenant,id);const r=await this.db.prepare('SELECT version,state,reviewer FROM editorial_state WHERE file_id=? AND version=?').bind(id,f.version).first();return r||{version:f.version,state:'draft',reviewer:null}}
+ async transition(principal,tenant,id,expectedVersion,action){
+ const policy={submit:['owner','editor'],approve:['owner','reviewer'],request_changes:['owner','reviewer']};if(!policy[action])throw new Invalid('unknown review action');await this.role(principal,tenant,policy[action]);
+ const current=await this.read(principal,tenant,id);if(current.version!==expectedVersion)throw new Conflict('review requires current version');
+ const before=await this.reviewState(principal,tenant,id);if(action==='submit'?!['draft','changes_requested'].includes(before.state):before.state!=='in_review')throw new Conflict('review state changed');
+ const author=await this.db.prepare('SELECT author FROM file_versions WHERE file_id=? AND version=?').bind(id,expectedVersion).first();if(action!=='submit'&&author?.author===principal)throw new Denied('a different person must review');
+ const target=action==='submit'?'in_review':action==='approve'?'approved':'changes_requested',reviewer=action==='submit'?null:principal,now=Date.now(),op=crypto.randomUUID();
+ // One conditional write owns the transition. Role, author, version and state are rechecked in SQL.
+ const allowed=policy[action].map(()=>'?').join(','),states=action==='submit'?"('draft','changes_requested')":"('in_review')";
+ const results=await this.db.batch([
+ this.db.prepare(`INSERT INTO editorial_state(file_id,version,state,reviewer,transition_id,updated_at) SELECT f.id,f.version,?,?,?,? FROM office_files f JOIN members m ON m.tenant=f.tenant JOIN file_versions v ON v.file_id=f.id AND v.version=f.version LEFT JOIN editorial_state e ON e.file_id=f.id WHERE f.id=? AND f.tenant=? AND f.version=? AND m.principal=? AND m.role IN (${allowed}) AND (?='submit' OR v.author<>?) AND (CASE WHEN e.version=f.version THEN e.state ELSE 'draft' END) IN ${states} ON CONFLICT(file_id) DO UPDATE SET version=excluded.version,state=excluded.state,reviewer=excluded.reviewer,transition_id=excluded.transition_id,updated_at=excluded.updated_at`).bind(target,reviewer,op,now,id,tenant,expectedVersion,principal,...policy[action],action,principal),
+ this.db.prepare(`INSERT INTO audit_events SELECT ?,?,?,?, ?,?,? WHERE EXISTS(SELECT 1 FROM editorial_state WHERE file_id=? AND version=? AND state=? AND transition_id=?)`).bind(op,tenant,principal,'review_'+action,id,expectedVersion,now,id,expectedVersion,target,op)]);
+ if(results[0].meta.changes!==1)throw new Conflict('review not applied; reload');return{version:expectedVersion,state:target,reviewer};
+ }
+
 }

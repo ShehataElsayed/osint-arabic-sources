@@ -1,0 +1,7 @@
+/* UI-neutral controller: current server state only, no client role claims or queued decisions. */
+export class ReviewController {
+ constructor(client){this.client=client;this.snapshot=null;this.busy=false}
+ async load(id){if(this.busy)throw Error('operation in progress');this.busy=true;this.snapshot=null;try{const file=await this.client.download(id),review=await this.client.reviewState(id);if(file.version!==review.version)throw Error('version changed; reload');this.snapshot={file:structuredClone(file),review:structuredClone(review)};return structuredClone(this.snapshot)}finally{this.busy=false}}
+ async act(action){if(this.busy||!this.snapshot)throw Error('load a current record first');this.busy=true;try{const {file}=this.snapshot;const review=await this.client.transition(file.id,file.version,action);if(review.version!==file.version)throw Error('invalid decision version');this.snapshot={file,review:structuredClone(review)};return structuredClone(this.snapshot)}catch(e){this.snapshot=null;throw e}finally{this.busy=false}}
+ clear(){this.snapshot=null}
+}
