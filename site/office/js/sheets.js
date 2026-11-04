@@ -52,7 +52,7 @@ export function fmtCell(v, fmt) {
   if (fmt === 'number') return (+v.toFixed(2)).toLocaleString('en-US', { maximumFractionDigits: 2 });
   if (fmt === 'percent') return (+((v * 100).toFixed(2))) + '٪';
   if (fmt === 'currency') return (+v.toFixed(2)).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' ج.م';
-  if (fmt === 'date') { const d = new Date(Math.round((v - 25569) * 86400000)); return isNaN(d) ? String(v) : d.toLocaleDateString('ar-EG-u-nu-latn'); }
+  if (fmt === 'date') { const d = new Date(Math.round((v - 25569) * 86400000)); return isNaN(d) ? String(v) : d.toISOString().slice(0,10); }
   return String(+v.toFixed(10));
 }
 
