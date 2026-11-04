@@ -21,6 +21,8 @@ export function captureSearch({question,items,plan=null,note='',provider='',targ
 export function captureDiscovery({question,facts,news,target}){
  const rows=[['النوع','النص / الادعاء','الناشر / المدقق','التقييم المنقول','الرابط','التاريخ','حالة المراجعة','الحدود']];
  for(const it of news?.items||[])rows.push(['RSS',it.title,it.source,'',it.url,it.published||'','unreviewed','عنوان للاكتشاف فقط، ليس المقال كاملاً أو تحققاً.']);
+ if(news?.error)rows.push(['حالة RSS','','',news.error,'','','unreviewed','تعذر جلب الموجزات، النتيجة غير معروفة.']);
+ else if(news&&!(news.items||[]).length)rows.push(['حالة RSS','','','لا مطابقة كافية','','','unreviewed','لا يعني عدم وجود أخبار عن الموضوع.']);
  if(facts?.summary)rows.push(['ملخص آلي للمراجعات',facts.summary,facts.provider||'not-reported','','','','unreviewed','ملخص للمراجعات المطابقة فقط، وليس تحققاً مستقلاً.']);
  if(facts?.coverage)rows.push(['تغطية لغة المراجعات',facts.coverage,'','','','','unreviewed','المطابقة بالكلمات، وليست تأكيداً حرفياً للخبر.']);
  for(const m of facts?.matches||[])rows.push(['مراجعة تحقق',m.claim,m.publisher,m.rating,m.url,m.date||'','unreviewed','تقييم جهة التحقق المذكورة، لا حكم الدليل. طابق الخبر بالمراجعة الأصلية.']);
