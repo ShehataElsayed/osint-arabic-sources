@@ -2,9 +2,10 @@
 import {authenticateAccess,Unauthenticated} from './access-auth.mjs';
 import {OfficeService,Denied,Conflict,Invalid} from './d1-service.mjs';
 import {WorkflowRunner,WorkflowConflict,WorkflowBlocked} from './workflow-runner.mjs';
+import {suppliedSourceAdapters,normalizeSources} from './source-adapters.mjs';
 import {D1WorkflowStore} from './workflow-store.mjs';
 const reply=(status,body,origin)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store','x-content-type-options':'nosniff',...(origin?{'access-control-allow-origin':origin,'vary':'Origin'}:{})}});
-export function createHandler({authenticate=authenticateAccess,service=db=>new OfficeService(db),workflow=db=>new WorkflowRunner({store:new D1WorkflowStore(db),office:service(db),adapters:{}})}={}){
+export function createHandler({authenticate=authenticateAccess,service=db=>new OfficeService(db),workflow=db=>new WorkflowRunner({store:new D1WorkflowStore(db),office:service(db),adapters:suppliedSourceAdapters()})}={}){
  return async(request,env)=>{
   const origin=request.headers.get('origin');
   // Server-managed exact origin, never reflected without equality. No cookie-auth CORS.
@@ -34,7 +35,7 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{return reply(400,{error:'invalid_json'},cors)}
    if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
    // Body principal/tenant claims are not consulted.
-   if(isWorkflow){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);if(!id&&!tail)return reply(201,await store.create({principal,tenant,brief:body.brief}),cors);const action=tail?.slice(1);if(!id||!['advance','materialize','submit'].includes(action))return reply(404,{error:'not_found'},cors);return reply(200,await store[action](principal,tenant,id),cors)}
+   if(isWorkflow){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);if(!id&&!tail)return reply(201,await store.create({principal,tenant,brief:body.brief,sourceInputs:normalizeSources(body.sourceInputs)}),cors);const action=tail?.slice(1);if(!id||!['advance','materialize','submit'].includes(action))return reply(404,{error:'not_found'},cors);return reply(200,await store[action](principal,tenant,id),cors)}
    if(review){if(request.method!=='POST')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await store.transition(principal,tenant,id,body.expectedVersion,body.action),cors)}
    if(request.method==='POST'&&!id)return reply(201,await store.create(principal,tenant,body.file),cors);
    if(request.method==='PUT'&&id)return reply(200,await store.save(principal,tenant,id,body.expectedVersion,body.file),cors);

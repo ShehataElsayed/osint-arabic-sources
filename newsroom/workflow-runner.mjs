@@ -13,7 +13,7 @@ function validOutput(stage,value){
 }
 export class WorkflowRunner {
  constructor({store,adapters,office}){this.store=store;this.adapters=adapters;this.office=office}
- async create({principal,tenant,brief}){await this.office.role(principal,tenant,['owner','editor']);if(typeof brief!=='string'||!brief.trim()||brief.length>12000)throw new WorkflowBlocked('brief required');return this.store.create({tenant,principal,brief,revision:1,status:'ready',cursor:0,steps:[],outputFile:null})}
+ async create({principal,tenant,brief,sourceInputs=[]}){await this.office.role(principal,tenant,['owner','editor']);if(typeof brief!=='string'||!brief.trim()||brief.length>12000)throw new WorkflowBlocked('brief required');return this.store.create({tenant,principal,brief,sourceInputs:structuredClone(sourceInputs),revision:1,status:'ready',cursor:0,steps:[],outputFile:null})}
  async list(principal,tenant){await this.office.role(principal,tenant);return this.store.list(principal,tenant)}
  async read(principal,tenant,id){await this.office.role(principal,tenant);const run=await this.store.read(principal,tenant,id);if(!run)throw new WorkflowBlocked('run not available');return run}
  async advance(principal,tenant,id){
@@ -23,7 +23,7 @@ export class WorkflowRunner {
   const stage=STAGES[run.cursor],adapter=this.adapters[stage];if(typeof adapter!=='function')return this.store.compareAndSet(principal,tenant,id,run.revision,{...run,status:'blocked',error:'adapter_unavailable:'+stage});
   // Persist running before external work. An interrupted/ambiguous stage is not automatically retried.
   const claimed=await this.store.compareAndSet(principal,tenant,id,run.revision,{...run,status:'running',error:null,activeStage:stage});
-  let output;try{output=validOutput(stage,await adapter({brief:run.brief,previous:clone(run.steps),stage}));await this.office.role(principal,tenant,['owner','editor'])}catch(e){return this.store.compareAndSet(principal,tenant,id,claimed.revision,{...claimed,status:e instanceof WorkflowBlocked?'blocked':'uncertain',error:e instanceof WorkflowBlocked?e.message:'stage_failed_or_uncertain',activeStage:null})}
+  let output;try{output=validOutput(stage,await adapter({brief:run.brief,previous:clone(run.steps),sourceInputs:clone(run.sourceInputs||[]),stage}));await this.office.role(principal,tenant,['owner','editor'])}catch(e){return this.store.compareAndSet(principal,tenant,id,claimed.revision,{...claimed,status:e instanceof WorkflowBlocked?'blocked':'uncertain',error:e instanceof WorkflowBlocked?e.message:'stage_failed_or_uncertain',activeStage:null})}
   // Only package output may become a reviewable Office document. This is still not publication.
   return this.store.compareAndSet(principal,tenant,id,claimed.revision,{...claimed,status:run.cursor+1===STAGES.length?'awaiting_materialization':'ready',cursor:run.cursor+1,activeStage:null,steps:[...run.steps,{stage,output,completedAt:new Date().toISOString()}]});
  }
