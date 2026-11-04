@@ -39,4 +39,6 @@ export class OfficeService {
  if(results[0].meta.changes!==1)throw new Conflict('review not applied; reload');return{version:expectedVersion,state:target,reviewer};
  }
 
+ async workflowOutputs(principal,tenant,workflowId){await this.role(principal,tenant);const rows=(await this.db.prepare("SELECT f.id,f.version,v.content FROM office_files f JOIN file_versions v ON v.file_id=f.id AND v.version=f.version WHERE f.tenant=? AND json_extract(v.content,'$.provenanceCase.workflowRun')=? AND EXISTS(SELECT 1 FROM members WHERE tenant=? AND principal=?) LIMIT 3").bind(tenant,workflowId,tenant,principal).all()).results;return rows.map(r=>({id:r.id,version:r.version,workflowRun:JSON.parse(r.content).provenanceCase.workflowRun}))}
+
 }
