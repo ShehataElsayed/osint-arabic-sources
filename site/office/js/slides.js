@@ -235,7 +235,14 @@ async function exportPptx() {
 const EMU = 914400; /* بكسل عرضنا 96dpi ≈ EMU/9525 */
 async function importPptx(fileObj) {
   const zip = await JSZip.loadAsync(await fileObj.arrayBuffer());
-  const slideNames = Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => (+a.match(/(\d+)/)[1]) - (+b.match(/(\d+)/)[1]));
+  let slideNames = Object.keys(zip.files).filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a, b) => (+a.match(/(\d+)/)[1]) - (+b.match(/(\d+)/)[1]));
+  if(zip.file('ppt/presentation.xml')&&zip.file('ppt/_rels/presentation.xml.rels')){
+    const pd=new DOMParser().parseFromString(await zip.file('ppt/presentation.xml').async('text'),'application/xml');
+    const pr=new DOMParser().parseFromString(await zip.file('ppt/_rels/presentation.xml.rels').async('text'),'application/xml'),targets={};
+    pr.querySelectorAll('Relationship').forEach(r=>{if(r.getAttribute('TargetMode')!=='External'&&(r.getAttribute('Type')||'').endsWith('/slide'))targets[r.getAttribute('Id')]=new URL(r.getAttribute('Target'),'https://package.invalid/ppt/presentation.xml').pathname.slice(1)});
+    const ordered=[...pd.querySelectorAll('p\\:sldId, sldId')].map(el=>targets[el.getAttribute('r:id')]).filter(n=>slideNames.includes(n));
+    if(ordered.length)slideNames=ordered;
+  }
   if (!slideNames.length) return toast('لم يُعثر على شرائح في الملف');
   pushUndo();
   const slides = [];
@@ -243,10 +250,10 @@ async function importPptx(fileObj) {
     const xml = await zip.file(sn).async('text');
     const doc = new DOMParser().parseFromString(xml, 'application/xml');
     const relsName = sn.replace('slides/', 'slides/_rels/') + '.rels';
-    const rels = {};
+    const rels = {}; let notesPath='';
     if (zip.file(relsName)) {
       const rd = new DOMParser().parseFromString(await zip.file(relsName).async('text'), 'application/xml');
-      rd.querySelectorAll('Relationship').forEach(r => rels[r.getAttribute('Id')] = r.getAttribute('Target'));
+      rd.querySelectorAll('Relationship').forEach(r => {if(r.getAttribute('TargetMode')==='External')return;const target=r.getAttribute('Target');rels[r.getAttribute('Id')]=target;if((r.getAttribute('Type')||'').endsWith('/notesSlide'))notesPath=new URL(target,'https://package.invalid/'+sn).pathname.slice(1)});
     }
     const elements = [];
     const walk = async node => {
@@ -263,7 +270,9 @@ async function importPptx(fileObj) {
         const bold = rPr && rPr.getAttribute('b') === '1';
         let color = '#f2f4ef';
         const srgb = rPr && rPr.querySelector('a\\:srgbClr, srgbClr'); if (srgb) color = '#' + srgb.getAttribute('val');
-        elements.push({ id: uid(), type: 'text', x, y, w, h, text: paras.join('\n'), style: { fontSize: sz, bold, color, font: 'Cairo' } });
+        const latin=rPr&&rPr.querySelector('a\\:latin, latin'),para=sp.querySelector('a\\:pPr, pPr');
+        const align={r:'right',l:'left',ctr:'center',just:'justify'}[para?.getAttribute('algn')]||'right';
+        elements.push({ id: uid(), type: 'text', x, y, w, h, text: paras.join('\n'), style: { fontSize: sz, bold, color, font:latin?.getAttribute('typeface')||'Cairo',align } });
       }
       for (const pic of node.querySelectorAll('p\\:pic, pic')) {
         const blip = pic.querySelector('a\\:blip, blip'); const rid = blip && (blip.getAttribute('r:embed') || blip.getAttribute('embed'));
@@ -281,7 +290,13 @@ async function importPptx(fileObj) {
       }
     };
     await walk(doc);
-    slides.push({ bg: { type: 'color', value: '#141613' }, elements, notes: '' });
+    let notes='';
+    if(notesPath&&zip.file(notesPath)){
+      const nd=new DOMParser().parseFromString(await zip.file(notesPath).async('text'),'application/xml');
+      notes=[...nd.querySelectorAll('p\\:sp, sp')].filter(sp=>sp.querySelector('p\\:ph, ph')?.getAttribute('type')==='body').flatMap(sp=>[...sp.querySelectorAll('a\\:p, p')].map(pa=>[...pa.querySelectorAll('a\\:t, t')].map(t=>t.textContent).join(''))).join('\n').trim();
+    }
+    const bg=doc.querySelector('p\\:bg p\\:bgPr a\\:solidFill a\\:srgbClr, bg bgPr solidFill srgbClr');
+    slides.push({ bg: { type: 'color', value:bg?'#'+bg.getAttribute('val'):'#141613' }, elements, notes });
   }
   file.data.slides = slides; cur = 0; selId = null;
   render(); markDirty(); toast(`استُورد العرض (${slides.length} شريحة)`);
