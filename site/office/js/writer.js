@@ -1,7 +1,7 @@
 /* كاتب أوش: محرر مستندات عربي كامل. التحرير في DOM (contenteditable) مع نموذج HTML موثق،
    استيراد docx عبر mammoth وتصدير docx عبر مكتبة docx من النموذج نفسه. */
 import { getFile, putFile, newFile, esc, download, toast, debounce, fileParam, stageHandoff, uid, safeDocumentHtml } from './kernel.js';
-import { summarize, extractEntities, extractEvents, extractClaims, researchPlan, askGuide, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
+import { summarize, extractEntities, extractEvents, extractClaims, researchPlan, askGuide,latestAI,attachAI,showAIStatus,askReport,draftNotice, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
 
 const $ = s => document.querySelector(s);
 const page = $('#page');
@@ -12,7 +12,7 @@ async function load() {
   const id = fileParam();
   if (id) { file = await getFile(id); }
   if (!file) { file = newFile('doc'); await putFile(file); history.replaceState(null, '', './writer.html?f=' + file.id); }
-  $('#doc-name').value = file.name;
+  $('#doc-name').value = file.name;showAIStatus(file);
   page.innerHTML = safeDocumentHtml(file.data.html || '<p><br></p>');
   updateCount();
   applySettings();
@@ -245,7 +245,7 @@ $('#ai-close').addEventListener('click', () => { aiPanel.classList.remove('open'
 let lastAI = null;
 function selectedText() { const s = getSelection().toString(); return s.trim().length > 5 ? s : (page.textContent || '').trim(); }
 aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', async () => {
-  const kind = b.dataset.ai;
+  const kind = b.dataset.ai;aiPanel.querySelectorAll('[data-ai]').forEach(x=>x.disabled=true);
   aiResult.innerHTML = 'جارٍ المعالجة عبر خادم الدليل…';
   lastAI = null; $('#ai-insert').disabled = true; $('#ai-to-sheet').disabled = true; $('#ai-to-deck').disabled = true;
   try {
@@ -283,17 +283,16 @@ aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', a
       const q = getSelection().toString().trim() || prompt('سؤالك للدليل:');
       if (!q) { aiResult.innerHTML = ''; return; }
       const r = await askGuide(q);
-      const ans = r.answer || r.text || r.summary || '';
-      const srcs = Array.isArray(r.sources) ? r.sources.map(s => `<li>${esc(s.name || s.title || '')} ${s.url ? `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">↗</a>` : ''}</li>`).join('') : '';
-      lastAI = { html: `<h3>${esc(q)}</h3><p>${esc(ans)}</p>${srcs ? '<h4>المصادر</h4><ul>' + srcs + '</ul>' : ''}`, provider: r.provider };
-      aiResult.innerHTML = `<span class="en-provider">${esc(r.provider ? aiProviderName(r.provider) : '')}</span>${lastAI.html}`;
+      lastAI={html:'<h3>'+esc(q)+'</h3><pre style="white-space:pre-wrap">'+esc(askReport(q,r))+'</pre>',provider:r.provider};
+      aiResult.innerHTML='<span class="en-provider">'+esc(aiProviderName(r.provider))+'</span>'+lastAI.html;
       $('#ai-insert').disabled = false;
     }
-  } catch (e) { aiResult.textContent = reasonText(e && e.reason, e && e.retryAfter); }
+    if(lastAI){lastAI.provenance=latestAI();lastAI.html='<p>'+esc(draftNotice)+'</p>'+lastAI.html;aiResult.insertAdjacentHTML('afterbegin','<p>'+esc(draftNotice)+'</p>')}
+  } catch (e) { aiResult.textContent = reasonText(e && e.reason, e && e.retryAfter); } finally {aiPanel.querySelectorAll('[data-ai]').forEach(x=>x.disabled=false)}
 }));
 function tableHtml(rows) { return '<table><tbody>' + rows.map((r, i) => '<tr>' + r.map(c => (i === 0 ? '<th>' : '<td>') + esc(c) + (i === 0 ? '</th>' : '</td>')).join('') + '</tr>').join('') + '</tbody></table>'; }
-$('#ai-insert').addEventListener('click', () => { if (!lastAI) return; document.execCommand('insertHTML', false, lastAI.html + '<p><br></p>'); markDirty(); toast('أُدرجت النتيجة في المستند'); });
-$('#ai-to-sheet').addEventListener('click', () => { if (!lastAI || !lastAI.rows) return; stageHandoff({ kind: 'sheet', name: file.name + ' — استخراج', rows: lastAI.rows }); location.href = './index.html'; });
+$('#ai-insert').addEventListener('click', () => { if (!lastAI) return; page.focus();const range=document.createRange();range.selectNodeContents(page);range.collapse(false);const selection=getSelection();selection.removeAllRanges();selection.addRange(range);document.execCommand('insertHTML', false, lastAI.html + '<p><br></p>');attachAI(file,lastAI.provenance); markDirty(); toast('أُدرجت النتيجة في المستند'); });
+$('#ai-to-sheet').addEventListener('click', () => { if (!lastAI || !lastAI.rows) return; stageHandoff({ kind: 'sheet', name: file.name + ' — استخراج', rows: lastAI.rows,aiProvenance:lastAI.provenance }); location.href = './index.html'; });
 $('#ai-to-deck').addEventListener('click', () => {
   if (!lastAI) return;
   let slides;
@@ -302,7 +301,7 @@ $('#ai-to-deck').addEventListener('click', () => {
   const mk = slides.filter(s => s.title || s.body).map(s => ({ bg: { type: 'color', value: '#141613' }, notes: '', elements: [
     { id: uid(), type: 'text', x: 90, y: 90, w: 1100, h: 100, text: s.title, style: { fontSize: 34, bold: true, color: '#b5e853', font: 'Cairo' } },
     { id: uid(), type: 'text', x: 90, y: 230, w: 1100, h: 380, text: s.body, style: { fontSize: 22, color: '#f2f4ef', font: 'Cairo' } }] }));
-  stageHandoff({ kind: 'deck', name: file.name + ' — عرض', slides: mk });
+  stageHandoff({ kind: 'deck', name: file.name + ' — عرض', slides: mk,aiProvenance:lastAI.provenance });
   location.href = './index.html';
 });
 

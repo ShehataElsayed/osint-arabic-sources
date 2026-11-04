@@ -1,6 +1,6 @@
 /* جداول أوش: شبكة كانفس بمحرك الدوال المحلي (formula.js)، اتجاه RTL أصلي، أوراق متعددة. */
 import { getFile, putFile, newFile, esc, download, toast, debounce, fileParam, uid } from './kernel.js';
-import { summarize, extractEntities, extractEvents, extractClaims, researchPlan, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
+import { summarize, extractEntities, extractEvents, extractClaims, researchPlan,latestAI,attachAI,showAIStatus,draftNotice, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
 import { evalFormula, isError, numToCol, colToNum, parseA1, ERR } from './formula.js';
 
 const $ = s => document.querySelector(s);
@@ -574,10 +574,10 @@ const aiPanel = $('#ai-panel'), aiResult = $('#ai-result');
 $('#ai-note').textContent = AI_NOTICE;
 $('#btn-ai').addEventListener('click', () => { const on = aiPanel.classList.toggle('open'); document.body.classList.toggle('ai-open', on); });
 $('#ai-close').addEventListener('click', () => { aiPanel.classList.remove('open'); document.body.classList.remove('ai-open'); });
-let aiRows = null;
+let aiRows = null,aiEnvelope=null;
 aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', async () => {
-  const kind = b.dataset.ai;
-  aiResult.innerHTML = 'جارٍ المعالجة عبر خادم الدليل…'; aiRows = null; $('#ai-insert').disabled = true;
+  const kind = b.dataset.ai;aiPanel.querySelectorAll('[data-ai]').forEach(x=>x.disabled=true);
+  aiResult.innerHTML = 'جارٍ المعالجة عبر خادم الدليل…'; aiRows = null;aiEnvelope=null; $('#ai-insert').disabled = true;
   try {
     if (kind === 'text-to-table') {
       const t = prompt('الصق النص الخام لتحويله إلى جدول:'); if (!t) { aiResult.innerHTML = ''; return; }
@@ -604,13 +604,16 @@ aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', a
       aiResult.innerHTML = `<span class="en-provider">${esc(aiProviderName(r.provider))}</span><p style="font-size:12px">${esc(r.intro || '')} — ${aiRows.length - 1} خطوة جاهزة للإدراج. خطة مقترحة لم تُنفَّذ.</p>`;
       $('#ai-insert').disabled = false;
     }
-  } catch (e) { aiResult.textContent = reasonText(e && e.reason, e && e.retryAfter); }
+    if(aiRows){aiEnvelope=latestAI();aiResult.insertAdjacentHTML('afterbegin','<p>'+esc(draftNotice)+'</p>')}
+  } catch (e) { aiResult.textContent = reasonText(e && e.reason, e && e.retryAfter); } finally {aiPanel.querySelectorAll('[data-ai]').forEach(x=>x.disabled=false)}
 }));
 $('#ai-insert').addEventListener('click', () => {
   if (!aiRows) return;
+  const occupied=aiRows.some((row,i)=>row.some((v,c)=>v!==''&&v!=null&&getCell(sel.r1+i,sel.c1+c)));
+  if(occupied&&!confirm('نطاق الإدراج يحتوي على بيانات. هل تستبدله بنتيجة آلية غير مراجعة؟'))return;
   pushUndo();
   aiRows.forEach((row, i) => row.forEach((v, c) => { if (v !== '' && v != null) setCell(sel.r1 + i, sel.c1 + c, { v: typeof v === 'number' ? v : String(v) }); }));
-  recalc(); markDirty(); render(); syncSpacer(); toast('أُدرجت النتيجة في الورقة');
+  attachAI(file,aiEnvelope);recalc(); markDirty(); render(); syncSpacer(); toast('أُدرجت النتيجة في الورقة');
 });
 
 /* ---------- قائمة ملف والحفظ ---------- */
@@ -639,7 +642,7 @@ async function load() {
   const id = fileParam();
   if (id) file = await getFile(id);
   if (!file) { file = newFile('sheet'); await putFile(file); history.replaceState(null, '', './sheets.html?f=' + file.id); }
-  $('#doc-name').value = file.name;
+  $('#doc-name').value = file.name;showAIStatus(file);
   const params = new URLSearchParams(location.search);
   if (params.get('import') === '1') {
     const dataUrl = sessionStorage.getItem('osh-import-' + file.id); const name = sessionStorage.getItem('osh-import-name-' + file.id) || '';

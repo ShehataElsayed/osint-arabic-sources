@@ -1,6 +1,6 @@
 /* عروض أوش: محرر شرائح 1280×720 بعناصر نصية وصور وأشكال وجداول، تصدير/استيراد pptx. */
 import { getFile, putFile, newFile, esc, download, toast, debounce, fileParam, uid } from './kernel.js';
-import { summarize, researchPlan, askGuide, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
+import { summarize, researchPlan, askGuide,latestAI,attachAI,showAIStatus,askReport,draftNotice,decisionName, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
 
 const $ = s => document.querySelector(s);
 const stage = $('#stage'), thumbs = $('#thumbs');
@@ -307,10 +307,10 @@ const aiPanel = $('#ai-panel'), aiResult = $('#ai-result');
 $('#ai-note').textContent = AI_NOTICE;
 $('#btn-ai').addEventListener('click', () => { const on = aiPanel.classList.toggle('open'); document.body.classList.toggle('ai-open', on); });
 $('#ai-close').addEventListener('click', () => { aiPanel.classList.remove('open'); document.body.classList.remove('ai-open'); });
-let aiSlides = null;
+let aiSlides = null,aiEnvelope=null;
 aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', async () => {
-  const kind = b.dataset.ai;
-  aiResult.innerHTML = 'جارٍ المعالجة عبر خادم الدليل…'; aiSlides = null; $('#ai-insert').disabled = true;
+  const kind = b.dataset.ai;aiPanel.querySelectorAll('[data-ai]').forEach(x=>x.disabled=true);
+  aiResult.innerHTML = 'جارٍ المعالجة عبر خادم الدليل…'; aiSlides = null;aiEnvelope=null; $('#ai-insert').disabled = true;
   try {
     if (kind === 'deck-plan') {
       const q = prompt('موضوع العرض:'); if (!q) { aiResult.innerHTML = ''; return; }
@@ -328,13 +328,13 @@ aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', a
     } else if (kind === 'ask') {
       const q = prompt('سؤالك للدليل:'); if (!q) { aiResult.innerHTML = ''; return; }
       const r = await askGuide(q);
-      const ans = r.answer || r.text || r.summary || '';
-      const srcs = Array.isArray(r.sources) ? r.sources.map(s => '• ' + (s.name || s.title || '')).join('\n') : '';
-      aiSlides = [{ title: q.slice(0, 80), body: ans + (srcs ? '\n\nالمصادر:\n' + srcs : ''), notes: '' }];
-      aiResult.innerHTML = `<p style="font-size:12.5px;line-height:2">${esc(ans).slice(0, 500)}</p>`;
+      const report=askReport(q,r);
+      aiSlides=[{title:q.slice(0,80),body:'الحالة: '+decisionName(r.decision||'answer')+'\n'+draftNotice+'\n'+(r.answer||r.insufficient_reason||'لا توجد إجابة مكتملة.').slice(0,600)+'\nالتقرير الكامل والمصادر والحدود في ملاحظات المتحدث.',notes:report}];
+      aiResult.innerHTML='<span class="en-provider">'+esc(aiProviderName(r.provider))+'</span><pre style="white-space:pre-wrap">'+esc(report)+'</pre>';
       $('#ai-insert').disabled = false;
     }
-  } catch (e) { aiResult.textContent = reasonText(e && e.reason, e && e.retryAfter); }
+    if(aiSlides){aiEnvelope=latestAI();aiResult.insertAdjacentHTML('afterbegin','<p>'+esc(draftNotice)+'</p>');aiSlides.forEach(s=>{s.notes=draftNotice+'\n'+(s.notes||'')})}
+  } catch (e) { aiResult.textContent = reasonText(e && e.reason, e && e.retryAfter); } finally {aiPanel.querySelectorAll('[data-ai]').forEach(x=>x.disabled=false)}
 }));
 $('#ai-insert').addEventListener('click', () => {
   if (!aiSlides) return;
@@ -342,7 +342,7 @@ $('#ai-insert').addEventListener('click', () => {
   const mk = aiSlides.map(s => ({ bg: { type: 'color', value: file.data.theme.canvas }, notes: s.notes || '', elements: [
     { id: uid(), type: 'text', x: 90, y: 90, w: 1100, h: 100, text: s.title, style: { fontSize: 34, bold: true, color: file.data.theme.accent, font: 'Cairo' } },
     { id: uid(), type: 'text', x: 90, y: 230, w: 1100, h: 380, text: s.body, style: { fontSize: 22, color: file.data.theme.ink, font: 'Cairo' } }] }));
-  file.data.slides.splice(cur + 1, 0, ...mk);
+  file.data.slides.splice(cur + 1, 0, ...mk);cur++;selId=null;attachAI(file,aiEnvelope);
   render(); markDirty(); toast(`أُدرجت ${mk.length} شرائح`);
 });
 
@@ -367,7 +367,7 @@ async function load() {
   const id = fileParam();
   if (id) file = await getFile(id);
   if (!file) { file = newFile('deck'); await putFile(file); history.replaceState(null, '', './slides.html?f=' + file.id); }
-  $('#doc-name').value = file.name;
+  $('#doc-name').value = file.name;showAIStatus(file);
   const params = new URLSearchParams(location.search);
   if (params.get('import') === '1') {
     const dataUrl = sessionStorage.getItem('osh-import-' + file.id); const name = sessionStorage.getItem('osh-import-name-' + file.id) || '';

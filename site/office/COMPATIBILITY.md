@@ -19,3 +19,5 @@ Not covered or not supported:
 Storage is per browser. Keep JSON backups. Clearing browser storage deletes local files. Sensitive content sent to AI is disclosed to the configured worker/model provider; review their policies.
 
 RSS discovery uses conservative whole-token filtering, normalized Arabic articles, and generic question-word removal. Multiple topic terms need at least two matches. This can miss inflected names, synonyms, or useful single-term matches within longer questions; no semantic relevance or truth claim is made. Client-side filtering is more conservative on legacy responses without descriptions. Fact Check service authorization remains an external configuration dependency.
+
+Native AI handlers now retain raw result/provider/source text/review history in local JSON, preserve ask decision/limits and full report in Writer or Slides notes, and show a persistent unreviewed banner. Malformed ask responses cannot be inserted. Writer appends explicit AI insertion; Sheets asks before replacing occupied cells. This is local provenance, not authenticated editorial approval, team audit, or automated truth verification.
