@@ -1,3 +1,4 @@
+import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import{validateCase}from'../journalist-core.js';
 import{imageCase}from'./image-case-core.js';
@@ -85,3 +86,5 @@ $('case-export').onclick=()=>{if(!observation)return;try{if(['pending','invalid'
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ قياساتك الكاملة ظاهرة أعلاه.'}
     finally{btn.disabled=false}};
 })();
+
+attachOfficeAction($('case-export'),async()=>{if(['pending','invalid'].includes(caseState)||!observation)throw Error('النتيجة أو القضية غير جاهزة'); return imageCase(observation,context(),caseBase||undefined)},{kind:'doc',name:'image - نتيجة من الدليل'});

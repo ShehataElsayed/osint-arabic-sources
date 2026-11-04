@@ -1,3 +1,4 @@
+import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import {validateCase} from '../journalist-core.js';
 import {BACKEND_URL, AI_NOTICE, aiProviderName} from '../rag-config.js';
 import {timelineCase,validateEvents} from './timeline-case-core.js';
@@ -140,3 +141,5 @@ async function aiExtractEvents(){
  catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الرصد المحلي ما زال متاحًا.')}
  finally{btn.disabled=false}}
 $('ai-extract').onclick=aiExtractEvents;
+
+attachOfficeAction($('case-export'),async()=>{if(caseInvalid||!events.length)throw Error('النتيجة أو القضية غير جاهزة'); return timelineCase(events,baseCase)},{kind:'sheet',name:'timeline - نتيجة من الدليل'});

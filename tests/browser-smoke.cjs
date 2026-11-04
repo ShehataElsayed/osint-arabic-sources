@@ -39,7 +39,7 @@ const fs=require('fs');
   // Full classic map with Pagefind and the original nav
   await page.goto('http://127.0.0.1:8765/map.html');
   await page.locator('a.taskcard',{hasText:'مساعد NewsRAG'}).waitFor();
-  assert.equal(await page.locator('nav.shellnav > a, nav.shellnav > details').count(),4,'four primary nav sections after hiding Yemen');
+  assert.equal(await page.locator('nav.shellnav > a, nav.shellnav > details').count(),5,'five primary nav sections including المكتب after hiding Yemen');
   assert.equal(await page.locator('header.top a[href*="facebook"]').count(),0,'facebook is in the footer, not the header');
   assert.ok(await page.locator('footer a[href*="facebook"]').count()>0);
   assert.ok(await page.locator('a.skip-link').count()===1);

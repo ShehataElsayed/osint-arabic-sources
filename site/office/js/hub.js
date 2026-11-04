@@ -1,0 +1,180 @@
+/* Osh Office hub: مدير الملفات + الأمر الذكي الذي يحوّل الطلب إلى التطبيق المناسب. */
+import { listFiles, putFile, deleteFile, getFile, newFile, openFile, KINDS, esc, fmtDate, download, toast, peekHandoff, takeHandoff, uid } from './kernel.js';
+import { summarize, extractEntities, extractEvents, extractClaims, researchPlan, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
+
+const $ = s => document.querySelector(s);
+const ICONS = {
+  doc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>',
+  sheet: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 4v16M15 4v16"/></svg>',
+  deck: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4M8 21h8"/></svg>',
+  board: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="5.5" height="14" rx="1.5"/><rect x="9.7" y="4" width="5.5" height="9" rx="1.5"/><rect x="16.4" y="4" width="5.5" height="12" rx="1.5"/></svg>'
+};
+$('#ai-notice').textContent = AI_NOTICE;
+
+let files = [];
+async function refresh() {
+  files = (await listFiles()).sort((a, b) => b.updated - a.updated);
+  render();
+}
+function render(filter = '') {
+  const host = $('#files'); const q = filter.trim();
+  const shown = q ? files.filter(f => f.name.includes(q)) : files;
+  $('#files-empty').hidden = shown.length > 0;
+  host.innerHTML = '';
+  for (const f of shown) {
+    const card = document.createElement('div'); card.className = 'osh-file-card';
+    card.innerHTML = `<div class="fc-top"><span class="fc-ico">${ICONS[f.kind] || ''}</span><div style="min-width:0"><strong>${esc(f.name)}</strong><small>${KINDS[f.kind] || f.kind} · آخر تعديل ${fmtDate(f.updated)}</small></div></div>
+    <div class="fc-acts"><button data-act="open">افتح</button><button data-act="rename">أعد التسمية</button><button data-act="dup">انسخ</button><button data-act="export">نزّل نسخة</button><button data-act="del" style="color:#f3aaa1">احذف</button></div>`;
+    card.addEventListener('click', async e => {
+      const act = e.target.dataset && e.target.dataset.act;
+      if (!act || act === 'open') return openFile(f);
+      e.stopPropagation();
+      if (act === 'rename') { const n = prompt('اسم الملف الجديد:', f.name); if (n && n.trim()) { f.name = n.trim(); await putFile(f); refresh(); } }
+      if (act === 'dup') { const c = JSON.parse(JSON.stringify(f)); c.id = uid(); c.name = f.name + ' — نسخة'; await putFile(c); refresh(); }
+      if (act === 'del') { if (confirm(`احذف «${f.name}» نهائيًا من هذا الجهاز؟`)) { await deleteFile(f.id); refresh(); } }
+      if (act === 'export') download(f.name + '.oshoffice.json', new Blob([JSON.stringify(f, null, 1)], { type: 'application/json' }));
+    });
+    host.appendChild(card);
+  }
+}
+$('#file-search').addEventListener('input', e => render(e.target.value));
+
+document.querySelectorAll('[data-new]').forEach(b => b.addEventListener('click', async () => {
+  const f = newFile(b.dataset.new, 'بدون عنوان');
+  await putFile(f); openFile(f);
+}));
+
+/* استيراد ملف من الجهاز: يُمرَّر إلى التطبيق المالك لصيغته ليحوّله */
+const IMPORT_KIND = { docx: 'doc', html: 'doc', htm: 'doc', md: 'doc', txt: 'doc', xlsx: 'sheet', csv: 'sheet', pptx: 'deck', json: 'board' };
+$('#import-file').addEventListener('change', async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  let kind = IMPORT_KIND[ext];
+  if (ext === 'json') { try { const j = JSON.parse(await file.text()); if (j.kind && KINDS[j.kind]) kind = j.kind; } catch { kind = 'board'; } }
+  if (!kind) return toast('صيغة غير مدعومة للاستيراد: ' + ext);
+  if (ext === 'json') { try { const j = JSON.parse(await file.text()); if (j.kind && j.data) { const f = { ...j, id: uid(), updated: Date.now() }; await putFile(f); return openFile(f); } } catch {} }
+  const f = newFile(kind, file.name.replace(/\.[^.]+$/, ''));
+  await putFile(f);
+  const dataUrl = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(file); });
+  sessionStorage.setItem('osh-import-' + f.id, dataUrl);
+  sessionStorage.setItem('osh-import-name-' + f.id, file.name);
+  location.href = { doc: './writer.html', sheet: './sheets.html', deck: './slides.html', board: './tasks.html' }[kind] + '?f=' + f.id + '&import=1';
+});
+
+/* تسليم من أدوات المنصة (مثلاً نتيجة تحقق أو ملخص) */
+function renderHandoff() {
+  const h = peekHandoff(); const box = $('#handoff-box');
+  if (!h) return;
+  const div = document.createElement('div');
+  div.className = 'osh-panel'; div.style.cssText = 'border-color:var(--accent);margin:16px 0';
+  div.innerHTML = `<h2>مادة وصلت من المنصة</h2><p class="muted">${esc(h.name || 'نتيجة من إحدى الأدوات')} — جاهزة للتحويل إلى ملف.</p><div class="row" style="display:flex;gap:8px;flex-wrap:wrap"><button class="osh-btn primary" id="ho-open">حوّلها إلى ${KINDS[h.kind] || 'ملف'}</button><button class="osh-btn" id="ho-dismiss">تجاهل</button></div>`;
+  box.appendChild(div);
+  div.querySelector('#ho-dismiss').addEventListener('click', () => { takeHandoff(); div.remove(); });
+  div.querySelector('#ho-open').addEventListener('click', async () => {
+    const p = takeHandoff(); if (!p) return;
+    const f = newFile(p.kind || 'doc', p.name || 'من المنصة');
+    if (p.kind === 'doc' || !p.kind) f.data.html = p.docHtml || '';
+    if (p.kind === 'sheet' && Array.isArray(p.rows)) { const cells = {}; p.rows.forEach((row, r) => row.forEach((v, c) => { if (v !== '' && v != null) cells[(r + 1) + ',' + (c + 1)] = { v: String(v) }; })); f.data.sheets[0].cells = cells; }
+    if (p.kind === 'deck' && Array.isArray(p.slides)) f.data.slides = p.slides;
+    await putFile(f); openFile(f);
+  });
+}
+
+/* الأمر الذكي: توجيه قاعدي شفاف إلى التطبيق المناسب */
+function routeIntent(text) {
+  const t = text;
+  if (/(عرض|شرائح|سلايدات|بوربوينت|باوربوينت|تقديمي|محاضرة)/.test(t)) return 'deck';
+  if (/(جدول|جداول|بيانات|إحصائ|احصائ|أرقام|ارقام|ميزانية|كشف|إكسل|اكسل|صفوف|أعمدة|اعمدة)/.test(t)) return 'sheet';
+  if (/(مهام|مهمة|متابعة|كانبان)/.test(t)) return 'board';
+  return 'doc';
+}
+function wantSummary(t) { return /(لخص|تلخيص|ملخص)/.test(t); }
+function wantPlan(t) { return /(خطة|خطوات|خارطة طريق|منهجية عمل|كيف أبحث|كيف ابحث)/.test(t); }
+function wantEntities(t) { return /(كيانات|أشخاص|اشخاص|جهات|أماكن|اماكن|أسماء|اسماء)/.test(t); }
+function wantEvents(t) { return /(أحداث|احداث|تواريخ|خط زمني)/.test(t); }
+function wantClaims(t) { return /(ادعاءات|ادعاء|تحقق من)/.test(t); }
+function stripCommand(t) { return t.replace(/^(لخص|تلخيص|استخرج|حوّل|حول|اعمل|أنشئ|انشئ|اكتب|ولّد|ولد)\s*/,'').trim(); }
+
+async function buildDocFromAI(text, target) {
+  const out = $('#ai-out');
+  if (wantSummary(text) && text.length > 220) {
+    const r = await summarize(text);
+    return { kind: 'doc', name: 'ملخص ذكي', html: `<h2>ملخص آلي</h2><p>${esc(r.overview)}</p>${r.quotes.length ? '<h3>اقتباسات حرفية من النص</h3><ul>' + r.quotes.map(q => `<li>${esc(q)}</li>`).join('') + '</ul>' : ''}<p><small>provider:${esc(r.provider || '')}</small></p>`, note: 'ملخص آلي — راجعه قبل الاعتماد عليه', provider: r.provider };
+  }
+  if (wantEntities(text) && text.length > 220) {
+    const r = await extractEntities(text);
+    const rows = [['الكيان', 'النوع']];
+    (r.persons || []).forEach(x => rows.push([x, 'شخص']));
+    (r.organizations || []).forEach(x => rows.push([x, 'جهة']));
+    (r.places || []).forEach(x => rows.push([x, 'مكان']));
+    return tablePayload(rows, 'كيانات مستخرجة', r.provider);
+  }
+  if (wantEvents(text) && text.length > 220) {
+    const r = await extractEvents(text);
+    const evs = Array.isArray(r.events) ? r.events : [];
+    const rows = [['الحدث', 'التاريخ/الزمن']].concat(evs.map(e => [e.event || e.text || JSON.stringify(e), e.date || e.time || '']));
+    return tablePayload(rows, 'أحداث مستخرجة', r.provider);
+  }
+  if (wantClaims(text) && text.length > 220) {
+    const r = await extractClaims(text);
+    const cl = Array.isArray(r.claims) ? r.claims : [];
+    const rows = [['الادعاء', 'الاقتباس الحرفي']].concat(cl.map(c => [c.claim || c.text || JSON.stringify(c), c.quote || '']));
+    return tablePayload(rows, 'ادعاءات قابلة للتحقق', r.provider);
+  }
+  if (wantPlan(text) || target === 'deck' || target === 'board') {
+    const q = stripCommand(text);
+    const plan = await researchPlan(q);
+    if (target === 'deck') return { kind: 'deck', name: 'عرض: ' + q.slice(0, 40), plan, provider: plan.provider };
+    if (target === 'board') return { kind: 'board', name: 'مهام: ' + q.slice(0, 40), plan, provider: plan.provider };
+    const steps = (plan.steps || []).map((s, i) => `<li><strong>${esc(s.goal)}</strong> — ${esc(s.how)} <small>(${esc(s.tool || '')})</small></li>`).join('');
+    return { kind: 'doc', name: 'خطة: ' + q.slice(0, 40), html: `<h2>${esc(plan.intro || 'خطة بحث')}</h2><ol>${steps}</ol>${plan.limits ? `<p><small>الحدود: ${esc(plan.limits)}</small></p>` : ''}`, note: 'خطة مقترحة لم تُنفَّذ — راجعها بخبرتك', provider: plan.provider };
+  }
+  if (text.length > 220 && !wantPlan(text)) { const r = await summarize(text); return { kind: 'doc', name: 'ملخص ذكي', html: `<h2>ملخص آلي</h2><p>${esc(r.overview)}</p>`, note: 'ملخص آلي — راجعه قبل الاعتماد عليه', provider: r.provider }; }
+  const q = stripCommand(text);
+  const plan = await researchPlan(q);
+  const steps = (plan.steps || []).map(s => `<li><strong>${esc(s.goal)}</strong> — ${esc(s.how)}</li>`).join('');
+  return { kind: 'doc', name: 'خطة: ' + q.slice(0, 40), html: `<h2>${esc(plan.intro || 'خطة بحث')}</h2><ol>${steps}</ol>`, note: 'خطة مقترحة لم تُنفَّذ — راجعها بخبرتك', provider: plan.provider };
+}
+function tablePayload(rows, name, provider) {
+  return { kind: 'sheet', name, rows, provider };
+}
+
+$('#ai-run').addEventListener('click', async () => {
+  const text = $('#ai-cmd').value.trim();
+  const out = $('#ai-out');
+  if (!text) return toast('اكتب طلبك أولًا');
+  let target = $('#ai-target').value;
+  if (target === 'auto') target = routeIntent(text);
+  out.hidden = false; out.textContent = 'جارٍ المعالجة عبر خادم الدليل…';
+  $('#ai-run').disabled = true;
+  try {
+    const p = await buildDocFromAI(text, target);
+    const f = newFile(p.kind, p.name);
+    if (p.kind === 'doc') f.data.html = p.html;
+    if (p.kind === 'sheet') { const cells = {}; (p.rows || []).forEach((row, r) => row.forEach((v, c) => { if (v !== '' && v != null) cells[(r + 1) + ',' + (c + 1)] = { v: String(v) }; })); f.data.sheets[0].cells = cells; }
+    if (p.kind === 'deck' && p.plan) {
+      const plan = p.plan; const T = f.data.theme;
+      const slides = [{ bg: { type: 'color', value: T.canvas }, notes: '', elements: [
+        { id: uid(), type: 'text', x: 90, y: 250, w: 1100, h: 150, text: p.name, style: { fontSize: 54, bold: true, color: T.ink, align: 'center', font: 'Cairo' } },
+        { id: uid(), type: 'text', x: 190, y: 430, w: 900, h: 70, text: plan.intro || '', style: { fontSize: 24, color: T.accent, align: 'center', font: 'Cairo' } }] }];
+      (plan.steps || []).forEach((s, i) => slides.push({ bg: { type: 'color', value: T.canvas }, notes: s.how || '', elements: [
+        { id: uid(), type: 'text', x: 90, y: 90, w: 1100, h: 90, text: `${i + 1}. ${s.goal}`, style: { fontSize: 34, bold: true, color: T.accent, font: 'Cairo' } },
+        { id: uid(), type: 'text', x: 90, y: 220, w: 1100, h: 300, text: s.how, style: { fontSize: 22, color: T.ink, font: 'Cairo' } }] }));
+      if (plan.limits) slides.push({ bg: { type: 'color', value: T.canvas }, notes: '', elements: [{ id: uid(), type: 'text', x: 90, y: 300, w: 1100, h: 120, text: 'الحدود: ' + plan.limits, style: { fontSize: 22, color: T.ink, align: 'center', font: 'Cairo' } }] });
+      f.data.slides = slides;
+    }
+    if (p.kind === 'board' && p.plan) {
+      const cards = (p.plan.steps || []).map(s => ({ id: uid(), title: s.goal, desc: s.how, due: '', pr: '', labels: [], check: [] }));
+      f.data.lists[0].cards = cards;
+      if (p.plan.intro) f.data.lists[0].title = 'خطة: ' + p.name.replace(/^مهام: /, '').slice(0, 30);
+    }
+    await putFile(f);
+    out.innerHTML = `<span class="en-provider">${esc(p.provider ? aiProviderName(p.provider) : '')}</span>تم إنشاء «${esc(f.name)}» (${KINDS[f.kind]}). ${p.note ? esc(p.note) : ''}`;
+    setTimeout(() => openFile(f), 900);
+  } catch (e) {
+    out.textContent = reasonText(e && e.reason, e && e.retryAfter);
+  } finally { $('#ai-run').disabled = false; }
+});
+
+refresh(); renderHandoff();

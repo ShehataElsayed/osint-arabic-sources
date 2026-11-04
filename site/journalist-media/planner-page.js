@@ -1,3 +1,4 @@
+import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import {validateCase} from '../journalist-core.js';
 import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import {plannerCase} from './planner-case-core.js';
@@ -84,3 +85,5 @@ $('copy').onclick=async()=>{if(!lastPlan||lastPlan.empty)return;
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ مسارك الكامل ظاهر أعلاه.'}
     finally{btn.disabled=false}};
 })();
+
+attachOfficeAction($('case-export'),async()=>{if(caseInvalid||!lastPlan)throw Error('النتيجة أو القضية غير جاهزة'); return plannerCase(lastPlan,lastDesc,reviews,baseCase)},{kind:'board',name:'planner - نتيجة من الدليل'});
