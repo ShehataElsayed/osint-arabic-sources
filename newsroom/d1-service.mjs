@@ -1,0 +1,27 @@
+/* Internal service experiment. No provisioning, public signup, sharing or publication. */
+export class Denied extends Error {}
+export class Conflict extends Error {}
+export class Invalid extends Error {}
+const roles=['owner','editor','reviewer','viewer'];
+export class OfficeService {
+ constructor(db){this.db=db}
+ async role(principal,tenant,allowed=roles){const r=await this.db.prepare('SELECT role FROM members WHERE tenant=? AND principal=?').bind(tenant,principal).first();if(!r||!allowed.includes(r.role))throw new Denied('not permitted');return r.role}
+ encode(file){if(!file||!['doc','sheet','deck','board'].includes(file.kind)||typeof file.name!=='string'||!file.name.trim()||file.name.length>200||!file.data||typeof file.data!=='object')throw new Invalid('invalid file');const text=JSON.stringify({kind:file.kind,name:file.name,data:file.data,provenanceCase:file.provenanceCase,aiProvenance:file.aiProvenance});if(new TextEncoder().encode(text).length>512000)throw new Invalid('pilot file limit is 512KB; keep media local');return text}
+ async list(principal,tenant){await this.role(principal,tenant);return(await this.db.prepare('SELECT id,name,kind,version,updated_at FROM office_files WHERE tenant=? AND EXISTS(SELECT 1 FROM members WHERE tenant=? AND principal=?) ORDER BY updated_at DESC LIMIT 100').bind(tenant,tenant,principal).all()).results}
+ async read(principal,tenant,id){await this.role(principal,tenant);const r=await this.db.prepare('SELECT f.id,f.version,fv.content FROM office_files f JOIN file_versions fv ON fv.file_id=f.id AND fv.version=f.version WHERE f.tenant=? AND f.id=? AND EXISTS(SELECT 1 FROM members WHERE tenant=? AND principal=?)').bind(tenant,id,tenant,principal).first();if(!r)throw new Denied('not permitted');return {id:r.id,version:r.version,...JSON.parse(r.content)}}
+ async create(principal,tenant,file){await this.role(principal,tenant,['owner','editor']);const text=this.encode(file),id=crypto.randomUUID(),now=Date.now();
+ // SQL membership checks are repeated inside mutations. Revocation between preflight and write is denied.
+ const results=await this.db.batch([
+ this.db.prepare("INSERT INTO office_files SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM members WHERE tenant=? AND principal=? AND role IN ('owner','editor'))").bind(id,tenant,file.name,file.kind,1,now,tenant,principal),
+ this.db.prepare('INSERT INTO file_versions SELECT ?,1,?,?,?,? WHERE EXISTS(SELECT 1 FROM office_files WHERE id=? AND tenant=?)').bind(id,text,principal,crypto.randomUUID(),now,id,tenant),
+ this.db.prepare("INSERT INTO audit_events SELECT ?,?,?,'create',?,1,? WHERE EXISTS(SELECT 1 FROM file_versions WHERE file_id=? AND version=1)").bind(crypto.randomUUID(),tenant,principal,id,now,id)]);
+ if(results[0].meta.changes!==1)throw new Denied('not permitted');return{id,version:1}}
+ async save(principal,tenant,id,expectedVersion,file){await this.role(principal,tenant,['owner','editor']);const text=this.encode(file);if(!Number.isInteger(expectedVersion)||expectedVersion<1)throw new Invalid('expected version required');const current=await this.read(principal,tenant,id);if(current.kind!==file.kind)throw new Invalid('file kind cannot change');if(current.version!==expectedVersion)throw new Conflict('reload before saving');const next=expectedVersion+1,now=Date.now(),operation=crypto.randomUUID();
+ // Insert first under UNIQUE(file_id,version): a concurrent stale writer cannot overwrite.
+ let results;try{results=await this.db.batch([
+ this.db.prepare("INSERT INTO file_versions SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM office_files f JOIN members m ON m.tenant=f.tenant WHERE f.id=? AND f.tenant=? AND f.version=? AND m.principal=? AND m.role IN ('owner','editor'))").bind(id,next,text,principal,operation,now,id,tenant,expectedVersion,principal),
+ this.db.prepare('UPDATE office_files SET name=?,version=?,updated_at=? WHERE id=? AND tenant=? AND version=? AND EXISTS(SELECT 1 FROM file_versions WHERE file_id=? AND version=? AND operation_id=?)').bind(file.name,next,now,id,tenant,expectedVersion,id,next,operation),
+ this.db.prepare("INSERT INTO audit_events SELECT ?,?,?,'save',?,?,? WHERE EXISTS(SELECT 1 FROM file_versions WHERE file_id=? AND version=? AND operation_id=?)").bind(crypto.randomUUID(),tenant,principal,id,next,now,id,next,operation)]);}catch(e){if(String(e).includes('UNIQUE'))throw new Conflict('concurrent save');throw e}
+ if(results[0].meta.changes!==1)throw new Conflict('save was not applied');
+ const after=await this.read(principal,tenant,id);if(after.version!==next)throw new Conflict('save was not applied');return{id,version:next}}
+}
