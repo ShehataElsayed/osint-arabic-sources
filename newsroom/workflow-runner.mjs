@@ -14,8 +14,10 @@ function validOutput(stage,value){
 export class WorkflowRunner {
  constructor({store,adapters,office}){this.store=store;this.adapters=adapters;this.office=office}
  async create({principal,tenant,brief}){await this.office.role(principal,tenant,['owner','editor']);if(typeof brief!=='string'||!brief.trim()||brief.length>12000)throw new WorkflowBlocked('brief required');return this.store.create({tenant,principal,brief,revision:1,status:'ready',cursor:0,steps:[],outputFile:null})}
+ async list(principal,tenant){await this.office.role(principal,tenant);return this.store.list(principal,tenant)}
+ async read(principal,tenant,id){await this.office.role(principal,tenant);const run=await this.store.read(principal,tenant,id);if(!run)throw new WorkflowBlocked('run not available');return run}
  async advance(principal,tenant,id){
-  await this.office.role(principal,tenant,['owner','editor']);const run=await this.store.read(tenant,id);if(!run)throw new WorkflowBlocked('run not available');
+  await this.office.role(principal,tenant,['owner','editor']);const run=await this.store.read(principal,tenant,id);if(!run)throw new WorkflowBlocked('run not available');
   if(run.status!=='ready'&&run.status!=='blocked')throw new WorkflowConflict('run cannot advance; inspect current state');
   if(run.cursor>=STAGES.length)return clone(run);
   const stage=STAGES[run.cursor],adapter=this.adapters[stage];if(typeof adapter!=='function')return this.store.compareAndSet(principal,tenant,id,run.revision,{...run,status:'blocked',error:'adapter_unavailable:'+stage});
@@ -26,11 +28,11 @@ export class WorkflowRunner {
   return this.store.compareAndSet(principal,tenant,id,claimed.revision,{...claimed,status:run.cursor+1===STAGES.length?'awaiting_materialization':'ready',cursor:run.cursor+1,activeStage:null,steps:[...run.steps,{stage,output,completedAt:new Date().toISOString()}]});
  }
  async materialize(principal,tenant,id){
-  await this.office.role(principal,tenant,['owner','editor']);const run=await this.store.read(tenant,id);if(!run||run.status!=='awaiting_materialization'||run.cursor!==STAGES.length)throw new WorkflowConflict('complete package required');
+  await this.office.role(principal,tenant,['owner','editor']);const run=await this.store.read(principal,tenant,id);if(!run||run.status!=='awaiting_materialization'||run.cursor!==STAGES.length)throw new WorkflowConflict('complete package required');
   const claimed=await this.store.compareAndSet(principal,tenant,id,run.revision,{...run,status:'materializing'});
   const output=run.steps.at(-1).output,esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   try{const file=await this.office.create(principal,tenant,{kind:'doc',name:'حزمة تحرير مؤتمتة للمراجعة',data:{html:'<h1>حزمة آلية غير مراجعة</h1><p>'+esc(output.summary)+'</p>'},provenanceCase:{workflowRun:id,brief:run.brief,stages:clone(run.steps),sources:clone(output.sources)}});return this.store.compareAndSet(principal,tenant,id,claimed.revision,{...claimed,status:'awaiting_human_submission',outputFile:file})}catch{throw new WorkflowConflict('materialization uncertain; reconcile before any retry')}
  }
- async submit(principal,tenant,id){await this.office.role(principal,tenant,['owner','editor']);const run=await this.store.read(tenant,id);if(!run||run.status!=='awaiting_human_submission'||!run.outputFile)throw new WorkflowConflict('current materialized package required');const claim=await this.store.compareAndSet(principal,tenant,id,run.revision,{...run,status:'submitting'});try{const review=await this.office.transition(principal,tenant,run.outputFile.id,run.outputFile.version,'submit');return this.store.compareAndSet(principal,tenant,id,claim.revision,{...claim,status:'awaiting_human_review',review})}catch{throw new WorkflowConflict('submission uncertain; reconcile server review before retry')}}
+ async submit(principal,tenant,id){await this.office.role(principal,tenant,['owner','editor']);const run=await this.store.read(principal,tenant,id);if(!run||run.status!=='awaiting_human_submission'||!run.outputFile)throw new WorkflowConflict('current materialized package required');const claim=await this.store.compareAndSet(principal,tenant,id,run.revision,{...run,status:'submitting'});try{const review=await this.office.transition(principal,tenant,run.outputFile.id,run.outputFile.version,'submit');return this.store.compareAndSet(principal,tenant,id,claim.revision,{...claim,status:'awaiting_human_review',review})}catch{throw new WorkflowConflict('submission uncertain; reconcile server review before retry')}}
  // Deliberately no publish method, output destination or final-human-decision adapter.
 }
