@@ -1,0 +1,30 @@
+# Institutional storage domain prototype
+
+Internal development proof only. Not connected to the live site or an HTTP server.
+
+Implemented and tested: tenant-bound membership checks, owner/editor/reviewer/viewer distinctions, versioned JSON files, optimistic save conflict detection, audit rows, version-bound draft/review/approval/changes-requested states with separate-author review and automatic approval invalidation on edit, SQLite backup/restore test, and cross-tenant denial even with a known file ID.
+
+Not implemented: authentication, enrollment, session/CSRF controls, invitation delivery, HTTP endpoints, file attachments/object storage, signed grants, editor save callbacks and SSRF defenses, CRDT collaboration, durable deployment, operational backups/restore drills, encryption key management, retention/deletion policy and production audit integrity. The audit table is not tamper-proof.
+
+`principal` must come from a future verified authentication adapter, not a client's request-body user ID. `bootstrap` is administrative provisioning, not a public signup route. Do not expose this prototype to the internet.
+
+Run: `python3 -m unittest tests/test_newsroom_store.py -v`
+
+Editorial approval is an internal version-bound decision, not authorization or implementation of external publication. Legacy files created before workflow support require a future migration before editorial transitions.
+
+`access-auth.mjs` is a separate, unconnected authentication-adapter experiment. It pins issuer/audience from deployment configuration, requires a verified RS256 signature, rejects token-selected key URLs, expires identities, and returns issuer+subject rather than trusting an email or request-body user. Four local cryptographic tests cover negative paths. It has no production key cache/rate limiting, live IdP test, HTTP/CSRF adapter, or deployment. These tests do not authenticate anyone on the live site. Uses pinned jose6.2.15, with independent security review still needed. Reference: https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/ .
+
+`d1-service.mjs` and `schema.sql` are an unconnected D1-shaped SQL adapter tested against local Node SQLite, not the actual D1 service. Five tests cover typed files/provenance, cross-tenant denial, role revocation between checks and write, stale/same-author concurrent operations, audit behavior and a 512KB per-file pilot cap. No media/object store. Neither the local SQL harness nor the Python prototype proves remote D1 behavior. D1 free limits currently include 500MB per database, 2MB max row, 5GB account total, 5m read rows/day, 100k written rows/day, 7-day recovery. These are vendor limits, not a verified account plan or unlimited institution service. Sources: https://developers.cloudflare.com/d1/platform/pricing/ and https://developers.cloudflare.com/d1/platform/limits/ . No cloud resource has been created.
+
+`http.mjs` adds an unconnected request adapter, not an exposed endpoint: signature-authenticated identity, route-scoped tenant, fixed allowed-origin checks, bounded UTF-8 JSON input, no-store replies, stable authorization/conflict errors without internal details. Four HTTP tests use dependency-injected authentication/service; they do not prove a deployed end-to-end path. No existing public worker or site config imports this code. Before deployment: actual D1 transaction behavior, IdP enrollment/policy and CORS flow, managed JWT verifier/key cache, rate limits, backup/export drills, content sanitization on rendering, full end-to-end adversarial tests, and operator provisioning must be verified. Authentication is not membership and editorial approval is not publication permission.
+
+
+Local runtime binding check: `cd newsroom && npm ci && node local-d1-check.mjs`. This now passes actual local Wrangler4.157.0 D1 binding create/read/save/stale-version/isolation checks, beyond the SQLite-shaped harness. It is not a remote cloud test. Config deliberately disables public/preview routes and has a zero placeholder DB ID; never deploy it unchanged. Dependencies are isolated and lockfile-pinned, license retained. No secrets or account IDs in config. `node --test ../tests/newsroom-*.test.mjs` runs the domain adapter tests after installing this package.
+
+The local Wrangler integration check also exercises a real locally signed RS256 JWT through the HTTP adapter into local D1, ignoring forged body identity, and denying missing auth/cross-tenant access. Its key endpoint is a synthetic local fixture, not Cloudflare Access. Remote enrollment, actual JWKS availability and policy routing are still unverified.
+
+`sync-client.mjs` is an opt-in, unconnected client experiment. It returns a new snapshot only after a successful response, retains original data on conflicts/network errors, carries expected remote version/provenance, refuses silently switching an existing remote mapping to another tenant/server, never saves the token, and never retries ambiguous writes. Four local tests pass. It has no live browser sign-in/token-delivery UI, offline queue, attachment upload or current-editor import. Nothing uploads user files automatically.
+
+The staged verifier now has a bounded per-isolate JWKS cache (five-minute TTL, four endpoints, coalesced requests, five-second fetch timeout, 64KB response cap). Expired keys are not reused on network failure. Three local tests cover refresh, coalescing, bounded entries and failure paths. This is not global abuse protection; no distributed request limiter or live key rotation drill is claimed.
+
+The local binding integration check now also exports all five metadata tables and restores them into a separate fresh local D1 binding, then verifies current content/version, audit count and cross-tenant denial. It is a logical local drill only, not a remote Time Travel restore, encrypted backup service or operational recovery SLA. No private user data is used.
