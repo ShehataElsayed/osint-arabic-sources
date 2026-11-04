@@ -235,11 +235,12 @@ $('build').addEventListener('click', () => {
           if(version!==generation||!j||!Array.isArray(j.items))return;
           const items=filterRss(v.topic,j.items);
           const rssValue={format:value.format,title:'اكتشاف RSS غير متحقق',sources:items.map((it,i)=>({id:'rss-'+i,title:it.title,url:it.url})),records:items.length?items.map((it,i)=>({id:'rss-record-'+i,tool:'news_rss',title:it.title,note:'مادة اكتشاف وليست تحققًا. '+(it.description||''),review:'unreviewed',anchors:[{sourceId:'rss-'+i}]})):[{id:'rss-empty',tool:'news_rss',title:'لا تطابق لفظي كافياً',note:'لم تنتج الاستجابة مادة مطابقة وفق المرشح اللفظي. هذا ليس دليل غياب الخبر.',review:'unreviewed'}],rssDiscovery:{query:v.topic,response:structuredClone(j),filteredItems:items,review:'unreviewed',matchedAt:new Date().toISOString()}};
-          caseToOffice(rssValue,{kind:'sheet',name:'اكتشاف RSS - '+v.topic,navigate:false}).catch(()=>{if(version===generation)$('status').textContent+=' لم تُحفظ نسخة اكتشاف RSS في مكتب أوش.'});
+          const rssLink=document.createElement('a');rssLink.textContent=items.length?'جارٍ حفظ اكتشاف RSS للمراجعة...':'لا تطابق لفظي كافٍ؛ جارٍ حفظ الاستجابة وحدودها...';rssLink.className='btn';host.append(rssLink);
+          caseToOffice(rssValue,{kind:'sheet',name:'اكتشاف RSS - '+v.topic,navigate:false}).then(f=>{if(version!==generation)return;rssLink.textContent=(items.length?'اكتشاف RSS غير متحقق':'لا تطابق لفظي كافٍ')+' - افتح سجل مكتب أوش';rssLink.href='./office/sheets.html?f='+encodeURIComponent(f.id)}).catch(()=>{if(version===generation)$('status').textContent+=' لم تُحفظ نسخة اكتشاف RSS في مكتب أوش.'});
           if(!items.length)return;
           const card = document.createElement('div');
           card.className = 'card cmdstage';
-          let h = '<h3>موجز أخبار مباشر (RSS)</h3><p class="muted">عناوين حديثة من موجزات RSS لمصادر إخبارية طابقت موضوعك على خادم الدليل — مواد للاكتشاف عند مصدرها، ليست محتوى كاملًا ولا تحققًا.</p><div class="cmdlist">';
+          let h = '<h3>موجز أخبار مباشر (RSS)</h3><p class="muted">عناوين حديثة من موجزات RSS لمصادر إخبارية اجتازت مطابقة لفظية محافظة لموضوعك على جهازك — مواد للاكتشاف عند مصدرها، ليست محتوى كاملًا ولا تحققًا.</p><div class="cmdlist">';
           for (const it of items) {
             h += '<div class="cmd"><code>' + esc(it.title) + '</code><span class="cmdbtns"><a class="btn" href="' + esc(it.url) + '" target="_blank" rel="noopener noreferrer">' + esc(it.source) + ' ↗</a></span></div>';
           }
