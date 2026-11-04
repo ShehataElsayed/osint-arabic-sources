@@ -115,7 +115,7 @@ async function load() {
   const params = new URLSearchParams(location.search);
   if (params.get('import') === '1') {
     const dataUrl = sessionStorage.getItem('osh-import-' + file.id);
-    if (dataUrl) { sessionStorage.removeItem('osh-import-' + file.id); try { const j = JSON.parse(await (await (await fetch(dataUrl)).blob()).text()); if (j.kind === 'board' && j.data) file.data = j.data; } catch {} }
+    if (dataUrl) { sessionStorage.removeItem('osh-import-' + file.id); try { const j = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(dataUrl.split(',')[1]), c => c.charCodeAt(0)))); if (j.kind === 'board' && j.data) file.data = j.data; } catch {} }
   }
   wireFileMenu(); render();
 }

@@ -68,3 +68,19 @@ export function fileParam() { return new URLSearchParams(location.search).get('f
 
 /* Serialize helpers shared by exporters */
 export function textOfHtml(html) { const d = document.createElement('div'); d.innerHTML = html; return d.textContent || ''; }
+
+/* Semantic HTML allowlist for imported documents. No active embeds, handlers or remote URLs. */
+export function safeDocumentHtml(html) {
+ const d=new DOMParser().parseFromString(html,'text/html');
+ const allowed=new Set('P DIV SPAN H1 H2 H3 H4 STRONG B EM I U S DEL BR HR UL OL LI BLOCKQUOTE PRE CODE TABLE THEAD TBODY TFOOT TR TD TH IMG A'.split(' '));
+ for(const el of [...d.body.querySelectorAll('*')]){
+  if(!allowed.has(el.tagName)){el.remove();continue}
+  for(const a of [...el.attributes]){
+   if(a.name==='src'&&el.tagName==='IMG'&&/^data:image\/(png|jpeg|gif|webp);base64,/i.test(a.value))continue;
+   if(a.name==='style'){const st=el.style;const safe=['color','background-color','font-size','font-family','font-weight','font-style','text-align','text-decoration','direction'].map(k=>[k,st.getPropertyValue(k)]).filter(([,v])=>v&&!/url|expression|[<>]/i.test(v));el.removeAttribute('style');for(const[k,v]of safe)el.style.setProperty(k,v);continue}
+   if(['colspan','rowspan','width','height','dir'].includes(a.name)&&/^[0-9]+$|^(rtl|ltr|auto)$/.test(a.value))continue;
+   el.removeAttribute(a.name);
+  }
+ }
+ return d.body.innerHTML;
+}

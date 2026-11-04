@@ -1,3 +1,4 @@
+import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import {importDomain} from './domain-case-core.js';
 import{parseDomain}from'../journalist-core.js';
@@ -81,3 +82,5 @@ $('save').onclick=()=>{const a=document.createElement('a'),u=URL.createObjectURL
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتيجتك الكاملة ظاهرة أعلاه.'}
     finally{btn.disabled=false}};
 })();
+
+attachOfficeAction($('case-export'),async()=>{if(caseInvalid||!info||!records.length)throw Error('النتيجة أو القضية غير جاهزة'); return await importDomain(JSON.stringify(dossier(),null,2),baseCase)},{kind:'sheet',name:'domain - نتيجة من الدليل'});

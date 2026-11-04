@@ -550,8 +550,8 @@ function exportCsv() {
 /* ---------- لوحة الذكاء ---------- */
 const aiPanel = $('#ai-panel'), aiResult = $('#ai-result');
 $('#ai-note').textContent = AI_NOTICE;
-$('#btn-ai').addEventListener('click', () => aiPanel.classList.toggle('open'));
-$('#ai-close').addEventListener('click', () => aiPanel.classList.remove('open'));
+$('#btn-ai').addEventListener('click', () => { const on = aiPanel.classList.toggle('open'); document.body.classList.toggle('ai-open', on); });
+$('#ai-close').addEventListener('click', () => { aiPanel.classList.remove('open'); document.body.classList.remove('ai-open'); });
 let aiRows = null;
 aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', async () => {
   const kind = b.dataset.ai;
@@ -622,7 +622,7 @@ async function load() {
   if (params.get('import') === '1') {
     const dataUrl = sessionStorage.getItem('osh-import-' + file.id); const name = sessionStorage.getItem('osh-import-name-' + file.id) || '';
     if (dataUrl) { sessionStorage.removeItem('osh-import-' + file.id); sessionStorage.removeItem('osh-import-name-' + file.id);
-      const blob = await (await fetch(dataUrl)).blob(); const fObj = new File([blob], name);
+      const [header, encoded] = dataUrl.split(','); const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0)); const blob = new Blob([bytes], { type: header.slice(5).split(';')[0] }); const fObj = new File([blob], name);
       if (/\.csv$/i.test(name)) importCsvText(await fObj.text()); else await importXlsx(fObj); }
   }
   buildToolbar(); wireFileMenu(); renderTabs(); syncSpacer(); render(); syncFormulaBar();

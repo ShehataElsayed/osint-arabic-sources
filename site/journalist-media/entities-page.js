@@ -1,3 +1,4 @@
+import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import {sentences,validateCase} from '../journalist-core.js';
 import {BACKEND_URL, AI_NOTICE, aiProviderName} from '../rag-config.js';
 
@@ -177,3 +178,5 @@ async function aiExtract(){
  catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الاستخراج المحلي ما زال متاحًا.')}
  finally{btn.disabled=false}}
 $('ai-extract').onclick=aiExtract;
+
+attachOfficeAction($('case-export'),async()=>{if(caseInvalid||!corpus)throw Error('النتيجة أو القضية غير جاهزة'); return entitiesCase(data(),baseCase)},{kind:'sheet',name:'entities - نتيجة من الدليل'});

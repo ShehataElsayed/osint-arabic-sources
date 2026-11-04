@@ -1,3 +1,4 @@
+import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import{validateCase}from'../journalist-core.js';
 import{archiveCase}from'./archive-case-core.js';
@@ -124,3 +125,5 @@ $('case-export').onclick=()=>{if(!result)return;try{if(['pending','invalid'].inc
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتيجتك الكاملة ظاهرة أعلاه.'}
     finally{btn.disabled=false}};
 })();
+
+attachOfficeAction($('case-export'),async()=>{if(['pending','invalid'].includes(caseState)||!result)throw Error('النتيجة أو القضية غير جاهزة'); return archiveCase(result,$('human-review').value,$('review-note').value,caseBase||undefined)},{kind:'sheet',name:'archive - نتيجة من الدليل'});

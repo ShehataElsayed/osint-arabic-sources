@@ -43,6 +43,8 @@ jobs:
       - run: python3 -m unittest discover -s python-tools/tests
       - run: npm run check:js
       - run: npx playwright install --with-deps chromium
+      - name: Osh Office import export and tool routing
+        run: CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:office
       - name: Browser smoke tests
         run: CHROME_PATH=$(node -e "console.log(require('playwright').chromium.executablePath())") npm run test:browser
       - name: Local tool state tests

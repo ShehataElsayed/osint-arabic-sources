@@ -1,3 +1,4 @@
+import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import {validateCase} from '../journalist-core.js';
 import {versionsCase} from './versions-case-core.js';
@@ -150,3 +151,5 @@ $('export').onclick=()=>{if(!last)return;
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتيجتك الكاملة ظاهرة أعلاه.'}
     finally{btn.disabled=false}};
 })();
+
+attachOfficeAction($('case-export'),async()=>{if(caseInvalid||!last)throw Error('النتيجة أو القضية غير جاهزة'); return versionsCase(last,baseCase)},{kind:'doc',name:'versions - نتيجة من الدليل'});

@@ -1,6 +1,6 @@
 /* كاتب أوش: محرر مستندات عربي كامل. التحرير في DOM (contenteditable) مع نموذج HTML موثق،
    استيراد docx عبر mammoth وتصدير docx عبر مكتبة docx من النموذج نفسه. */
-import { getFile, putFile, newFile, esc, download, toast, debounce, fileParam, stageHandoff, uid } from './kernel.js';
+import { getFile, putFile, newFile, esc, download, toast, debounce, fileParam, stageHandoff, uid, safeDocumentHtml } from './kernel.js';
 import { summarize, extractEntities, extractEvents, extractClaims, researchPlan, askGuide, AI_NOTICE, aiProviderName, reasonText } from './ai.js';
 
 const $ = s => document.querySelector(s);
@@ -13,7 +13,8 @@ async function load() {
   if (id) { file = await getFile(id); }
   if (!file) { file = newFile('doc'); await putFile(file); history.replaceState(null, '', './writer.html?f=' + file.id); }
   $('#doc-name').value = file.name;
-  page.innerHTML = file.data.html || '<p><br></p>';
+  page.innerHTML = safeDocumentHtml(file.data.html || '<p><br></p>');
+  updateCount();
   applySettings();
   const params = new URLSearchParams(location.search);
   if (params.get('import') === '1') runStagedImport();
@@ -126,7 +127,7 @@ function htmlToDocx(html, name) {
     return out;
   }
   async function imgRun(img) {
-    try { const blob = await (await fetch(img.src)).blob(); const buf = await blob.arrayBuffer();
+    try { const buf = img.src.startsWith('data:') ? Uint8Array.from(atob(img.src.split(',')[1]), c => c.charCodeAt(0)).buffer : await (await fetch(img.src)).arrayBuffer();
       return new Paragraph({ children: [new ImageRun({ data: buf, transformation: { width: Math.min(img.naturalWidth || 560, 560), height: Math.min(img.naturalHeight || 400, 560 * ((img.naturalHeight || 400) / (img.naturalWidth || 560))) }, type: img.src.startsWith('data:image/png') ? 'png' : 'jpg' })], alignment: AlignmentType.CENTER });
     } catch { return new Paragraph({ children: [] }); }
   }
@@ -166,9 +167,9 @@ function htmlToDocx(html, name) {
 async function importDocx(fileObj) {
   const buf = await fileObj.arrayBuffer();
   const r = await window.mammoth.convertToHtml({ arrayBuffer: buf }, { convertImage: window.mammoth.images.dataUri });
-  page.innerHTML = r.value || '<p><br></p>';
+  page.innerHTML = safeDocumentHtml(r.value || '<p><br></p>');
   if (r.messages && r.messages.length) toast('استُورد مع ' + r.messages.length + ' ملاحظة تحويل');
-  markDirty(); toast('استُورد ملف Word');
+  markDirty(); updateCount(); toast('استُورد ملف Word');
 }
 function importText(fileObj) {
   const ext = (fileObj.name.split('.').pop() || '').toLowerCase();
@@ -180,7 +181,7 @@ function importText(fileObj) {
         .replace(/^- (.*)$/gm, '<li>$1</li>').replace(/(<li>.*<\/li>\n?)+/g, m => '<ul>' + m + '</ul>')
         .replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br>');
       page.innerHTML = '<p>' + h + '</p>';
-    } else if (ext === 'html' || ext === 'htm') page.innerHTML = t;
+    } else if (ext === 'html' || ext === 'htm') page.innerHTML = safeDocumentHtml(t);
     else page.innerHTML = esc(t).split(/\n{2,}/).map(p => `<p>${p.replace(/\n/g, '<br>')}</p>`).join('');
     markDirty(); toast('استُورد الملف');
   });
@@ -190,7 +191,7 @@ async function runStagedImport() {
   const name = sessionStorage.getItem('osh-import-name-' + file.id) || '';
   if (!dataUrl) return;
   sessionStorage.removeItem('osh-import-' + file.id); sessionStorage.removeItem('osh-import-name-' + file.id);
-  const blob = await (await fetch(dataUrl)).blob();
+  const [header, encoded] = dataUrl.split(','); const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0)); const blob = new Blob([bytes], { type: header.slice(5).split(';')[0] });
   const f = new File([blob], name);
   const ext = (name.split('.').pop() || '').toLowerCase();
   if (ext === 'docx') await importDocx(f); else importText(f);
@@ -239,8 +240,8 @@ $('#menu-file').addEventListener('click', async e => {
 /* ---------- لوحة الذكاء ---------- */
 const aiPanel = $('#ai-panel'), aiResult = $('#ai-result');
 $('#ai-note').textContent = AI_NOTICE;
-$('#btn-ai').addEventListener('click', () => aiPanel.classList.toggle('open'));
-$('#ai-close').addEventListener('click', () => aiPanel.classList.remove('open'));
+$('#btn-ai').addEventListener('click', () => { const on = aiPanel.classList.toggle('open'); document.body.classList.toggle('ai-open', on); });
+$('#ai-close').addEventListener('click', () => { aiPanel.classList.remove('open'); document.body.classList.remove('ai-open'); });
 let lastAI = null;
 function selectedText() { const s = getSelection().toString(); return s.trim().length > 5 ? s : (page.textContent || '').trim(); }
 aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', async () => {

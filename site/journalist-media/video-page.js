@@ -1,3 +1,4 @@
+import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import{validateCase}from'../journalist-core.js';
 import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 import{videoCase}from'./video-case-core.js';
@@ -156,3 +157,5 @@ $('vf-count').onchange=invalidateFrames;$('vf-mode').onchange=invalidateFrames;
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ نتائجك الكاملة ظاهرة أعلاه.'}
     finally{btn.disabled=false}};
 })();
+
+attachOfficeAction($('case-export'),async()=>{if(['pending','invalid'].includes(caseState)||!record)throw Error('النتيجة أو القضية غير جاهزة'); return videoCase(record,{title:$('source-title').value,url:$('source-url').value,note:$('notes').value},reviews,caseBase||undefined)},{kind:'doc',name:'video - نتيجة من الدليل'});

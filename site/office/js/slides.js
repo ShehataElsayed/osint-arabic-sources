@@ -259,11 +259,11 @@ async function importPptx(fileObj) {
         const paras = [...sp.querySelectorAll('a\\:p, p')].map(pa => [...pa.querySelectorAll('a\\:t, t')].map(t => t.textContent).join('')).filter(t => t !== '');
         if (!paras.length) continue;
         const rPr = sp.querySelector('a\\:rPr, rPr');
-        const sz = rPr && rPr.getAttribute('sz') ? +rPr.getAttribute('sz') / 100 : 24;
+        const sz = rPr && rPr.getAttribute('sz') ? +rPr.getAttribute('sz') / 100 / 0.75 : 24;
         const bold = rPr && rPr.getAttribute('b') === '1';
         let color = '#f2f4ef';
         const srgb = rPr && rPr.querySelector('a\\:srgbClr, srgbClr'); if (srgb) color = '#' + srgb.getAttribute('val');
-        elements.push({ id: uid(), type: 'text', x, y, w, h: Math.max(h, paras.length * sz * 1.7), text: paras.join('\n'), style: { fontSize: sz, bold, color, font: 'Cairo' } });
+        elements.push({ id: uid(), type: 'text', x, y, w, h, text: paras.join('\n'), style: { fontSize: sz, bold, color, font: 'Cairo' } });
       }
       for (const pic of node.querySelectorAll('p\\:pic, pic')) {
         const blip = pic.querySelector('a\\:blip, blip'); const rid = blip && (blip.getAttribute('r:embed') || blip.getAttribute('embed'));
@@ -290,8 +290,8 @@ async function importPptx(fileObj) {
 /* ---------- لوحة الذكاء ---------- */
 const aiPanel = $('#ai-panel'), aiResult = $('#ai-result');
 $('#ai-note').textContent = AI_NOTICE;
-$('#btn-ai').addEventListener('click', () => aiPanel.classList.toggle('open'));
-$('#ai-close').addEventListener('click', () => aiPanel.classList.remove('open'));
+$('#btn-ai').addEventListener('click', () => { const on = aiPanel.classList.toggle('open'); document.body.classList.toggle('ai-open', on); });
+$('#ai-close').addEventListener('click', () => { aiPanel.classList.remove('open'); document.body.classList.remove('ai-open'); });
 let aiSlides = null;
 aiPanel.querySelectorAll('[data-ai]').forEach(b => b.addEventListener('click', async () => {
   const kind = b.dataset.ai;
@@ -356,7 +356,7 @@ async function load() {
   const params = new URLSearchParams(location.search);
   if (params.get('import') === '1') {
     const dataUrl = sessionStorage.getItem('osh-import-' + file.id); const name = sessionStorage.getItem('osh-import-name-' + file.id) || '';
-    if (dataUrl) { sessionStorage.removeItem('osh-import-' + file.id); sessionStorage.removeItem('osh-import-name-' + file.id); const blob = await (await fetch(dataUrl)).blob(); await importPptx(new File([blob], name)); }
+    if (dataUrl) { sessionStorage.removeItem('osh-import-' + file.id); sessionStorage.removeItem('osh-import-name-' + file.id); const [header, encoded] = dataUrl.split(','); const bytes = Uint8Array.from(atob(encoded), c => c.charCodeAt(0)); const blob = new Blob([bytes], { type: header.slice(5).split(';')[0] }); await importPptx(new File([blob], name)); }
   }
   buildToolbar(); wireFileMenu(); fitStage(); render();
 }

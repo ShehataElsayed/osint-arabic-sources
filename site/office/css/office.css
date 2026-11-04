@@ -160,3 +160,29 @@
 .osh-add-card:hover{color:var(--accent);border-color:var(--accent)}
 .osh-list.dragover{border-color:var(--accent)}
 @media(max-width:900px){.osh-deck-grid{grid-template-columns:1fr}.osh-thumbs{flex-direction:row;max-height:none;overflow-x:auto}.osh-thumb{width:150px}.osh-page{width:100%;min-height:0;padding:34px 22px}.osh-app{padding:0 12px}}
+
+/* AI panel docks on wide screens so it never covers the editor; overlays only on small screens */
+@media (min-width: 1000px) {
+  body.ai-open main { margin-inline-end: min(400px, 30vw); }
+  main { transition: margin-inline-end .22s; }
+}
+/* Complete the shared shell's base layout without depending on unrelated map CSS. */
+.osh-app-shell,.osh-app-shell *{box-sizing:border-box}
+.osh-app-shell>header.top{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:18px 0;gap:16px}
+.osh-app-shell .brand{display:flex;align-items:center;gap:14px}
+.osh-app-shell .brand small{display:block;max-width:420px}
+.osh-app-shell footer{display:flex;gap:20px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:30px;padding:22px 0;font-size:12px}
+body.ai-open main{min-width:0}
+@media(min-width:1000px){body.ai-open .osh-page{width:100%;max-width:794px;padding:40px}.osh-ai-panel{width:400px}}
+@media(max-width:999px){
+ .osh-app-shell{padding:0 14px}
+ .osh-page{width:100%;min-width:0;padding:24px 18px;min-height:70vh}
+ body.ai-open .osh-ai-panel{position:relative;inset:auto;transform:none;width:100%;height:auto;max-height:none;box-shadow:none;margin:16px 0;z-index:50}
+ body.ai-open .osh-ai-panel .ai-body{max-height:50vh}
+ .osh-file-name{max-width:100%;width:100%;min-width:0}
+ .osh-ai-cmd textarea{min-width:0;width:100%}
+ .osh-app-shell .top .topnav.shellnav{grid-template-columns:repeat(4,1fr)}
+}
+/* White paper needs dark table text regardless of the guide's global table palette. */
+.osh-page td,.osh-page th{color:#17190f;background:transparent}
+.osh-page th{background:#edf0e7}
