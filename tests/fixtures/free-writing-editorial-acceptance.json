@@ -27,5 +27,12 @@
     "manualReview": "First body separates allowance/paid exception and preserves numbers; operational limits from pipeline, not model. Basic grammar still improvable. Not a broad quality benchmark.",
     "persistedProof": "Existing accepted public output materialized in actual local D1 Office version1 awaiting human submission; not production or human approval",
     "productionEnabled": false
+  },
+  "plannedEvidenceEvaluation": {
+    "date": "2026-11-05",
+    "architecture": "One explicit evidence section per bounded free call; pipeline attaches citations, no generated evidence IDs; optional selected evidence checked as exact source substrings.",
+    "machineAcceptance": "Two full outputs passed numeric/quote checks at reported cost0",
+    "manualReview": "Rejected both. First repeats flattened table text as if included daily allowance were charged. After exact focused evidence selection, second still asserts the general rule covers most models without evidence for that quantifier. Citation/schema adherence no longer sufficient blocker description: semantic overreach remains.",
+    "productionEnabled": false
   }
 }
