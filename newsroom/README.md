@@ -58,3 +58,20 @@ The coordinator now has an explicit read/reconcile action for uncertain package 
 `client/index.html` and `app.mjs` now provide a separate entry that requests the institution's verified session/membership, mounts the workflow dashboard and opens its actual output in the human-review component. It uses same-origin managed authentication, not pasted tokens, stored secrets, role selectors or client identity claims. `development-worker.mjs` fails closed unless the IdP configuration and verified identity exist, allowlists development assets and adds no-store/CSP headers; the API still enforces its own auth/membership. `node newsroom/build-development.mjs` builds only local assets, with no deployment/provisioning. Do not wire this into the working public site.
 
 The real local-browser test now enters through this development page, checks verified editor membership, executes supplied-source adapters, materializes the package, submits it and opens linked review without manual file-ID transfer. Synthetic JWTs are injected only by the test harness, not exposed in the shipped page. This verifies the assembled client/API behavior locally. Real Cloudflare Access policy/enrollment, actual saved session and remote origin routing remain access-dependent validation, and no public development URL is claimed.
+
+## Development identity and editable review
+
+The new OSH / OPERATIONS identity keeps the product's lime accent and pairs it with restrained teal-black surfaces, a readable light document surface, numbered stages and a real progress element. The desktop entry uses connected workflow and review work areas, not a menu of unavailable products. Mobile stacks these areas without horizontal overflow. Source and brief fields have visible labels; focus outlines, status announcements and minimum button height remain. This is original product design, not Saudi government branding, certification or a claim of full accessibility compliance.
+
+Saudi reference study (2026-11-04):
+- Digital Government Authority, Platforms Code: consistent experience, reusable components and digital inclusion. https://dga.gov.sa/ar/digital-knowledge/national-design-system-of-Saudi-Arabia
+- National Platform: centralized services and coherent user journeys. https://my.gov.sa/ar/about
+- Ministry of Media unified sign-in: one managed entry rather than disconnected credentials. https://iam.media.gov.sa/
+- SPA's Ealam platform announcement: a unified service portal in the media sector. https://www.spa.gov.sa/en/N2666609
+- Vision 2030: visually inspected large clear type, generous spacing, one main action and restrained identity. https://www.vision2030.gov.sa/en
+- Ministry of Media: content types grouped in one media center. https://media.gov.sa/
+The official text sources were read; the Vision page was visually inspected. DGA/National Platform were blocked in the visual session; Ministry/Ealam visual pages were unreachable, so no visual conclusions are claimed for them. The applied decisions are a unified workspace, shared component tokens, visible workflow states and a direct route from output to review, not copied layout/code or official marks.
+
+The review area now supports text-only editing and expected-version saves through the authenticated file API. Saving creates a new version and invalidates the prior version's approval. Source/stage provenance remains intact and HTML characters are escaped. It deliberately converts text to paragraphs and does not claim rich document layout fidelity. The real local-browser regression saves version 2 and confirms draft state. Production identity enrollment, remote integration and actual model execution remain unproved.
+
+Read/reconcile also reads the current version after a human text edit and moves the workflow back to submission when that version is draft. It never carries the prior approval forward. The local regression confirms version 2 replaces the old workflow reference and can re-enter review; the dashboard requires an explicit state check rather than silently presenting stale approval.
