@@ -1,3 +1,4 @@
+import {captureAIResult} from '../office/js/tool-bridge.js';
 import {attachOfficeAction} from '../office/js/tool-bridge.js';
 import {validateCase} from '../journalist-core.js';
 import {BACKEND_URL, AI_NOTICE, aiProviderName} from '../rag-config.js';
@@ -137,6 +138,7 @@ async function aiExtractEvents(){
    box.append(card)}
   $('ai-notice').textContent=AI_NOTICE;
   $('ai-result').hidden=false;
+  captureAIResult({rows:[['الحدث','التاريخ','الاقتباس الحرفي'],...ev.map(e=>[e.event,e.date||e.date_raw||'',e.quote])],provider:j.provider,raw:j},{kind:'sheet',name:document.title+' - استخراج آلي',sourceText:text}).catch(()=>say('النتيجة ظاهرة؛ تعذر حفظ نسخة مكتب أوش.'));
   say('اكتمل الاستخراج بالذكاء الاصطناعي؛ راجع الأحداث قبل اعتمادها.')}
  catch{say('تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ الرصد المحلي ما زال متاحًا.')}
  finally{btn.disabled=false}}

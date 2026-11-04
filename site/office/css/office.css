@@ -186,3 +186,6 @@ body.ai-open main{min-width:0}
 /* White paper needs dark table text regardless of the guide's global table palette. */
 .osh-page td,.osh-page th{color:#17190f;background:transparent}
 .osh-page th{background:#edf0e7}
+.osh-cell-detail{border:1px solid var(--line);padding:9px 13px;margin:8px 0;color:var(--ink);font-size:12px}
+.osh-cell-detail summary{cursor:pointer;color:var(--accent)}
+.osh-cell-detail pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:220px;overflow:auto;padding:12px;background:#0a0d08;font:inherit;user-select:text}

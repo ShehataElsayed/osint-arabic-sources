@@ -12,7 +12,7 @@ Not covered or not supported:
 - DOCX page layout fidelity, tracked changes, comments, complex fields, advanced tables. Mammoth imports semantic content rather than exact Word layout.
 - XLSX styles, charts, merges and dimensions are not yet preserved by the importer/exporter. Formulas are a subset with 10 explicit parser/regression tests, not all Excel functions verified.
 - PPTX masters, themes, transitions, animations, grouped objects, imported shapes/tables and notes are not yet preserved. Text/image geometry has fixture coverage only.
-- Platform routing: 9 shared-case tools have an explicit Open in Osh Office action. This is not automatic routing for every platform result. AI results in every tool are not yet all connected.
+- Platform routing: 10 shared-case tools automatically save local Office copies and offer Open in Office. Successful summary results on 9 tool surfaces and structured entity/claim/event AI outputs also save typed Office copies with source/provider/unreviewed provenance. Assistant/search, verification, image-difference and some legacy outputs remain unconnected; this is not every platform result.
 - Account login, institution isolation, server storage, authorization/roles, simultaneous collaboration, audit trail, newsroom approval and publication workflow, and multi-device sync are not built in this increment.
 - AI reuses deployed worker modes and free quotas. No worker deploy or model subscription is included.
 

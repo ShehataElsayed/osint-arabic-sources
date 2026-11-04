@@ -1,3 +1,4 @@
+import {captureAIResult} from '../office/js/tool-bridge.js';
 import{validateCase,textReport,TOOL_NAMES}from'../journalist-core.js';
 import { BACKEND_URL, aiProviderName } from '../rag-config.js';
 const $=id=>document.getElementById(id),el=(tag,text)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;return n};let current=null,generation=0;
@@ -56,6 +57,7 @@ function caseTextForAI(c){
       ql.replaceChildren();
       if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
       res.hidden=false;
+      captureAIResult({overview:sm.overview,quotes:sm.key_quotes||[],provider:j.provider},{name:document.title+' - ملخص آلي',sourceText:typeof text==='string'?text:(typeof tsv==='string'?tsv:'')}).catch(()=>{st.textContent+=' لم تُحفظ نسخة مكتب أوش؛ النتيجة ظاهرة هنا.'});
       st.textContent='اكتمل التلخيص بالذكاء الاصطناعي؛ الملخص بصياغة النموذج وصفٌ للقضية لا تقييم لمصادرها - راجعه أمام القضية قبل الاعتماد عليه.'}
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ قضيتك الكاملة ظاهرة أعلاه.'}
     finally{btn.disabled=false}};

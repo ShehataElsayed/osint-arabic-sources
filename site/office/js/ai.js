@@ -9,7 +9,7 @@ export { AI_NOTICE, aiProviderName };
 let _tools = null, _index = null;
 async function toolsIndex() {
   if (_index) return _index;
-  const r = await fetch('../search-tools.json');
+  const r = await fetch(new URL('../../search-tools.json', import.meta.url));
   if (!r.ok) throw new Error('catalog_missing');
   _tools = await r.json();
   _index = buildIndex(_tools);
