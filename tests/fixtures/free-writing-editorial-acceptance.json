@@ -34,5 +34,17 @@
     "machineAcceptance": "Two full outputs passed numeric/quote checks at reported cost0",
     "manualReview": "Rejected both. First repeats flattened table text as if included daily allowance were charged. After exact focused evidence selection, second still asserts the general rule covers most models without evidence for that quantifier. Citation/schema adherence no longer sufficient blocker description: semantic overreach remains.",
     "productionEnabled": false
+  },
+  "otherFreeModelsEvaluation": {
+    "date": "2026-11-05",
+    "catalog": "https://openrouter.ai/api/v1/models",
+    "routeAllowlist": [
+      "google/gemma-4-26b-a4b-it:free",
+      "dots-studio/dots-3-note-preview:free"
+    ],
+    "gemma26b": "Actual request429, no output and no retry/fallback. Live catalog prompt/completion pricing0 verified.",
+    "dotsPreview": "Three actual section outputs reported cost0 and passed numeral/quote checks. Manual rejection: corrupt Arabic morphology with nonsensical embedded Latin fragments and ungrammatical writing. Not suitable for this Arabic editorial workflow.",
+    "productionEnabled": false,
+    "limits": "Bounded workflow observations, not a general benchmark or proof that all free writing models fail."
   }
 }
