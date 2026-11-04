@@ -53,3 +53,20 @@ class TenantStoreTests(unittest.TestCase):
                 restored.read('bob', self.b, self.f)
         finally:
             restored.db.close()
+
+    def test_separate_connections_detect_stale_version(self):
+        second = Store(self.path)
+        try:
+            self.store.save('alice', self.a, self.f, 1, {'text': 'نسخة ثانية'})
+            with self.assertRaises(Conflict):
+                second.save('alice', self.a, self.f, 1, {'text': 'نسخة متأخرة'})
+            self.assertEqual(second.read('alice', self.a, self.f)['version'], 2)
+        finally:
+            second.db.close()
+
+    def test_membership_revocation_takes_effect_on_next_read(self):
+        self.store.member('alice', self.a, 'editor', 'editor')
+        self.store.db.execute('DELETE FROM members WHERE tenant=? AND user=?', (self.a, 'editor'))
+        self.store.db.commit()
+        with self.assertRaises(Denied):
+            self.store.read('editor', self.a, self.f)

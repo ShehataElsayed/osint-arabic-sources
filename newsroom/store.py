@@ -20,6 +20,7 @@ class Store:
     def __init__(self, path):
         self.db = sqlite3.connect(path)
         self.db.execute('PRAGMA foreign_keys=ON')
+        self.db.execute('PRAGMA busy_timeout=5000')
         self.db.executescript('''
         CREATE TABLE IF NOT EXISTS institutions(id TEXT PRIMARY KEY, name TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS members(tenant TEXT REFERENCES institutions(id), user TEXT, role TEXT CHECK(role IN ('owner','editor','reviewer','viewer')), PRIMARY KEY(tenant,user));
