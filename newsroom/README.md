@@ -11,3 +11,5 @@ Not implemented: authentication, enrollment, session/CSRF controls, invitation d
 Run: `python3 -m unittest tests/test_newsroom_store.py -v`
 
 Editorial approval is an internal version-bound decision, not authorization or implementation of external publication. Legacy files created before workflow support require a future migration before editorial transitions.
+
+`access-auth.mjs` is a separate, unconnected authentication-adapter experiment. It pins issuer/audience from deployment configuration, requires a verified RS256 signature, rejects token-selected key URLs, expires identities, and returns issuer+subject rather than trusting an email or request-body user. Four local cryptographic tests cover negative paths. It has no production key cache/rate limiting, live IdP test, HTTP/CSRF adapter, or deployment. These tests do not authenticate anyone on the live site. Production should use a maintained provider verifier and independent security review. Reference: https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/ .
