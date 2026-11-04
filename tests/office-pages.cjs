@@ -16,6 +16,11 @@ const { chromium } = require('playwright'), { spawn } = require('child_process')
     await p.locator('.osh-new-card[data-new=doc]').waitFor();
     assert.equal(await p.locator('.osh-new-card').count(), 4, 'four app cards');
     await p.screenshot({ path: 'test-output/office-hub.png' });
+    for(const width of [320,390,1380]) {
+      await p.setViewportSize({width,height:940});
+      assert(await p.locator('.brand small').evaluate(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&e.scrollWidth<=e.clientWidth}), 'header subtitle is not clipped');
+      assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+    }
     /* writer: create from hub, type, save, reload keeps text */
     await p.locator('.osh-new-card[data-new=doc]').click();
     await p.waitForURL(/writer\.html\?f=/);
