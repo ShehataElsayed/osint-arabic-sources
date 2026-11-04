@@ -511,7 +511,7 @@ function chartFromSelection() {
 /* ---------- استيراد/تصدير xlsx وcsv ---------- */
 async function importXlsx(fileObj) {
   const buf = await fileObj.arrayBuffer();
-  const wb = XLSX.read(buf, { type: 'array', cellFormula: true });
+  const wb = XLSX.read(buf, { type: 'array', cellFormula: true, cellNF:true, cellStyles:true });
   const sheets = wb.SheetNames.map(nm => {
     const ws = wb.Sheets[nm]; const cells = {};
     for (const addr of Object.keys(ws)) {
@@ -521,9 +521,13 @@ async function importXlsx(fileObj) {
       const cell = {};
       if (c.f) cell.f = c.f;
       if (c.v !== undefined && c.v !== null && c.v !== '') cell.v = c.w !== undefined && c.t === 's' ? c.v : c.v;
+      if(c.z){cell.xlsxNumberFormat=c.z;const supported={'0.00%':'percent','0%':'percent','0.00':'number','0':'int','yyyy-mm-dd':'date','@':'text'};if(supported[c.z])cell.s={fmt:supported[c.z]}}
       if (cell.f || cell.v !== undefined) cells[K(p.r, p.c)] = cell;
     }
-    return { name: nm.slice(0, 24), cells, merges: [], colW: {}, rowH: {}, rtl: true, freeze: { r: 0, c: 0 } };
+    const colW={},rowH={};
+    (ws['!cols']||[]).forEach((col,i)=>{if(col){const px=col.wpx??(col.wch!=null?col.wch*7+5:col.width!=null?col.width*7:undefined);if(Number.isFinite(px))colW[i+1]=Math.max(1,px)}});
+    (ws['!rows']||[]).forEach((row,i)=>{if(row){const px=row.hpx??(row.hpt!=null?row.hpt*96/72:undefined);if(Number.isFinite(px))rowH[i+1]=Math.max(1,px)}});
+    return { name:nm, cells, merges: [], colW,rowH, rtl:true, freeze:{r:0,c:0} };
   });
   if (sheets.length) { pushUndo(); file.data.sheets = sheets; file.data.active = 0; recalc(); render(); renderTabs(); syncSpacer(); markDirty(); toast('استُورد ملف Excel (' + sheets.length + ' ورقة)'); }
 }
@@ -543,12 +547,16 @@ function exportXlsx() {
     for (const k of Object.keys(s.cells)) {
       const [r, c] = k.split(',').map(Number); const cell = s.cells[k];
       const addr = numToCol(c) + r;
-      if (cell.f) { const v = displayValue(r, c, s); ws[addr] = { t: typeof v === 'number' ? 'n' : 's', v: isError(v) ? v.__err : (v === '' ? '' : v), f: cell.f }; }
-      else if (cell.v != null && cell.v !== '') ws[addr] = typeof cell.v === 'number' ? { t: 'n', v: cell.v } : { t: 's', v: String(cell.v) };
+      if (cell.f) { const v = displayValue(r, c, s); ws[addr] = { t: typeof v === 'number' ? 'n' : typeof v === 'boolean'?'b':'s', v: isError(v) ? v.__err : (v === '' ? '' : v), f: cell.f }; }
+      else if (cell.v != null && cell.v !== '') ws[addr] = typeof cell.v === 'number' ? { t: 'n', v: cell.v } : typeof cell.v==='boolean'?{t:'b',v:cell.v}:{ t: 's', v: String(cell.v) };
+      const format=cell.s?.fmt;const formats={number:'0.00',int:'0',percent:'0.00%',currency:'#,##0.00 "ج.م"',date:'yyyy-mm-dd',text:'@'};
+      if(ws[addr]&&(formats[format]||cell.xlsxNumberFormat))ws[addr].z=formats[format]||cell.xlsxNumberFormat;
     }
     const ref = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: Math.max(1, usedBounds(s).rows) - 1, c: Math.max(1, usedBounds(s).cols) - 1 } });
     ws['!ref'] = ref;
-    XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0, 28) || 'ورقة');
+    ws['!cols']=[];for(const [col,wpx] of Object.entries(s.colW||{}))ws['!cols'][Number(col)-1]={wpx};
+    ws['!rows']=[];for(const [row,hpx] of Object.entries(s.rowH||{}))ws['!rows'][Number(row)-1]={hpx,hpt:hpx*72/96};
+    XLSX.utils.book_append_sheet(wb, ws, s.name.slice(0,31) || 'ورقة');
   }
   const out = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
   download(file.name + '.xlsx', new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
