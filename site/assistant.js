@@ -1,3 +1,4 @@
+import {filterRss} from './rss-relevance.js';
 // مساعد NewsRAG: تجربة السؤال الواحد. المستخدم يكتب السؤال فقط؛ نموذج ذكاء اصطناعي يجهّز المسودة،
 // وفحوص NewsRAG تمر عليها قبل العرض (فتح المصادر، اقتباسات حرفية، دعم الادعاءات، معايير الثقة).
 // العرض: إجابة واحدة مفصلة، اكتمال إجابة صريح + نتائج فحوص بمعايير معلنة (بلا رقم إجمالي)، مصادر بموثوقية جهة النشر،
@@ -213,12 +214,14 @@ function render(conf, question) {
 // not fetched article content and not verified facts. Runs in parallel with the answer; any failure
 // just skips the panel.
 function newsPanel(q) {
-  return post({ mode: 'news_rss', q }).then(r => (r && Array.isArray(r.items) && r.items.length) ? r : null).catch(() => null);
+  return post({ mode: 'news_rss', q }).then(r => r&&Array.isArray(r.items)?{...r,error:r.feeds_ok===0?'feeds_unavailable':null,items:filterRss(q,r.items),lexical_filter:true}: {error:r?.error||'unexpected',items:[]}).catch(() => ({error:'neterr',items:[]}));
 }
 function renderNews(r, box) {
   const card = el('div', 'src-card fade');
   card.append(el('span', 'badge', 'موجز RSS'));
-  card.append(el('h3', null, 'أخبار حديثة مرتبطة من موجزات RSS'));
+  card.append(el('h3', null, 'عناوين RSS اجتازت مطابقة كلمات محدودة'));
+  if(r.error)card.append(el('p',null,'تعذر جلب موجزات RSS الآن. لا توجد نتيجة يمكن الاعتماد عليها.'));
+  else if(!r.items.length)card.append(el('p',null,'لا توجد عناوين تطابق كلمات الموضوع بدرجة كافية في الموجزات المتاحة؛ هذا لا يعني عدم وجود أخبار عنه.'));
   const list = el('ol', 'plan-steps');
   for (const it of r.items) {
     const li = el('li');
@@ -227,7 +230,7 @@ function renderNews(r, box) {
     list.append(li);
   }
   card.append(list);
-  card.append(el('p', 'note', 'عناوين من موجزات RSS لمصادر إخبارية (بي بي سي عربي، فرانس 24، سكاي نيوز عربية، CNN بالعربية، المصري اليوم) طابقتها خوارزمية كلمات على خادم الدليل: مواد للاكتشاف والمراجعة عند مصدرها، وليست محتوى كاملًا ولا تحققًا من صحتها.'));
+  card.append(el('p', 'note', 'عناوين من موجزات RSS لمصادر إخبارية (بي بي سي عربي، فرانس 24، سكاي نيوز عربية، CNN بالعربية، المصري اليوم) اجتازت مطابقة كلمات محافظة وليست إثباتاً لارتباط الخبر بسؤالك: مواد للاكتشاف والمراجعة عند مصدرها، وليست محتوى كاملًا ولا تحققًا من صحتها.'));
   box.append(card);
 }
 // Quick news verification: matched claim reviews from the Google Fact Check API, each attributed to

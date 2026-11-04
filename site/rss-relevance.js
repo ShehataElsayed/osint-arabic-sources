@@ -1,0 +1,7 @@
+/* Conservative lexical discovery gate, not semantic relevance or fact verification. */
+const normalize=s=>String(s??'').toLowerCase().normalize('NFKC').replace(/[\u064b-\u065f\u0670\u0640]/g,'').replace(/[أإآٱ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+const STOP=new Set(normalize('هل ما ماذا من متى أين كيف لماذا كم هي هو أن في على إلى عن مع لم لن لا ليس قال تم كان كانت هذا هذه ذلك التي الذي أو ثم قد اليوم عام أتحقق اتحقق تحقق التحقق صحفياً صحفيا يمكن أريد عاوز معرفة اعرف أجد أبحث البحث طريقة باستخدام استخدام وأين وكيف وما and the how what when where why can does did is are to of for with from this that').split(' '));
+const token=w=>w.replace(/^[وف]ال(?=.{3})/u,'').replace(/^ال(?=.{3})/u,'');
+export function rssTerms(query){return [...new Set(normalize(query).split(' ').filter(w=>w.length>2&&!STOP.has(w)).map(token))].slice(0,16)}
+export function rssMatch(query,item){const terms=rssTerms(query),hay=new Set(normalize((item.title||'')+' '+(item.description||'')).split(' ').map(token));const matches=terms.filter(t=>hay.has(t));return {pass:terms.length>0&&matches.length>=Math.min(2,terms.length),matches,terms}}
+export function filterRss(query,items){return items.map(item=>({item,match:rssMatch(query,item)})).filter(x=>x.match.pass).sort((a,b)=>b.match.matches.length-a.match.matches.length||(Date.parse(b.item.published)||0)-(Date.parse(a.item.published)||0)).map(x=>({...x.item,matched_terms:x.match.matches,match_basis:'whole-token-lexical'}))}

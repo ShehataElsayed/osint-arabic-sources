@@ -17,3 +17,5 @@ Not covered or not supported:
 - AI reuses deployed worker modes and free quotas. No worker deploy or model subscription is included.
 
 Storage is per browser. Keep JSON backups. Clearing browser storage deletes local files. Sensitive content sent to AI is disclosed to the configured worker/model provider; review their policies.
+
+RSS discovery uses conservative whole-token filtering, normalized Arabic articles, and generic question-word removal. Multiple topic terms need at least two matches. This can miss inflected names, synonyms, or useful single-term matches within longer questions; no semantic relevance or truth claim is made. Client-side filtering is more conservative on legacy responses without descriptions. Fact Check service authorization remains an external configuration dependency.

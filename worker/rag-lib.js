@@ -1,3 +1,4 @@
+import {rssTerms,filterRss} from '../site/rss-relevance.js';
 // Cloudflare Worker (free plan). Secret: FACTCHECK_API_KEY. Open sources only; no Google scraping.
 // Fact-check results are snippet + link only.
 const ALLOWED_ORIGIN = 'https://shehataelsayed.github.io';
@@ -425,7 +426,7 @@ ${src}`;
 // attribution. A claim match is a real review of that claim by a named checker - it is never a
 // verdict by us; a loose keyword hit stays the API's own relevance match; and NO match is reported
 // as unknown, never as true or false. Key: FACTCHECK_API_KEY, falling back to GEMINI_API_KEY (same
-// Google API-key infrastructure; the live probe proves the key's project has the API enabled).
+// Google API-key infrastructure; current key/project configuration still requires a live check).
 export async function factCheckQuick(question, env, f = fetch) {
   const q = String(question || '').trim().slice(0, 300);
   if (!q) return { error: 'bad_request' };
@@ -437,7 +438,7 @@ export async function factCheckQuick(question, env, f = fetch) {
   // An API error stops the search instead of silently falling through to a fake empty.
   const search = async lang => {
     const r = await f(`https://factchecktools.googleapis.com/v1alpha1/claims:search?query=${encodeURIComponent(q)}&languageCode=${lang}&pageSize=8&key=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(15000) });
-    if (!r.ok) return { error: 'fc_http_' + r.status };
+    if (!r.ok) { try { await r.body?.cancel(); } catch {} return { error: 'fc_http_' + r.status }; }
     return { claims: (await r.json()).claims || [] };
   };
   let claims, coverage = 'ar';
@@ -504,7 +505,7 @@ export function parseRssItems(raw, source) {
 export async function newsRss(query, env, f = fetch) {
   const q = String(query || '').trim().slice(0, 200);
   if (!q) return { error: 'bad_request' };
-  const terms = [...new Set(nrm(q).split(' ').filter(w => w.length > 2))].slice(0, 8);
+  const terms = rssTerms(q);
   if (!terms.length) return { error: 'bad_request' };
   // Per-invocation feed cache: every discovery query re-ranks the SAME feeds, so fetch each
   // feed once per invocation. On the free plan every fetch is a subrequest and repeated feed
@@ -526,14 +527,10 @@ export async function newsRss(query, env, f = fetch) {
   const seen = new Set(), items = [];
   for (const res of results) for (const it of res.items) {
     if (seen.has(it.url)) continue;
-    const hay = nrm(it.title + ' ' + it.description);
-    const hits = terms.filter(t => hay.includes(t)).length;
-    if (!hits) continue;
     seen.add(it.url);
-    items.push({ title: it.title, url: it.url, source: it.source, published: it.published, hits, ts: Date.parse(it.published) || 0 });
+    items.push(it);
   }
-  items.sort((a, b) => b.hits - a.hits || b.ts - a.ts);
-  return { items: items.slice(0, 8).map(({ hits, ts, description, ...x }) => x), feeds_ok: results.filter(r => !r.failed).length, feeds_failed: results.filter(r => r.failed).length };
+  return { items: filterRss(q,items).slice(0, 8).map(({ description, ...x }) => x), feeds_ok: results.filter(r => !r.failed).length, feeds_failed: results.filter(r => r.failed).length };
 }
 // RSS supplement for the news discovery pools (user-requested RSS on every news-search surface,
 // 2026-10-30): same curated publisher feeds as the chat news panel, normalized to the GDELT

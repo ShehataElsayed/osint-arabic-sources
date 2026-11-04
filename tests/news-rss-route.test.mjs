@@ -1,5 +1,5 @@
 import test from 'node:test'; import assert from 'node:assert/strict';
-import worker, { NEWS_FEEDS } from '../worker/rag-lib.js';
+import worker, { NEWS_FEEDS, factCheckQuick } from '../worker/rag-lib.js';
 
 // Route-level tests for the news_rss dispatch: live Arabic news discovery via direct publisher
 // RSS feeds, matched on the guide's server. Items are discovery leads (headline/source/date/link),
@@ -52,3 +52,7 @@ test('route: origin/method/JSON guards apply', async () => {
   assert.equal((await worker.fetch(new Request('https://worker.test/', { method: 'GET', headers: { origin: ORIGIN } }), {})).status, 405);
   assert.equal((await post('{bad')).status, 400);
 });
+
+test('route: generic question match does not return unrelated headlines',async()=>{const r=await(await post({mode:'news_rss',q:'كيف أتحقق صحفياً من صورة قديمة أعيد نشرها بسياق جديد؟'})).json();assert.deepEqual(r.items,[])});
+
+test('fact check401 remains error/unknown, exposes no secret-bearing body',async()=>{const r=await factCheckQuick('ادعاء مصطنع',{FACTCHECK_API_KEY:'synthetic-test-key'},async()=>new Response('private upstream diagnostic',{status:401}));assert.deepEqual(r,{error:'fc_http_401'});assert(!JSON.stringify(r).includes('synthetic-test-key'));assert(!JSON.stringify(r).includes('private'))});
