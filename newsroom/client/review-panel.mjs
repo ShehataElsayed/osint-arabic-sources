@@ -1,0 +1,13 @@
+/* Staged institutional client component. Caller supplies an authenticated controller.
+   No demo roles, token fields, enrollment bypass or public import. */
+export function mountReview(host,controller){
+ const node=(tag,text)=>{const n=document.createElement(tag);if(text)n.textContent=text;return n};
+ host.dir='rtl';host.lang='ar';host.classList.add('newsroom-review');
+ const title=node('h1','مراجعة مؤسسية مرتبطة بالإصدار'),notice=node('p','نموذج تجريبي غير منشور. قرار المراجعة داخلي لهذا الإصدار فقط، وليس إذن نشر أو إثبات صحة.'),label=node('label','معرف الملف المشترك'),input=node('input');input.id='review-file-id';label.htmlFor=input.id;
+ const load=node('button','افتح السجل'),status=node('p','افتح ملفًا من مساحة المؤسسة المصرح بها.'),content=node('section'),actions=node('div');status.setAttribute('role','status');status.id='review-status';content.id='review-content';actions.className='review-actions';
+ const buttons=Object.entries({submit:'أرسل للمراجعة',approve:'اعتماد داخلي للإصدار',request_changes:'اطلب تعديلات'}).map(([action,text])=>{const b=node('button',text);b.dataset.action=action;b.disabled=true;actions.append(b);b.onclick=()=>run(()=>controller.act(action));return b});
+ function render(snapshot){content.replaceChildren();if(!snapshot){buttons.forEach(b=>b.disabled=true);return}const{file,review}=snapshot;content.append(node('h2',file.name||'ملف مشترك'),node('p','الإصدار: '+file.version),node('p','حالة الخادم: '+({draft:'مسودة',in_review:'قيد المراجعة',approved:'معتمد داخليًا',changes_requested:'تعديلات مطلوبة'}[review.state]||'غير معروفة')));const raw=node('pre',JSON.stringify(file.data,null,2));raw.setAttribute('aria-label','محتوى الإصدار محفوظ كنص غير نشط');content.append(raw);buttons.forEach(b=>{b.disabled=b.dataset.action==='submit'?!['draft','changes_requested'].includes(review.state):review.state!=='in_review'})}
+ async function run(fn){render(null);load.disabled=true;buttons.forEach(b=>b.disabled=true);status.textContent='جارٍ التحقق من الإصدار والصلاحية على الخادم...';try{const snapshot=await fn();render(snapshot);status.textContent='عُرضت حالة الخادم لهذا الإصدار. الصلاحية يقررها الخادم، وليس ظهور الزر.'}catch{controller.clear();render(null);status.textContent='لم يُؤكد الإجراء. قد تكون الصلاحية أو النسخة تغيرت، أو تعذر الاتصال. افتح السجل مجددًا قبل أي قرار. لم نعد المحاولة تلقائيًا.'}finally{load.disabled=false}}
+ load.onclick=()=>{const id=input.value.trim();if(!/^[a-zA-Z0-9-]{1,64}$/.test(id)){status.textContent='أدخل معرف ملف صالحًا.';return}run(()=>controller.load(id))};
+ host.replaceChildren(title,notice,label,input,load,status,content,actions);return{destroy(){controller.clear();host.replaceChildren()}};
+}
