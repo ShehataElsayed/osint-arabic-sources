@@ -60,6 +60,7 @@ render();
       ov.textContent=sm.overview;ql.replaceChildren();
       if(Array.isArray(sm.key_quotes)&&sm.key_quotes.length){qh.hidden=false;for(const q of sm.key_quotes){const li=document.createElement('li');li.textContent=q;ql.append(li)}}else qh.hidden=true;
       res.hidden=false;
+      import('./office/js/tool-bridge.js').then(({captureAIResult})=>captureAIResult({overview:sm.overview,quotes:sm.key_quotes||[],provider:j.provider},{name:document.title+' - ملخص آلي',sourceText:text})).catch(()=>{st.textContent+=' لم تُحفظ نسخة مكتب أوش؛ النتيجة ظاهرة هنا.'});
       st.textContent='اكتمل التلخيص بالذكاء الاصطناعي؛ الملخص بصياغة النموذج وصفٌ للحالة لا حكم على الادعاء ولا مصادقة على تقديرك - راجعه أمام الحالة قبل الاعتماد عليه.'}
     catch{st.textContent='تعذر الوصول إلى خدمة الذكاء الاصطناعي؛ حالتك الكاملة ظاهرة أعلاه.'}
     finally{btn.disabled=false}};
