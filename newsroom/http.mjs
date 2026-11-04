@@ -1,3 +1,5 @@
+import{institutionOverview}from'./institution-overview.mjs';
+import{produceReport}from'./produce-report.mjs';
 import{runPublicDemonstration}from'./public-demonstration.mjs';
 import{TaskExecutor}from'./task-executor.mjs';
 import{existingWorkerPlanner}from'./existing-worker-planner.mjs';
@@ -22,11 +24,12 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
   try{
    const identity=await authenticate(request,{issuer:env.ACCESS_ISSUER,audience:env.ACCESS_AUDIENCE});
    const session=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/session$/);if(session){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,{tenant:session[1],role:await service(env.DB).role(identity.principal,session[1])},cors)}
+   const overviewPath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/overview$/);if(overviewPath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await institutionOverview({principal:identity.principal,tenant:overviewPath[1],office:service(env.DB),store:new D1WorkflowStore(env.DB),db:env.DB,env}),cors)}
    const capabilityPath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/capabilities(?:\/([a-zA-Z0-9-]{1,80}))?$/);if(capabilityPath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(identity.principal,capabilityPath[1]);return reply(200,capabilityPath[2]?capabilityContract(capabilityPath[2]):searchCapabilities(new URL(request.url).searchParams.get('q')||''),cors)}
-   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows|plans|public-demo)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile|pause|resume|branch|replan))?$/);
+   const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows|plans|public-demo|produce-report)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile|pause|resume|branch|replan))?$/);
    if(!path)return reply(404,{error:'not_found'},cors);
    const [,tenant,resource,id,tail]=path,principal=identity.principal;
-   if(resource==='plans'||resource==='public-demo'){if(request.method!=='POST'||id||tail)return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(principal,tenant,['owner','editor'])}
+   if(resource==='plans'||resource==='public-demo'||resource==='produce-report'){if(request.method!=='POST'||id||tail)return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(principal,tenant,['owner','editor'])}
    const isWorkflow=resource==='workflows',review=tail==='/review',store=isWorkflow?workflow(env.DB):service(env.DB);
    if(isWorkflow&&request.method==='GET')return reply(200,id?await store.read(principal,tenant,id):{runs:await store.list(principal,tenant)},cors);
    if(!isWorkflow&&tail&&!review)return reply(404,{error:'not_found'},cors);
@@ -43,6 +46,7 @@ export function createHandler({authenticate=authenticateAccess,service=db=>new O
    const bytes=new Uint8Array(size);let at=0;for(const c of chunks){bytes.set(c,at);at+=c.length}
    let body;try{body=JSON.parse(new TextDecoder('utf-8',{fatal:true}).decode(bytes))}catch{return reply(400,{error:'invalid_json'},cors)}
    if(!body||typeof body!=='object')return reply(400,{error:'invalid_json'},cors);
+   if(resource==='produce-report')return reply(201,await produceReport({principal,tenant,brief:body.brief,sourceInputs:body.sourceInputs,office:service(env.DB),store:new D1WorkflowStore(env.DB)}),cors);
    if(resource==='public-demo')return reply(201,await runPublicDemonstration({principal,tenant,office:service(env.DB),store:new D1WorkflowStore(env.DB),env}),cors);
    if(resource==='plans')return reply(200,await proposePlan({question:body.question,capabilityIds:body.capabilityIds},{...env,PLANNER:env.PLANNER||(env.INSTITUTION_PLANNER_ENABLED==='true'?existingWorkerPlanner(env):undefined)}),cors);
    // Body principal/tenant claims are not consulted.
