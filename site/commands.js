@@ -1,3 +1,5 @@
+import {caseToOffice} from './office/js/tool-bridge.js';
+import {filterRss} from './rss-relevance.js';
 const $ = (id) => document.getElementById(id);
 const g = (q) => 'https://www.google.com/search?q=' + encodeURIComponent(q);
 const bing = (q) => 'https://www.bing.com/search?q=' + encodeURIComponent(q);
@@ -180,7 +182,7 @@ function planText(kind, v) {
   return 'الهدف: جمع مؤشرات مفتوحة المصدر عن «' + target + '» وتحويلها إلى معلومات مؤكدة قابلة للنشر. ' + extra;
 }
 
-let LAST = null;
+let LAST = null, generation = 0;
 function esc(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
 $('build').addEventListener('click', () => {
@@ -196,6 +198,13 @@ $('build').addEventListener('click', () => {
   err.hidden = true;
   const stages = stagesFor(kind, v);
   LAST = { kind, v, stages, plan: planText(kind, v) };
+  const version=++generation, snapshot=structuredClone(LAST);
+  let office=document.getElementById('commands-office');
+  if(!office){office=document.createElement('a');office.id='commands-office';office.className='btn';$('download').after(office)}
+  office.removeAttribute('href');office.textContent='جارٍ حفظ خطة غير منفذة في مكتب أوش...';
+  const value={format:'journalist-workbench-v1',title:'خطة أوامر غير منفذة',sources:[],records:[],commandPlan:snapshot,sourceUrl:location.href,aiPlan:$('build').commandsAIContext||null};
+  snapshot.stages.forEach((stage,si)=>stage.items.forEach((item,i)=>value.records.push({id:`command-${si}-${i}`,tool:'commands',title:stage.t+' · '+item.cmd,note:'أمر بحث مقترح لم يُنفذ ولم تُراجع نتائجه.\n'+item.cmd+'\nالرابط: '+item.open,review:'unreviewed'})));
+  caseToOffice(value,{kind:'board',name:'خطة أوامر - '+KINDS[kind].label,navigate:false}).then(f=>{if(version!==generation)return;office.textContent='حُفظت خطة غير منفذة في مكتب أوش - افتح';office.href='./office/tasks.html?f='+encodeURIComponent(f.id)}).catch(()=>{if(version===generation)office.textContent='تعذر حفظ نسخة مكتب أوش؛ الخطة ظاهرة أدناه.'});
   $('plan').innerHTML = '<strong>خطتك:</strong> ' + esc(LAST.plan);
   const host = $('stages');
   host.innerHTML = '';
@@ -223,11 +232,15 @@ $('build').addEventListener('click', () => {
       if (!BACKEND_URL) return;
       fetch(BACKEND_URL, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'news_rss', q: v.topic }) })
         .then(r => r.ok ? r.json() : null).then(j => {
-          if (!j || !Array.isArray(j.items) || !j.items.length) return;
+          if(version!==generation||!j||!Array.isArray(j.items))return;
+          const items=filterRss(v.topic,j.items);
+          const rssValue={format:value.format,title:'اكتشاف RSS غير متحقق',sources:items.map((it,i)=>({id:'rss-'+i,title:it.title,url:it.url})),records:items.length?items.map((it,i)=>({id:'rss-record-'+i,tool:'news_rss',title:it.title,note:'مادة اكتشاف وليست تحققًا. '+(it.description||''),review:'unreviewed',anchors:[{sourceId:'rss-'+i}]})):[{id:'rss-empty',tool:'news_rss',title:'لا تطابق لفظي كافياً',note:'لم تنتج الاستجابة مادة مطابقة وفق المرشح اللفظي. هذا ليس دليل غياب الخبر.',review:'unreviewed'}],rssDiscovery:{query:v.topic,response:structuredClone(j),filteredItems:items,review:'unreviewed',matchedAt:new Date().toISOString()}};
+          caseToOffice(rssValue,{kind:'sheet',name:'اكتشاف RSS - '+v.topic,navigate:false}).catch(()=>{if(version===generation)$('status').textContent+=' لم تُحفظ نسخة اكتشاف RSS في مكتب أوش.'});
+          if(!items.length)return;
           const card = document.createElement('div');
           card.className = 'card cmdstage';
           let h = '<h3>موجز أخبار مباشر (RSS)</h3><p class="muted">عناوين حديثة من موجزات RSS لمصادر إخبارية طابقت موضوعك على خادم الدليل — مواد للاكتشاف عند مصدرها، ليست محتوى كاملًا ولا تحققًا.</p><div class="cmdlist">';
-          for (const it of j.items) {
+          for (const it of items) {
             h += '<div class="cmd"><code>' + esc(it.title) + '</code><span class="cmdbtns"><a class="btn" href="' + esc(it.url) + '" target="_blank" rel="noopener noreferrer">' + esc(it.source) + ' ↗</a></span></div>';
           }
           card.innerHTML = h + '</div>';
