@@ -18,3 +18,5 @@ CREATE TABLE IF NOT EXISTS work_orders(id TEXT PRIMARY KEY,tenant TEXT NOT NULL 
 CREATE TABLE IF NOT EXISTS order_executions(tenant TEXT NOT NULL,order_id TEXT NOT NULL,revision INTEGER NOT NULL,content TEXT NOT NULL,PRIMARY KEY(tenant,order_id));
 CREATE TABLE IF NOT EXISTS work_order_acceptances(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,order_id TEXT NOT NULL,content TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS order_acceptances_tenant_order ON work_order_acceptances(tenant,order_id);
+CREATE TABLE IF NOT EXISTS file_review_notes(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES office_files(id),version INTEGER NOT NULL,author TEXT NOT NULL,body TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('open','resolved')),created_at INTEGER NOT NULL,resolved_by TEXT,resolved_at INTEGER,operation_id TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS file_notes_scope ON file_review_notes(tenant,file_id,version,created_at);
