@@ -1,3 +1,4 @@
+import{workQueue}from'./work-queue.mjs';
 import{OrderPackage}from'./order-package.mjs';
 import{WorkOrderAcceptance}from'./work-order-acceptance.mjs';
 import{OrderExecution}from'./order-execution.mjs';
@@ -35,6 +36,7 @@ export function createHandler({goalDecider=workersAIDecider,authenticate=authent
   try{
    const identity=await authenticate(request,{issuer:env.ACCESS_ISSUER,audience:env.ACCESS_AUDIENCE});
    const session=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/session$/);if(session){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,{tenant:session[1],role:await service(env.DB).role(identity.principal,session[1])},cors)}
+   const queuePath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/work-queue$/);if(queuePath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await workQueue({principal:identity.principal,tenant:queuePath[1],office:service(env.DB),db:env.DB}),cors)}
    const overviewPath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/overview$/);if(overviewPath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);return reply(200,await institutionOverview({principal:identity.principal,tenant:overviewPath[1],office:service(env.DB),store:new D1WorkflowStore(env.DB),db:env.DB,env}),cors)}
    const capabilityPath=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/capabilities(?:\/([a-zA-Z0-9-]{1,80}))?$/);if(capabilityPath){if(request.method!=='GET')return reply(405,{error:'method_not_allowed'},cors);await service(env.DB).role(identity.principal,capabilityPath[1]);return reply(200,capabilityPath[2]?capabilityContract(capabilityPath[2]):searchCapabilities(new URL(request.url).searchParams.get('q')||''),cors)}
    const path=new URL(request.url).pathname.match(/^\/v1\/institutions\/([a-zA-Z0-9-]{1,64})\/(files|workflows|plans|public-demo|produce-report|goal-agents|crm|work-orders)(?:\/([a-zA-Z0-9-]{1,64}))?(\/(?:review|advance|materialize|submit|reconcile|pause|resume|branch|replan|tick|link|archive|context|execute|order-tick|scope-acceptance|package|work-orders|workspace|assign|members|import-preview|import-commit))?$/);
