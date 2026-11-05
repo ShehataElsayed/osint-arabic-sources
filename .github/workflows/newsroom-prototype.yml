@@ -21,3 +21,6 @@ jobs:
       - run: node --test tests/newsroom-*.test.mjs
       - run: python3 -m unittest tests/test_newsroom_store.py -v
       - run: node newsroom/local-d1-check.mjs
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node tests/newsroom-review-ui.cjs

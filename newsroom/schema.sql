@@ -6,3 +6,17 @@ CREATE INDEX IF NOT EXISTS office_files_tenant ON office_files(tenant,updated_at
 CREATE TABLE IF NOT EXISTS file_versions(file_id TEXT NOT NULL REFERENCES office_files(id),version INTEGER NOT NULL,content TEXT NOT NULL,author TEXT NOT NULL,operation_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL,PRIMARY KEY(file_id,version));
 CREATE TABLE IF NOT EXISTS audit_events(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,file_id TEXT,version INTEGER,created_at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS audit_tenant_time ON audit_events(tenant,created_at);
+
+CREATE TABLE IF NOT EXISTS editorial_state(file_id TEXT PRIMARY KEY REFERENCES office_files(id),version INTEGER NOT NULL,state TEXT NOT NULL CHECK(state IN ('draft','in_review','approved','changes_requested','rejected')),reviewer TEXT,transition_id TEXT NOT NULL,updated_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS workflow_runs(id TEXT PRIMARY KEY,tenant TEXT NOT NULL REFERENCES institutions(id),revision INTEGER NOT NULL,content TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS crm_records(id TEXT PRIMARY KEY,tenant TEXT NOT NULL REFERENCES institutions(id),kind TEXT NOT NULL CHECK(kind IN ('actor','opportunity','activity','contract','ledger')),revision INTEGER NOT NULL CHECK(revision>=1),content TEXT NOT NULL,updated_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS crm_tenant_kind ON crm_records(tenant,kind,updated_at);
+CREATE TABLE IF NOT EXISTS crm_work_links(tenant TEXT NOT NULL REFERENCES institutions(id),record_id TEXT NOT NULL REFERENCES crm_records(id),workflow_id TEXT NOT NULL REFERENCES workflow_runs(id),created_at INTEGER NOT NULL,PRIMARY KEY(tenant,record_id,workflow_id));
+CREATE TABLE IF NOT EXISTS crm_imports(tenant TEXT NOT NULL,source_hash TEXT NOT NULL,id TEXT NOT NULL,content TEXT NOT NULL,PRIMARY KEY(tenant,source_hash));
+CREATE TABLE IF NOT EXISTS crm_import_guards(id TEXT PRIMARY KEY,passed INTEGER NOT NULL CHECK(passed=1));
+CREATE TABLE IF NOT EXISTS work_orders(id TEXT PRIMARY KEY,tenant TEXT NOT NULL REFERENCES institutions(id),revision INTEGER NOT NULL,content TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS order_executions(tenant TEXT NOT NULL,order_id TEXT NOT NULL,revision INTEGER NOT NULL,content TEXT NOT NULL,PRIMARY KEY(tenant,order_id));
+CREATE TABLE IF NOT EXISTS work_order_acceptances(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,order_id TEXT NOT NULL,content TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS order_acceptances_tenant_order ON work_order_acceptances(tenant,order_id);
+CREATE TABLE IF NOT EXISTS file_review_notes(id TEXT PRIMARY KEY,tenant TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES office_files(id),version INTEGER NOT NULL,author TEXT NOT NULL,body TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('open','resolved')),created_at INTEGER NOT NULL,resolved_by TEXT,resolved_at INTEGER,operation_id TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS file_notes_scope ON file_review_notes(tenant,file_id,version,created_at);

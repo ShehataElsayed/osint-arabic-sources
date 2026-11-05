@@ -1,0 +1,3 @@
+/* Isolated institution adapter reuses existing generation implementation, never its public-Origin route. */
+import{researchPlan}from'../worker/rag-lib.js';
+export function existingWorkerPlanner(env){return{async fetch(request){const body=await request.json();if(body.mode!=='research_plan')return Response.json({error:'unsupported'},{status:400});const result=await researchPlan(body.question,body.candidates,{AI_PROVIDER:env.AI_PROVIDER,GEMINI_API_KEY:env.GEMINI_API_KEY,GEMINI_MODEL:env.GEMINI_MODEL,AI:env.AI,CF_AI_MODEL:env.CF_AI_MODEL});return Response.json(result.error?{plan:null,reason:result.error}:{plan:result})}}}

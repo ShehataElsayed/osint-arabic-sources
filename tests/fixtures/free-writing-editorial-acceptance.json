@@ -1,0 +1,50 @@
+{
+  "schema": "osh-editorial-evaluation-v1",
+  "sourceUrl": "https://developers.cloudflare.com/workers-ai/platform/pricing/",
+  "evaluationDate": "2026-11-04",
+  "model": "nvidia/nemotron-3.5-super-vl:free",
+  "httpStatus": 200,
+  "reportedCost": 0,
+  "machineAcceptance": "passed",
+  "editorialAcceptance": "rejected-scope-ambiguity",
+  "criteria": [
+    "Explain the general daily free allocation separately from the list of models that require a paid billing method.",
+    "Do not imply every model requires payment, that the allocation applies only to paid models, or that a free allowance makes paid-only models available.",
+    "Keep quoted price, unit denominator, daily allowance and reset time exact.",
+    "Distinguish source reporting from independent verification and actual current account entitlement."
+  ],
+  "observedIssue": "The second Arabic paragraph joins the general free-allocation rule with the paid-model exception using wording that may make the allocation seem specific to those models.",
+  "limits": "A manual judgment fixture, not an automated semantic verifier or broad model benchmark. Production sourcebrief remains off.",
+  "followupEvaluation": {
+    "httpStatus": 200,
+    "reportedCost": 0,
+    "machineAcceptance": "passed",
+    "editorialAcceptance": "rejected-limits-contamination",
+    "finding": "Separating rules in the task improved body scope, but generated limits incorrectly blamed numeric placeholders for an unknown update date and added an unsupported interpretation of free allowance coverage. Full body+limits review remains required."
+  },
+  "bodyOnlyPipelineEvaluation": {
+    "machineAcceptance": "one real output passed, repeat rejected evidence ID cardinality",
+    "manualReview": "First body separates allowance/paid exception and preserves numbers; operational limits from pipeline, not model. Basic grammar still improvable. Not a broad quality benchmark.",
+    "persistedProof": "Existing accepted public output materialized in actual local D1 Office version1 awaiting human submission; not production or human approval",
+    "productionEnabled": false
+  },
+  "plannedEvidenceEvaluation": {
+    "date": "2026-11-05",
+    "architecture": "One explicit evidence section per bounded free call; pipeline attaches citations, no generated evidence IDs; optional selected evidence checked as exact source substrings.",
+    "machineAcceptance": "Two full outputs passed numeric/quote checks at reported cost0",
+    "manualReview": "Rejected both. First repeats flattened table text as if included daily allowance were charged. After exact focused evidence selection, second still asserts the general rule covers most models without evidence for that quantifier. Citation/schema adherence no longer sufficient blocker description: semantic overreach remains.",
+    "productionEnabled": false
+  },
+  "otherFreeModelsEvaluation": {
+    "date": "2026-11-05",
+    "catalog": "https://openrouter.ai/api/v1/models",
+    "routeAllowlist": [
+      "google/gemma-4-26b-a4b-it:free",
+      "dots-studio/dots-3-note-preview:free"
+    ],
+    "gemma26b": "Actual request429, no output and no retry/fallback. Live catalog prompt/completion pricing0 verified.",
+    "dotsPreview": "Three actual section outputs reported cost0 and passed numeral/quote checks. Manual rejection: corrupt Arabic morphology with nonsensical embedded Latin fragments and ungrammatical writing. Not suitable for this Arabic editorial workflow.",
+    "productionEnabled": false,
+    "limits": "Bounded workflow observations, not a general benchmark or proof that all free writing models fail."
+  }
+}

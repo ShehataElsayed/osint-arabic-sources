@@ -1,0 +1,3 @@
+/* Bounded editable text slides only. Reject unsupported objects instead of flattening. */
+export function textSlides(data){if(!Array.isArray(data?.slides)||!data.slides.length||data.slides.length>20)throw Error('1-20 text slides required');return data.slides.map(s=>{if(typeof s.title!=='string'||typeof s.body!=='string'||s.title.length>120||s.body.length>1800||Object.keys(s).some(k=>!['id','title','body'].includes(k)))throw Error('bounded text slide required');return structuredClone(s)})}
+export function replaceTextSlides(data,slides){textSlides(data);return{...structuredClone(data),slides:textSlides({slides})}}
