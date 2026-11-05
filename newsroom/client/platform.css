@@ -18,3 +18,5 @@ body[data-agent-interactive=true] #dashboard>:not(#agent-task):not(#agent-worksp
 .scalar-sheet-scroll{max-width:100%;overflow:auto;border:1px solid #dce1ec}.scalar-sheet{border-collapse:collapse;min-width:100%}.scalar-sheet td,.scalar-sheet th{padding:0;border:1px solid #dce1ec}.scalar-sheet input{min-width:130px;border:0!important;border-radius:0!important;margin:0;padding:10px!important}.scalar-sheet th input{font-weight:700;background:#f0f4ff!important}
 
 .review-notes article{padding:14px;border:1px solid #dce1ec;margin:10px 0;border-radius:8px}.review-notes article p{white-space:pre-wrap}.review-notes small{display:block}
+
+.text-slide-canvas{box-sizing:border-box;width:100%;aspect-ratio:16/9;background:#fff;border:1px solid #dce1ec;border-top:6px solid #235cdb;border-radius:8px;padding:clamp(16px,4vw,44px);overflow:auto;color:#18243a}.text-slide-canvas h2{font-size:clamp(22px,3vw,36px);margin:18px 0}.text-slide-canvas p{white-space:pre-wrap;font-size:clamp(16px,2vw,22px);line-height:1.7;color:#18243a}.text-slide-canvas small{color:#235cdb}.text-deck-editor nav{display:flex;gap:8px;flex-wrap:wrap}
